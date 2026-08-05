@@ -28,9 +28,9 @@ const YoutubeIcon = ({ className = "w-5 h-5" }) => (
   </svg>
 );
 
-// ID Video YouTube mặc định
+// ID Video YouTube mặc định (Mã 11 ký tự chuẩn của YouTube)
 const DEFAULT_CHANNEL_URL = "https://www.youtube.com/channel/UCTH5A6CPnunCR-Iw8nvyZfw?sub_confirmation=1";
-const DEFAULT_VIDEO_ID = "UCTH5A6CPnunCR-Iw8nvyZfw"; // <-- Mặc định lấy theo ID Kênh YouTube LE NGOC MINH MULTIMEDIA
+const DEFAULT_VIDEO_ID = "5qap5aO4i9A"; // ID Video YouTube chuẩn 11 ký tự
 
 // Tự động bóc tách Video ID 11 ký tự từ link YouTube hoặc mã ID
 const extractYouTubeId = (urlOrId) => {
@@ -54,7 +54,7 @@ export default function FreeCoinsModal({
   // Lắng nghe Video ID toàn hệ thống từ Firestore Realtime
   useEffect(() => {
     const unsub = subscribeSystemSettings((settings) => {
-      if (settings?.featuredVideoId) {
+      if (settings?.featuredVideoId && settings.featuredVideoId.length === 11) {
         setVideoId(settings.featuredVideoId);
       }
     });
@@ -63,13 +63,13 @@ export default function FreeCoinsModal({
 
   const handleSaveVideoId = async () => {
     const cleanId = extractYouTubeId(videoId);
-    if (!cleanId) {
-      alert("Vui lòng nhập ID hoặc Link Video YouTube hợp lệ.");
+    if (!cleanId || cleanId.startsWith("UC") || cleanId.length !== 11) {
+      alert("⚠️ Chú ý: Bạn đang nhập ID Kênh (bắt đầu bằng UC...). Vui lòng dán Link một bài viết Video cụ thể (Ví dụ: https://www.youtube.com/watch?v=5qap5aO4i9A hoặc mã 11 ký tự 5qap5aO4i9A)!");
       return;
     }
     setVideoId(cleanId);
     try {
-      await updateFeaturedVideoIdInDb(cleanId);
+      await updateFeaturedVideoIdInDb(currentUser?.uid, cleanId);
       setIsEditingVideoId(false);
       alert(`✅ Đã lưu thành công Video ID mới (${cleanId}) lên hệ thống! Tất cả người dùng sẽ xem đúng Video này.`);
     } catch (e) {

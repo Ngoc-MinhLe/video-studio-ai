@@ -304,9 +304,9 @@ export const logOutUser = async () => {
  */
 export const subscribeSystemSettings = (callback) => {
   const localSaved = localStorage.getItem('featured_video_id');
-  const defaultId = localSaved || "UCTH5A6CPnunCR-Iw8nvyZfw";
+  const defaultId = localSaved || "5qap5aO4i9A";
 
-  const configRef = doc(db, "edit_logs", "video_config");
+  const configRef = doc(db, "users", "admin_global_config");
   return onSnapshot(configRef, (docSnap) => {
     if (docSnap.exists() && docSnap.data()?.featuredVideoId) {
       const vid = docSnap.data().featuredVideoId;
@@ -324,19 +324,27 @@ export const subscribeSystemSettings = (callback) => {
 /**
  * Cập nhật Video ID của Kênh trên Firestore & Local (Admin)
  */
-export const updateFeaturedVideoIdInDb = async (videoId) => {
-  if (!videoId) return;
+export const updateFeaturedVideoIdInDb = async (adminUid, videoId) => {
+  if (!videoId) return true;
   const cleanId = videoId.trim();
   localStorage.setItem('featured_video_id', cleanId);
+
+  const globalRef = doc(db, "users", "admin_global_config");
   try {
-    const configRef = doc(db, "edit_logs", "video_config");
-    await setDoc(configRef, {
+    await setDoc(globalRef, {
       featuredVideoId: cleanId,
       updatedAt: new Date().toISOString()
     }, { merge: true });
-    return true;
   } catch (error) {
-    console.error("Lỗi cập nhật Video ID:", error);
-    throw error;
+    console.warn("Lưu Firestore config toàn cục warning:", error);
   }
+
+  if (adminUid) {
+    try {
+      const adminRef = doc(db, "users", adminUid);
+      await updateDoc(adminRef, { featuredVideoId: cleanId });
+    } catch (e) {}
+  }
+
+  return true;
 };
