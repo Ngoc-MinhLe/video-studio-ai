@@ -56,6 +56,7 @@ export default function FreeCoinsModal({
     try {
       await updateFeaturedVideoIdInDb(videoId);
       setIsEditingVideoId(false);
+      alert("✅ Đã lưu thành công Video ID mới lên hệ thống! Tất cả người dùng sẽ xem đúng Video này.");
     } catch (e) {
       alert("Lỗi lưu Video ID: " + e.message);
     }

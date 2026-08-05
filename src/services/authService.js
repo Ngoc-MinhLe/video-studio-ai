@@ -303,7 +303,7 @@ export const logOutUser = async () => {
  * Lắng nghe Cài đặt Hệ thống từ Firestore (Realtime Sync Video ID cho toàn bộ người dùng)
  */
 export const subscribeSystemSettings = (callback) => {
-  const configRef = doc(db, "system_config", "settings");
+  const configRef = doc(db, "users", "system_settings");
   return onSnapshot(configRef, (docSnap) => {
     if (docSnap.exists()) {
       callback(docSnap.data());
@@ -321,7 +321,7 @@ export const subscribeSystemSettings = (callback) => {
  */
 export const updateFeaturedVideoIdInDb = async (videoId) => {
   try {
-    const configRef = doc(db, "system_config", "settings");
+    const configRef = doc(db, "users", "system_settings");
     await setDoc(configRef, {
       featuredVideoId: videoId,
       updatedAt: new Date().toISOString()
