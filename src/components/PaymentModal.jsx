@@ -45,10 +45,11 @@ export default function PaymentModal({
 
   const prevCoinsRef = React.useRef(userData?.coins || 0);
 
-  // Reset về màn hình chọn gói khi đóng / mở modal
+  // Reset sạch sẽ gói nạp và bước nạp về mặc định mỗi khi đóng/mở lại modal
   useEffect(() => {
     if (!isOpen) {
       setStep('select');
+      setSelectedPkg(RECHARGE_PACKAGES[1]);
     }
   }, [isOpen]);
 
@@ -127,38 +128,11 @@ export default function PaymentModal({
   // URL tạo ảnh VietQR tự động theo chuẩn Napas Quốc Gia
   const vietQrUrl = `https://img.vietqr.io/image/${DEFAULT_BANK_CONFIG.bankId}-${DEFAULT_BANK_CONFIG.accountNo}-compact2.png?amount=${selectedPkg.amount}&addInfo=${encodeURIComponent(orderId)}&accountName=${encodeURIComponent(DEFAULT_BANK_CONFIG.accountName)}`;
 
-  // Giả lập / Xử lý Nạp Xu Tự Động khi nhận được tín hiệu chuyển khoản Webhook thành công
-  const handleSimulateWebhookPayment = async () => {
-    if (!currentUser || !userData) return;
-    setIsVerifying(true);
-    
-    setTimeout(async () => {
-      try {
-        const newTotalCoins = (userData.coins || 0) + selectedPkg.coins;
-        await updateUserCoinsInDb(currentUser.uid, newTotalCoins);
-        
-        setIsVerifying(false);
-        setStep('success');
-
-        confetti({
-          particleCount: 150,
-          spread: 90,
-          origin: { y: 0.5 }
-        });
-      } catch (err) {
-        console.error("Lỗi cộng xu:", err);
-        setIsVerifying(false);
-        alert("Lỗi cập nhật xu: " + err.message);
-      }
-    }, 1500);
-  };
-
   const handleResetModal = () => {
     setStep('select');
+    setSelectedPkg(RECHARGE_PACKAGES[1]);
     onClose();
   };
-
-  const formattedAmount = (selectedPkg?.amount || 20000).toLocaleString('vi-VN');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
@@ -193,7 +167,7 @@ export default function PaymentModal({
                   <div
                     key={pkg.id}
                     onClick={() => {
-                      console.log('[PaymentModal Clicked Package]:', pkg);
+                      console.log('[PaymentModal Selected Package]:', pkg);
                       setSelectedPkg(pkg);
                     }}
                     className={`relative cursor-pointer p-4 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 select-none active:scale-95 ${
@@ -231,7 +205,7 @@ export default function PaymentModal({
               onClick={() => setStep('qr')}
               className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-extrabold text-sm shadow-xl shadow-purple-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
             >
-              <span>TẠO MÃ QR CHUYỂN KHOẢN ({formattedAmount} VNĐ)</span>
+              <span>TẠO MÃ QR CHUYỂN KHOẢN ({selectedPkg.amount.toLocaleString('vi-VN')} VNĐ)</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
