@@ -16,10 +16,25 @@ import {
   Sliders,
   RefreshCw,
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  Coins,
+  ShieldCheck,
+  LogOut,
+  User,
+  Gift
 } from 'lucide-react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './services/firebase';
+import { 
+  subscribeUserData, 
+  deductForVideoExport, 
+  isUserAdmin, 
+  logOutUser 
+} from './services/authService';
 import { loadFFmpeg, processVideo } from './services/ffmpegService';
 import { processVideoCanvas } from './services/canvasExporter';
+import AdminModal from './components/AdminModal';
+import AuthModal from './components/AuthModal';
 import confetti from 'canvas-confetti';
 
 // Icon YouTube SVG sắc nét chuẩn thương hiệu
@@ -30,6 +45,13 @@ const YoutubeIcon = ({ className = "w-5 h-5" }) => (
 );
 
 export default function App() {
+  // --- Auth & User States ---
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userData, setUserData] = useState(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalType, setAuthModalType] = useState('login'); // 'login' | 'insufficient_coins'
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+
   // --- States Quản lý Files ---
   const [videoFile, setVideoFile] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
@@ -50,7 +72,6 @@ export default function App() {
   const [subPosition, setSubPosition] = useState('bottom');
 
   // --- Engine & Export States ---
-  // Mặc định chọn Canvas Engine để xuất video siêu tốc 100% không bị lỗi nạp WASM trên Cốc Cốc
   const [engineType, setEngineType] = useState('canvas'); 
   const [isEngineReady, setIsEngineReady] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -59,6 +80,22 @@ export default function App() {
   const [exportExtension, setExportExtension] = useState('mp4');
   const [statusText, setStatusText] = useState('Hệ thống sẵn sàng!');
   const [engineError, setEngineError] = useState(null);
+
+  // Lắng nghe Firebase Auth & Firestore User Data realtime
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      if (user) {
+        const unsubUser = subscribeUserData(user.uid, (data) => {
+          setUserData(data);
+        });
+        return () => unsubUser();
+      } else {
+        setUserData(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   // --- Video & Audio Player Controls ---
   const [isPlaying, setIsPlaying] = useState(false);
@@ -210,13 +247,33 @@ export default function App() {
       return;
     }
 
+    // 1. Kiểm tra đăng nhập
+    if (!currentUser || !userData) {
+      setAuthModalType('login');
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    // 2. Kiểm tra & Trừ lượt Miễn Phí hoặc Trừ Xu
+    const deductRes = await deductForVideoExport(currentUser.uid, userData, 5);
+    if (!deductRes.success) {
+      setAuthModalType('insufficient_coins');
+      setIsAuthModalOpen(true);
+      return;
+    }
+
     if (isPlaying) {
       togglePlay();
     }
 
     setIsProcessing(true);
     setProgress(0);
-    setStatusText('Đang bắt đầu quá trình xuất Video...');
+
+    if (deductRes.usedFree) {
+      setStatusText(`Đang render... (Dùng 1 lượt Free hôm nay, còn ${deductRes.remainingFree} lượt)`);
+    } else {
+      setStatusText(`Đang render... (Đã trừ 5 Xu, số dư còn lại ${deductRes.remainingCoins} Xu)`);
+    }
 
     try {
       if (engineType === 'canvas') {
@@ -299,7 +356,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 flex-wrap justify-end">
             {/* Nút Quảng Cáo Kênh YouTube trên Header */}
             <a 
               href="https://www.youtube.com/channel/UCTH5A6CPnunCR-Iw8nvyZfw?sub_confirmation=1" 
@@ -316,62 +373,86 @@ export default function App() {
             <div className="flex items-center gap-1 bg-[#1a1e2b] p-1 rounded-xl border border-[#2b3042] text-xs">
               <button
                 onClick={() => setEngineType('canvas')}
-                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   engineType === 'canvas'
                     ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
                     : 'text-[#94a3b8] hover:text-white'
                 }`}
                 title="Canvas Engine: Chạy 100% trên Cốc Cốc, Chrome, Safari không cần nạp 32MB WASM"
               >
-                🚀 Engine Canvas (Siêu Tốc)
+                🚀 Canvas Engine
               </button>
               <button
                 onClick={() => setEngineType('ffmpeg')}
-                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   engineType === 'ffmpeg'
                     ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
                     : 'text-[#94a3b8] hover:text-white'
                 }`}
                 title="FFmpeg WASM Engine: Render bằng WebAssembly"
               >
-                ⚡ FFmpeg WASM
+                ⚡ FFmpeg
               </button>
             </div>
 
-            <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-[#1a1e2b] border border-[#2b3042]">
-              {engineType === 'canvas' ? (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span className="text-emerald-400 font-medium">Canvas Sẵn Sàng (100% Cốc Cốc)</span>
-                </>
-              ) : isEngineReady ? (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span className="text-emerald-400 font-medium">FFmpeg WASM Sẵn Sàng</span>
-                </>
-              ) : (
-                <div className="flex items-center gap-2">
-                  {engineError ? (
-                    <>
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="text-amber-300 font-medium">Thử lại Engine</span>
-                      <button 
-                        onClick={initEngine} 
-                        className="hover:rotate-180 transition-transform p-0.5"
-                        title="Tải lại Engine FFmpeg"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5 text-purple-400" />
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 text-purple-400 animate-spin" />
-                      <span className="text-purple-300 max-w-[200px] truncate">{statusText}</span>
-                    </>
-                  )}
+            {/* Trạng Thái Người Dùng & Số Dư Xu */}
+            {currentUser && userData ? (
+              <div className="flex items-center gap-2">
+                {/* Lượt Free Hàng Ngày */}
+                <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 text-xs font-semibold" title="Số lượt xuất miễn phí nhận được hôm nay (Tự động reset 2 lượt mỗi ngày)">
+                  <Gift className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>{userData.dailyFreeExports || 0} Free/ngày</span>
                 </div>
-              )}
-            </div>
+
+                {/* Số Xu Tích Lũy */}
+                <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/10 text-amber-300 border border-amber-500/30 text-xs font-bold font-mono" title="Số xu hiện có trong tài khoản">
+                  <Coins className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{userData.coins || 0} Xu</span>
+                </div>
+
+                {/* Nút Admin Panel (Nếu là Admin) */}
+                {isUserAdmin(userData) && (
+                  <button 
+                    onClick={() => setIsAdminModalOpen(true)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-md shadow-purple-600/30 transition-all cursor-pointer"
+                    title="Mở Trang Quản Trị Admin"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span className="hidden md:inline">Admin Panel</span>
+                  </button>
+                )}
+
+                {/* User Avatar & Logout */}
+                <div className="flex items-center gap-2 bg-[#1a1e2b] p-1 pr-2 rounded-xl border border-[#2b3042]">
+                  {currentUser.photoURL ? (
+                    <img src={currentUser.photoURL} alt="" className="w-7 h-7 rounded-lg object-cover" />
+                  ) : (
+                    <div className="w-7 h-7 rounded-lg bg-purple-600/40 flex items-center justify-center text-xs font-bold text-white">
+                      {(currentUser.displayName || 'U')[0]}
+                    </div>
+                  )}
+                  <span className="text-xs font-medium text-white max-w-[90px] truncate hidden lg:inline">{currentUser.displayName}</span>
+                  <button 
+                    onClick={logOutUser}
+                    className="p-1 rounded text-[#94a3b8] hover:text-red-400 transition-colors"
+                    title="Đăng xuất"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button 
+                onClick={() => {
+                  setAuthModalType('login');
+                  setIsAuthModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs shadow-md shadow-purple-600/30 transition-all cursor-pointer"
+              >
+                <User className="w-4 h-4" />
+                <span>Đăng Nhập Google</span>
+              </button>
+            )}
 
             <button 
               onClick={handleExport}
@@ -695,6 +776,23 @@ export default function App() {
           © 2026 Video Studio AI • Phát triển bởi LE NGOC MINH MULTIMEDIA
         </p>
       </footer>
+
+      {/* --- MODAL QUẢN TRỊ ADMIN --- */}
+      <AdminModal 
+        isOpen={isAdminModalOpen}
+        onClose={() => setIsAdminModalOpen(false)}
+        currentUser={currentUser}
+      />
+
+      {/* --- MODAL ĐĂNG NHẬP / XÁC NHẬN XU --- */}
+      <AuthModal 
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        modalType={authModalType}
+        onLoginSuccess={(user) => {
+          console.log("Đăng nhập thành công:", user);
+        }}
+      />
     </div>
   );
 }
