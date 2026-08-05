@@ -303,27 +303,35 @@ export const logOutUser = async () => {
  * Lắng nghe Cài đặt Hệ thống từ Firestore (Realtime Sync Video ID cho toàn bộ người dùng)
  */
 export const subscribeSystemSettings = (callback) => {
+  const localSaved = localStorage.getItem('featured_video_id');
+  const defaultId = localSaved || "dQw4w9WgXcQ";
+
   const configRef = doc(db, "users", "system_settings");
   return onSnapshot(configRef, (docSnap) => {
-    if (docSnap.exists()) {
-      callback(docSnap.data());
+    if (docSnap.exists() && docSnap.data()?.featuredVideoId) {
+      const vid = docSnap.data().featuredVideoId;
+      localStorage.setItem('featured_video_id', vid);
+      callback({ featuredVideoId: vid });
     } else {
-      callback({ featuredVideoId: "dQw4w9WgXcQ" });
+      callback({ featuredVideoId: defaultId });
     }
   }, (err) => {
     console.warn("Lỗi đọc cài đặt hệ thống:", err);
-    callback({ featuredVideoId: "dQw4w9WgXcQ" });
+    callback({ featuredVideoId: defaultId });
   });
 };
 
 /**
- * Cập nhật Video ID của Kênh trên Firestore (Admin)
+ * Cập nhật Video ID của Kênh trên Firestore & Local (Admin)
  */
 export const updateFeaturedVideoIdInDb = async (videoId) => {
+  if (!videoId) return;
+  const cleanId = videoId.trim();
+  localStorage.setItem('featured_video_id', cleanId);
   try {
     const configRef = doc(db, "users", "system_settings");
     await setDoc(configRef, {
-      featuredVideoId: videoId,
+      featuredVideoId: cleanId,
       updatedAt: new Date().toISOString()
     }, { merge: true });
     return true;

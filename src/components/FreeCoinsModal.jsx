@@ -32,6 +32,15 @@ const YoutubeIcon = ({ className = "w-5 h-5" }) => (
 const DEFAULT_CHANNEL_URL = "https://www.youtube.com/channel/UCTH5A6CPnunCR-Iw8nvyZfw?sub_confirmation=1";
 const DEFAULT_VIDEO_ID = "dQw4w9WgXcQ"; // <-- ID Video YouTube mặc định
 
+// Tự động bóc tách Video ID 11 ký tự từ link YouTube hoặc mã ID
+const extractYouTubeId = (urlOrId) => {
+  if (!urlOrId) return '';
+  const trimmed = urlOrId.trim();
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = trimmed.match(regExp);
+  return (match && match[2].length === 11) ? match[2] : trimmed;
+};
+
 export default function FreeCoinsModal({
   isOpen,
   onClose,
@@ -39,7 +48,7 @@ export default function FreeCoinsModal({
   userData
 }) {
   // Trạng thái Video ID
-  const [videoId, setVideoId] = useState(DEFAULT_VIDEO_ID);
+  const [videoId, setVideoId] = useState(() => localStorage.getItem('featured_video_id') || DEFAULT_VIDEO_ID);
   const [isEditingVideoId, setIsEditingVideoId] = useState(false);
 
   // Lắng nghe Video ID toàn hệ thống từ Firestore Realtime
@@ -53,10 +62,16 @@ export default function FreeCoinsModal({
   }, []);
 
   const handleSaveVideoId = async () => {
+    const cleanId = extractYouTubeId(videoId);
+    if (!cleanId) {
+      alert("Vui lòng nhập ID hoặc Link Video YouTube hợp lệ.");
+      return;
+    }
+    setVideoId(cleanId);
     try {
-      await updateFeaturedVideoIdInDb(videoId);
+      await updateFeaturedVideoIdInDb(cleanId);
       setIsEditingVideoId(false);
-      alert("✅ Đã lưu thành công Video ID mới lên hệ thống! Tất cả người dùng sẽ xem đúng Video này.");
+      alert(`✅ Đã lưu thành công Video ID mới (${cleanId}) lên hệ thống! Tất cả người dùng sẽ xem đúng Video này.`);
     } catch (e) {
       alert("Lỗi lưu Video ID: " + e.message);
     }
