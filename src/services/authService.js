@@ -32,7 +32,7 @@ const getTodayString = () => {
 };
 
 /**
- * Đăng nhập bằng Email & Mật khẩu (Tự động đăng ký nếu chưa có tài khoản)
+ * Đăng nhập bằng Email & Mật khẩu (Dành cho tài khoản đã khởi tạo trên Firebase Auth)
  */
 export const signInWithEmail = async (email, password) => {
   const cleanEmail = (email || '').trim().toLowerCase();
@@ -44,61 +44,62 @@ export const signInWithEmail = async (email, password) => {
   try {
     userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
   } catch (err) {
+    console.error("Firebase Email Auth Error:", err);
     if (
-      err.code === 'auth/user-not-found' || 
-      err.code === 'auth/invalid-credential' ||
-      err.code === 'auth/wrong-password'
+      err.code === 'auth/wrong-password' || 
+      err.code === 'auth/invalid-credential'
     ) {
-      try {
-        // Tự động tạo tài khoản mới nếu chưa tồn tại
-        userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
-      } catch (createErr) {
-        if (createErr.code === 'auth/email-already-in-use') {
-          throw new Error('Mật khẩu không chính xác cho tài khoản này.');
-        }
-        throw createErr;
-      }
+      throw new Error('Mật khẩu không chính xác.');
+    } else if (err.code === 'auth/user-not-found') {
+      throw new Error('Tài khoản này chưa tồn tại. Vui lòng tạo tài khoản trên Firebase Console hoặc đăng nhập bằng Google.');
     } else {
-      throw err;
+      throw new Error(err.message || 'Không thể đăng nhập bằng Email này.');
     }
   }
 
   const user = userCredential.user;
   const today = getTodayString();
   const userRef = doc(db, "users", user.uid);
-  const userSnap = await getDoc(userRef);
-
   const isAdmin = isUserAdmin({ email: user.email });
 
-  if (!userSnap.exists()) {
-    const displayName = cleanEmail.split('@')[0];
-    const initialData = {
-      uid: user.uid,
-      displayName: displayName || 'Người dùng',
-      email: cleanEmail,
-      photoURL: '',
-      coins: isAdmin ? 9999 : 20,
-      dailyFreeExports: 2,
-      lastDailyDate: today,
-      role: isAdmin ? 'admin' : 'user',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    await setDoc(userRef, initialData);
-    return initialData;
-  } else {
-    const data = userSnap.data();
-    if (data.lastDailyDate !== today) {
-      await updateDoc(userRef, {
-        dailyFreeExports: 2,
-        lastDailyDate: today,
-        updatedAt: new Date().toISOString()
-      });
-      data.dailyFreeExports = 2;
-      data.lastDailyDate = today;
+  let userData = {
+    uid: user.uid,
+    displayName: cleanEmail.split('@')[0],
+    email: cleanEmail,
+    photoURL: '',
+    coins: isAdmin ? 9999 : 20,
+    dailyFreeExports: 2,
+    lastDailyDate: today,
+    role: isAdmin ? 'admin' : 'user',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  try {
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      userData = userSnap.data();
+      if (userData.lastDailyDate !== today) {
+        userData.dailyFreeExports = 2;
+        userData.lastDailyDate = today;
+        try {
+          await updateDoc(userRef, {
+            dailyFreeExports: 2,
+            lastDailyDate: today,
+            updatedAt: new Date().toISOString()
+          });
+        } catch (e) {}
+      }
+    } else {
+      try {
+        await setDoc(userRef, userData);
+      } catch (e) {}
     }
-    return data;
+  } catch (firestoreErr) {
+    console.warn("Firestore Rules warning (vẫn cho phép đăng nhập):", firestoreErr);
   }
+
+  return userData;
 };
 
 /**

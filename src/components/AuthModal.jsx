@@ -22,7 +22,7 @@ export default function AuthModal({
 }) {
   const [authMethod, setAuthMethod] = useState('email'); // 'email' | 'google'
   const [email, setEmail] = useState('admin@gmail.com');
-  const [password, setPassword] = useState('123456');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -53,10 +53,8 @@ export default function AuthModal({
       onClose();
     } catch (err) {
       console.error(err);
-      if (err.code === 'auth/unauthorized-domain') {
-        setErrorMsg('Tên miền Vercel chưa được thêm vào Firebase Authorized Domains. Bạn có thể dùng Đăng Nhập bằng Email bên dưới để vào ngay!');
-      } else if (err.code === 'auth/popup-closed-by-user') {
-        setErrorMsg('Đã đóng cửa sổ Google popup trước khi hoàn tất.');
+      if (err.code === 'auth/popup-closed-by-user') {
+        setErrorMsg('Cửa sổ Google Popup đã đóng trước khi hoàn tất.');
       } else {
         setErrorMsg(err.message || 'Không thể đăng nhập Google.');
       }
@@ -78,7 +76,7 @@ export default function AuthModal({
         </button>
 
         {modalType === 'login' ? (
-          /* MODAL ĐĂNG NHẬP (HỖ TRỢ CẢ EMAIL/PASSWORD VÀ GOOGLE) */
+          /* MODAL ĐĂNG NHẬP (EMAIL/PASSWORD VÀ GOOGLE) */
           <div className="flex flex-col items-center text-center gap-4 pt-2">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center shadow-xl shadow-purple-600/30">
               <Sparkles className="w-7 h-7 text-white" />
@@ -118,7 +116,7 @@ export default function AuthModal({
             </div>
 
             {errorMsg && (
-              <div className="w-full text-xs text-red-300 bg-red-500/10 p-3 rounded-xl border border-red-500/30 text-left">
+              <div className="w-full text-xs text-red-300 bg-red-500/10 p-3 rounded-xl border border-red-500/30 text-left leading-relaxed">
                 ⚠️ {errorMsg}
               </div>
             )}
@@ -128,53 +126,52 @@ export default function AuthModal({
               <form onSubmit={handleEmailLogin} className="w-full flex flex-col gap-3 text-left">
                 <div>
                   <label className="text-xs text-[#94a3b8] mb-1 block font-medium">Email tài khoản</label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-[#64748b] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <div className="flex items-center gap-2 bg-[#161a26] border border-[#2b3042] rounded-xl px-3 py-2 focus-within:border-purple-500 transition-colors">
+                    <Mail className="w-4 h-4 text-[#64748b] shrink-0" />
                     <input 
                       type="email"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Nhập email (VD: admin@gmail.com)..."
-                      className="w-full bg-[#161a26] border border-[#2b3042] rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
+                      placeholder="admin@gmail.com"
+                      className="w-full bg-transparent text-xs text-white focus:outline-none font-mono"
                     />
                   </div>
                 </div>
 
                 <div>
                   <label className="text-xs text-[#94a3b8] mb-1 block font-medium">Mật khẩu</label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-[#64748b] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <div className="flex items-center gap-2 bg-[#161a26] border border-[#2b3042] rounded-xl px-3 py-2 focus-within:border-purple-500 transition-colors">
+                    <Lock className="w-4 h-4 text-[#64748b] shrink-0" />
                     <input 
                       type="password"
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Nhập mật khẩu (tự động tạo mới nếu chưa có)..."
-                      className="w-full bg-[#161a26] border border-[#2b3042] rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
+                      placeholder="Nhập mật khẩu đã đặt trên Firebase..."
+                      className="w-full bg-transparent text-xs text-white focus:outline-none font-mono"
                     />
                   </div>
-                  <span className="text-[10px] text-[#64748b] mt-1 block">* Nếu chưa có tài khoản, hệ thống sẽ tự động đăng ký mới.</span>
                 </div>
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2 mt-1 cursor-pointer active:scale-98"
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer active:scale-98"
                 >
                   {loading ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <>
                       <LogIn className="w-4 h-4" />
-                      <span>Đăng Nhập / Đăng Ký Tự Động</span>
+                      <span>Đăng Nhập</span>
                     </>
                   )}
                 </button>
               </form>
             ) : (
               /* NÚT ĐĂNG NHẬP GOOGLE */
-              <div className="w-full flex flex-col gap-3">
+              <div className="w-full flex flex-col gap-3 py-2">
                 <button
                   type="button"
                   onClick={handleGoogleLogin}
@@ -195,10 +192,6 @@ export default function AuthModal({
                     </>
                   )}
                 </button>
-
-                <p className="text-[11px] text-[#64748b]">
-                  * Lưu ý: Nếu dùng Google Login trên Vercel, hãy đảm bảo tên miền <code className="text-purple-400">videolengocminh.vercel.app</code> đã được thêm vào Authorized Domains trên Firebase Console.
-                </p>
               </div>
             )}
           </div>
