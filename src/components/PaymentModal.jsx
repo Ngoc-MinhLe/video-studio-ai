@@ -45,6 +45,13 @@ export default function PaymentModal({
 
   const prevCoinsRef = React.useRef(userData?.coins || 0);
 
+  // Reset về màn hình chọn gói khi đóng / mở modal
+  useEffect(() => {
+    if (!isOpen) {
+      setStep('select');
+    }
+  }, [isOpen]);
+
   // Lắng nghe biến động số dư Xu realtime của User (Tự động nhảy màn hình khi tiền về)
   useEffect(() => {
     if (step === 'qr' && userData?.coins > prevCoinsRef.current) {
@@ -62,12 +69,12 @@ export default function PaymentModal({
   useEffect(() => {
     let unsub = () => {};
 
-    if (step === 'qr' && currentUser) {
+    if (step === 'qr' && currentUser && selectedPkg) {
       const randomCode = Math.floor(100000 + Math.random() * 900000);
       const memo = `VS ${randomCode}`;
       setOrderId(memo);
 
-      // Tạo đơn hàng chờ thanh toán thông qua Serverless API (Dùng firebase-admin an toàn 100%)
+      // Tạo đơn hàng chờ thanh toán thông qua Serverless REST API
       fetch('/api/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -106,7 +113,7 @@ export default function PaymentModal({
     }
 
     return () => unsub();
-  }, [step, currentUser]); // Chỉ chạy lại khi bước (step) chuyển sang QR
+  }, [step, currentUser, selectedPkg?.id]);
 
   if (!isOpen) return null;
 
@@ -151,6 +158,8 @@ export default function PaymentModal({
     onClose();
   };
 
+  const formattedAmount = (selectedPkg?.amount || 20000).toLocaleString('vi-VN');
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
       <div className="relative w-full max-w-lg bg-[#12151e] border border-purple-500/30 rounded-2xl shadow-2xl overflow-hidden p-6 text-left">
@@ -184,7 +193,7 @@ export default function PaymentModal({
                   <div
                     key={pkg.id}
                     onClick={() => {
-                      console.log('[PaymentModal Selected Package]:', pkg);
+                      console.log('[PaymentModal Clicked Package]:', pkg);
                       setSelectedPkg(pkg);
                     }}
                     className={`relative cursor-pointer p-4 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 select-none active:scale-95 ${
@@ -222,7 +231,7 @@ export default function PaymentModal({
               onClick={() => setStep('qr')}
               className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-extrabold text-sm shadow-xl shadow-purple-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
             >
-              <span>TẠO MÃ QR CHUYỂN KHOẢN ({selectedPkg.amount.toLocaleString('vi-VN')} VNĐ)</span>
+              <span>TẠO MÃ QR CHUYỂN KHOẢN ({formattedAmount} VNĐ)</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
