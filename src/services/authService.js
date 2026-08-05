@@ -112,23 +112,20 @@ export const signInWithEmail = async (email, password) => {
 };
 
 /**
- * Đăng nhập bằng Google (Tự động thử Popup, nếu bị chặn Popup do COOP thì chuyển sang Redirect)
+ * Đăng nhập bằng Google
  */
 export const signInWithGoogle = async () => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return await handleAuthSuccess(result.user);
   } catch (error) {
-    console.warn("Lỗi Popup Google Auth, chuyển sang chế độ Redirect...", error);
-    if (
-      error.code === 'auth/popup-closed-by-user' || 
-      error.code === 'auth/popup-blocked' ||
-      error.code === 'auth/cancelled-popup-request'
-    ) {
-      // Vượt rào cản COOP / Popup Blocker bằng phương thức Redirect chuẩn
-      await signInWithRedirect(auth, googleProvider);
+    console.error("Lỗi Đăng Nhập Google:", error);
+    if (error.code === 'auth/popup-closed-by-user') {
+      throw new Error('Cửa sổ Google Popup bị đóng hoặc bị trình duyệt Cốc Cốc ngắt kết nối. Vui lòng bấm Đăng Nhập lại hoặc dùng Đăng Nhập Email.');
+    } else if (error.code === 'auth/unauthorized-domain') {
+      throw new Error('Tên miền này chưa được thêm vào Authorized Domains trên Firebase Console.');
     } else {
-      throw error;
+      throw new Error(error.message || 'Không thể đăng nhập bằng Google.');
     }
   }
 };
