@@ -15,11 +15,19 @@ import {
   FileAudio,
   Sliders,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  ExternalLink
 } from 'lucide-react';
 import { loadFFmpeg, processVideo } from './services/ffmpegService';
 import { processVideoCanvas } from './services/canvasExporter';
 import confetti from 'canvas-confetti';
+
+// Icon YouTube SVG sắc nét chuẩn thương hiệu
+const YoutubeIcon = ({ className = "w-5 h-5" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+  </svg>
+);
 
 export default function App() {
   // --- States Quản lý Files ---
@@ -292,6 +300,18 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Nút Quảng Cáo Kênh YouTube trên Header */}
+            <a 
+              href="https://www.youtube.com/channel/UCTH5A6CPnunCR-Iw8nvyZfw?sub_confirmation=1" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600 hover:text-white transition-all text-xs font-semibold shadow-sm group"
+              title="Ghé thăm kênh YouTube LE NGOC MINH MULTIMEDIA"
+            >
+              <YoutubeIcon className="w-4 h-4 text-red-500 group-hover:text-white shrink-0 transition-colors" />
+              <span className="hidden sm:inline">Đăng Ký Kênh</span>
+            </a>
+
             {/* Bộ chọn Engine Render */}
             <div className="flex items-center gap-1 bg-[#1a1e2b] p-1 rounded-xl border border-[#2b3042] text-xs">
               <button
@@ -497,7 +517,7 @@ export default function App() {
             ) : (
               <div className="flex flex-col items-center gap-3 text-[#64748b] p-8">
                 <FileVideo className="w-12 h-12 stroke-[1.5]" />
-                <p className="text-sm font-medium text-center">Vui lòng chọn một Video MP4 từ cột bên trái để bắt đầu</p>
+                <p className="text-sm font-medium text-center">Vui lòng chọn một Video từ cột bên trái để bắt đầu</p>
               </div>
             )}
           </div>
@@ -634,6 +654,47 @@ export default function App() {
           </div>
         </section>
       </main>
+
+      {/* --- YOUTUBE CHANNEL PROMO SECTION --- */}
+      <footer className="max-w-7xl mx-auto mt-8 px-6">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-red-950/50 via-[#12151e] to-purple-950/50 border border-red-500/30 p-6 md:p-8 backdrop-blur-md shadow-2xl">
+          {/* Vệt sáng trang trí background */}
+          <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-red-500/10 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-5 text-center md:text-left flex-1">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-red-600 to-rose-500 flex items-center justify-center shadow-xl shadow-red-600/30 shrink-0">
+                <YoutubeIcon className="w-9 h-9 text-white" />
+              </div>
+              <div>
+                <div className="flex items-center justify-center md:justify-start gap-2 mb-1 flex-wrap">
+                  <h3 className="font-bold text-lg md:text-xl text-white tracking-wide">LE NGOC MINH MULTIMEDIA</h3>
+                  <span className="text-[10px] uppercase tracking-wider font-bold px-2.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/40">Kênh Chính Thức</span>
+                </div>
+                <p className="text-xs md:text-sm text-[#94a3b8] max-w-2xl leading-relaxed">
+                  Ủng hộ kênh để xem thêm nhiều Video hướng dẫn dựng phim, Kỹ thuật AI Multimedia, Thủ thuật phần mềm & Mẹo biên tập video TikTok/Reels triệu view!
+                </p>
+              </div>
+            </div>
+
+            <a 
+              href="https://www.youtube.com/channel/UCTH5A6CPnunCR-Iw8nvyZfw?sub_confirmation=1" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-sm shadow-xl shadow-red-600/30 hover:shadow-red-600/50 transition-all flex items-center gap-2.5 shrink-0 group border border-red-400/30 active:scale-95"
+            >
+              <YoutubeIcon className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              <span>ĐĂNG KÝ KÊNH NGAY</span>
+              <ExternalLink className="w-4 h-4 opacity-80 group-hover:translate-x-0.5 transition-transform" />
+            </a>
+          </div>
+        </div>
+        
+        <p className="text-center text-xs text-[#64748b] mt-6">
+          © 2026 Video Studio AI • Phát triển bởi LE NGOC MINH MULTIMEDIA
+        </p>
+      </footer>
     </div>
   );
 }
