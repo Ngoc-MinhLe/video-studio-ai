@@ -43,6 +43,21 @@ export default function PaymentModal({
   const [copiedField, setCopiedField] = useState(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
+  const prevCoinsRef = React.useRef(userData?.coins || 0);
+
+  // Lắng nghe biến động số dư Xu realtime của User (Tự động nhảy màn hình khi tiền về)
+  useEffect(() => {
+    if (step === 'qr' && userData?.coins > prevCoinsRef.current) {
+      setStep('success');
+      confetti({
+        particleCount: 150,
+        spread: 90,
+        origin: { y: 0.5 }
+      });
+    }
+    prevCoinsRef.current = userData?.coins || 0;
+  }, [userData?.coins, step]);
+
   // Khởi tạo đơn nạp xu Firestore & Lắng nghe SePay Webhook tự động 24/7
   useEffect(() => {
     let unsub = () => {};
@@ -266,28 +281,14 @@ export default function PaymentModal({
             </div>
 
             {/* Trạng thái lắng nghe biến động ngân hàng tự động */}
-            <div className="bg-[#161a26] p-3.5 rounded-xl border border-emerald-500/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 text-purple-400 animate-spin shrink-0" />
-                <span className="text-[#94a3b8]">Đang lắng nghe biến động ngân hàng tự động...</span>
+            <div className="bg-[#161a26] p-3.5 rounded-xl border border-emerald-500/30 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                <span className="text-emerald-300 font-semibold">
+                  Đang tự động kiểm tra số dư ngân hàng (Tự động 100%)...
+                </span>
               </div>
-
-              {/* Nút Kích hoạt / Xác nhận nạp xu tức thì */}
-              <button
-                onClick={handleSimulateWebhookPayment}
-                disabled={isVerifying}
-                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 active:scale-95"
-                title="Bấm vào đây nếu bạn đã chuyển khoản thành công để kích hoạt nạp xu tức thì"
-              >
-                {isVerifying ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    <Zap className="w-4 h-4 text-yellow-300 fill-yellow-300" />
-                    <span>XÁC NHẬN ĐÃ CHUYỂN KHOẢN & CỘNG XU</span>
-                  </>
-                )}
-              </button>
+              <span className="text-[11px] font-mono text-[#64748b]">Tốc độ 1-2 giây</span>
             </div>
           </div>
         )}
