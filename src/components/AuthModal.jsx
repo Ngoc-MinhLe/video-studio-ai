@@ -18,7 +18,9 @@ export default function AuthModal({
   isOpen, 
   onClose, 
   modalType = 'login', // 'login' | 'insufficient_coins'
-  onLoginSuccess 
+  onLoginSuccess,
+  onOpenPayment,
+  onOpenFreeCoins
 }) {
   const [authMethod, setAuthMethod] = useState('email'); // 'email' | 'google'
   const [email, setEmail] = useState('admin@gmail.com');
@@ -54,7 +56,7 @@ export default function AuthModal({
     } catch (err) {
       console.error(err);
       if (err.code === 'auth/popup-closed-by-user') {
-        setErrorMsg('Cửa sổ Google Popup đã đóng trước khi hoàn tất.');
+        setErrorMsg('Cửa sổ Google Popup bị đóng hoặc bị trình duyệt Cốc Cốc ngắt kết nối. Vui lòng bấm Đăng Nhập lại hoặc dùng Đăng Nhập Email.');
       } else {
         setErrorMsg(err.message || 'Không thể đăng nhập Google.');
       }
@@ -211,19 +213,33 @@ export default function AuthModal({
 
             <div className="w-full bg-[#1a1e2b] p-4 rounded-xl border border-[#2b3042] text-xs text-[#94a3b8] text-left flex flex-col gap-2">
               <p className="font-semibold text-white">💡 Làm sao để có thêm Xu?</p>
-              <p>• Quay lại vào ngày mai để tự động nhận thêm <strong>2 lượt xuất miễn phí mới</strong>.</p>
-              <p>• Hoặc liên hệ Admin qua kênh YouTube <strong>LE NGOC MINH MULTIMEDIA</strong> để được hỗ trợ cấp thêm xu!</p>
+              <p>• Nạp Xu tự động qua Ngân Hàng VietQR (Nhận xu ngay sau 3 giây).</p>
+              <p>• Hoặc Kiếm Xu Miễn Phí bằng cách Đăng ký Kênh & Xem Video.</p>
             </div>
 
-            <a 
-              href="https://www.youtube.com/channel/UCTH5A6CPnunCR-Iw8nvyZfw?sub_confirmation=1" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 shrink-0"
-            >
-              <span>LIÊN HỆ ADMIN CẤP XU</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+            <div className="flex flex-col gap-2.5 w-full">
+              <button
+                onClick={() => {
+                  onClose();
+                  if (onOpenPayment) onOpenPayment();
+                }}
+                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              >
+                <Coins className="w-4 h-4" />
+                <span>NẠP XU QUA NGÂN HÀNG VIETQR</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  onClose();
+                  if (onOpenFreeCoins) onOpenFreeCoins();
+                }}
+                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              >
+                <Gift className="w-4 h-4" />
+                <span>KIẾM XU FREE (SUB KÊNH +50 XU)</span>
+              </button>
+            </div>
           </div>
         )}
 

@@ -818,6 +818,8 @@ export default function App() {
         onLoginSuccess={(user) => {
           console.log("Đăng nhập thành công:", user);
         }}
+        onOpenPayment={() => setIsPaymentModalOpen(true)}
+        onOpenFreeCoins={() => setIsFreeCoinsModalOpen(true)}
       />
 
       {/* --- MODAL NẠP XU NGÂN HÀNG VIETQR --- */}
