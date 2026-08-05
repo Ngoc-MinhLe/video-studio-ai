@@ -26,12 +26,12 @@ const RECHARGE_PACKAGES = [
   { id: 'pkg_100k', amount: 100000, coins: 800, bonus: '+300 Xu Tặng', popular: false },
 ];
 
-// Cấu hình ngân hàng mặc định (Có thể thay đổi số tài khoản & tên tài khoản của bạn tại đây)
+// Cấu hình ngân hàng Vietcombank chính chủ của bạn
 const DEFAULT_BANK_CONFIG = {
-  bankId: 'MB', // MBBank (Có thể đổi thành VCB, TCB, ACB, VPB, TPB...)
-  bankName: 'Ngân hàng MBBank',
-  accountNo: '0988888888', // <-- Số tài khoản ngân hàng của bạn
-  accountName: 'LE NGOC MINH', // <-- Tên chủ tài khoản
+  bankId: 'VCB', // Vietcombank
+  bankName: 'Ngân hàng TMCP Ngoại Thương Việt Nam (Vietcombank)',
+  accountNo: '0031000298465', // Số tài khoản Vietcombank chính chủ
+  accountName: 'LE NGOC MINH', // Tên chủ tài khoản
 };
 
 export default function PaymentModal({ 
