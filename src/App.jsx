@@ -36,6 +36,7 @@ import { loadFFmpeg, processVideo } from './services/ffmpegService';
 import { processVideoCanvas } from './services/canvasExporter';
 import AdminModal from './components/AdminModal';
 import AuthModal from './components/AuthModal';
+import PaymentModal from './components/PaymentModal';
 import confetti from 'canvas-confetti';
 
 // Icon YouTube SVG sắc nét chuẩn thương hiệu
@@ -50,6 +51,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [authModalType, setAuthModalType] = useState('login'); // 'login' | 'insufficient_coins'
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
 
@@ -406,11 +408,18 @@ export default function App() {
                   <span>{userData.dailyFreeExports || 0} Free/ngày</span>
                 </div>
 
-                {/* Số Xu Tích Lũy */}
-                <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/10 text-amber-300 border border-amber-500/30 text-xs font-bold font-mono" title="Số xu hiện có trong tài khoản">
-                  <Coins className="w-3.5 h-3.5 text-amber-400" />
+                {/* Nút Nạp Xu Qua Ngân Hàng VietQR */}
+                <button 
+                  onClick={() => setIsPaymentModalOpen(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-500/20 to-yellow-500/20 hover:from-amber-500/30 hover:to-yellow-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold font-mono transition-all cursor-pointer shadow-sm active:scale-95 group"
+                  title="Bấm vào đây để Nạp Xu Tự Động Qua Ngân Hàng VietQR / MoMo"
+                >
+                  <Coins className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-12 transition-transform" />
                   <span>{userData.coins || 0} Xu</span>
-                </div>
+                  <span className="ml-1 text-[10px] bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 font-extrabold px-1.5 py-0.5 rounded-md uppercase tracking-wider shadow-sm">
+                    Nạp Xu
+                  </span>
+                </button>
 
                 {/* Nút Admin Panel (Nếu là Admin) */}
                 {isUserAdmin(userData) && (
@@ -794,6 +803,14 @@ export default function App() {
         onLoginSuccess={(user) => {
           console.log("Đăng nhập thành công:", user);
         }}
+      />
+
+      {/* --- MODAL NẠP XU NGÂN HÀNG VIETQR --- */}
+      <PaymentModal 
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        currentUser={currentUser}
+        userData={userData}
       />
     </div>
   );
