@@ -1,20 +1,29 @@
-import { initializeApp, getApps } from "firebase/app";
-import { getFirestore, doc, getDoc, updateDoc, collection, query, where, getDocs, increment } from "firebase/firestore";
+import admin from 'firebase-admin';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBRz-WubZ9tsp_bfaiGpu5Iz_kOgC68vbQ",
-  authDomain: "lengocminh-74a9e.firebaseapp.com",
-  projectId: "lengocminh-74a9e",
-  storageBucket: "lengocminh-74a9e.firebasestorage.app",
-  messagingSenderId: "528797008471",
-  appId: "1:528797008471:web:d2c169aa256980a7645912",
-};
+// Khởi tạo Firebase Admin SDK (Chạy trên Vercel Serverless có quyền Admin tối cao, bypass rules an toàn mà KHÔNG cần sửa quy tắc bảo mật của ứng dụng khác)
+if (!admin.apps.length) {
+  try {
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      const serviceAccount = typeof process.env.FIREBASE_SERVICE_ACCOUNT === 'string' 
+        ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+        : process.env.FIREBASE_SERVICE_ACCOUNT;
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+    } else {
+      admin.initializeApp({
+        projectId: "lengocminh-74a9e"
+      });
+    }
+  } catch (err) {
+    console.warn("Lỗi khởi tạo Firebase Admin SDK:", err);
+    admin.initializeApp({ projectId: "lengocminh-74a9e" });
+  }
+}
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-const db = getFirestore(app);
+const db = admin.firestore();
 
 export default async function handler(req, res) {
-  // CORS Headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -53,7 +62,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, message: 'Ignored outbound transaction' });
     }
 
-    // Match order code pattern: VS 123456 or VS123456 or 123456
+    // Tách mã đơn hàng dạng VS 123456 hoặc VS123456 hoặc dãy 6 chữ số
     let matchedDigits = null;
     const vsMatch = content.match(/VS\s*[-_]?\s*(\d{6})/i);
     if (vsMatch) {
@@ -71,9 +80,9 @@ export default async function handler(req, res) {
     if (matchedDigits) {
       const candidateCodes = [`VS ${matchedDigits}`, `VS${matchedDigits}`];
       for (const code of candidateCodes) {
-        const orderRef = doc(db, "orders", code);
-        const orderSnap = await getDoc(orderRef);
-        if (orderSnap.exists()) {
+        const orderRef = db.collection("orders").doc(code);
+        const orderSnap = await orderRef.get();
+        if (orderSnap.exists) {
           targetOrderDoc = orderSnap.data();
           targetOrderRef = orderRef;
           break;
@@ -81,13 +90,10 @@ export default async function handler(req, res) {
       }
     }
 
-    // Fallback: Nếu không thấy bằng doc ID, tìm trong collection "orders" trạng thái pending
+    // Fallback: Tìm đơn hàng pending nếu chưa thấy
     if (!targetOrderDoc) {
       try {
-        const ordersCol = collection(db, "orders");
-        const q = query(ordersCol, where("status", "==", "pending"));
-        const querySnap = await getDocs(q);
-
+        const querySnap = await db.collection("orders").where("status", "==", "pending").get();
         querySnap.forEach((docSnap) => {
           const d = docSnap.data();
           if (!targetOrderDoc && matchedDigits && (d.orderCode || '').includes(matchedDigits)) {
@@ -96,7 +102,7 @@ export default async function handler(req, res) {
           }
         });
       } catch (e) {
-        console.warn("[SePay Webhook]: Query collection fallback warn:", e);
+        console.warn("[SePay Webhook]: Fallback query order warning:", e);
       }
     }
 
@@ -112,30 +118,30 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, message: 'Order already completed previously.' });
     }
 
-    // Cập nhật trạng thái đơn hàng thành completed
-    await updateDoc(targetOrderRef, {
+    // Cập nhật đơn hàng thành công bằng Firebase Admin SDK (Bypass rules an toàn)
+    await targetOrderRef.update({
       status: 'completed',
       paidAmount: transferAmount,
       sepayTransactionId: data.id || null,
       updatedAt: new Date().toISOString()
     });
 
-    // Cộng xu tự động cho tài khoản người dùng
+    // Tự động cộng Xu cho người dùng bằng Firebase Admin SDK
     const uid = targetOrderDoc.uid;
     const coinsToAdd = Number(targetOrderDoc.coins || 0);
 
     if (uid && coinsToAdd > 0) {
-      const userRef = doc(db, "users", uid);
-      await updateDoc(userRef, {
-        coins: increment(coinsToAdd),
+      const userRef = db.collection("users").doc(uid);
+      await userRef.update({
+        coins: admin.firestore.FieldValue.increment(coinsToAdd),
         updatedAt: new Date().toISOString()
       });
-      console.log(`[SePay Webhook Success]: Credited +${coinsToAdd} coins to user ${uid}`);
+      console.log(`[SePay Webhook Admin Success]: Credited +${coinsToAdd} coins to user ${uid}`);
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Coins credited automatically!',
+      message: 'Coins credited automatically via Firebase Admin SDK!',
       uid,
       coinsAdded: coinsToAdd
     });
