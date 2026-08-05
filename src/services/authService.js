@@ -1,5 +1,7 @@
 import { 
   signInWithPopup, 
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut, 
   onAuthStateChanged 
 } from "firebase/auth";
@@ -30,6 +32,76 @@ const getTodayString = () => {
 };
 
 /**
+ * Đăng nhập bằng Email & Mật khẩu (Tự động đăng ký nếu chưa có tài khoản)
+ */
+export const signInWithEmail = async (email, password) => {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail || !password) {
+    throw new Error('Vui lòng nhập đầy đủ Email và Mật khẩu.');
+  }
+
+  let userCredential;
+  try {
+    userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
+  } catch (err) {
+    if (
+      err.code === 'auth/user-not-found' || 
+      err.code === 'auth/invalid-credential' ||
+      err.code === 'auth/wrong-password'
+    ) {
+      try {
+        // Tự động tạo tài khoản mới nếu chưa tồn tại
+        userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+      } catch (createErr) {
+        if (createErr.code === 'auth/email-already-in-use') {
+          throw new Error('Mật khẩu không chính xác cho tài khoản này.');
+        }
+        throw createErr;
+      }
+    } else {
+      throw err;
+    }
+  }
+
+  const user = userCredential.user;
+  const today = getTodayString();
+  const userRef = doc(db, "users", user.uid);
+  const userSnap = await getDoc(userRef);
+
+  const isAdmin = isUserAdmin({ email: user.email });
+
+  if (!userSnap.exists()) {
+    const displayName = cleanEmail.split('@')[0];
+    const initialData = {
+      uid: user.uid,
+      displayName: displayName || 'Người dùng',
+      email: cleanEmail,
+      photoURL: '',
+      coins: isAdmin ? 9999 : 20,
+      dailyFreeExports: 2,
+      lastDailyDate: today,
+      role: isAdmin ? 'admin' : 'user',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    await setDoc(userRef, initialData);
+    return initialData;
+  } else {
+    const data = userSnap.data();
+    if (data.lastDailyDate !== today) {
+      await updateDoc(userRef, {
+        dailyFreeExports: 2,
+        lastDailyDate: today,
+        updatedAt: new Date().toISOString()
+      });
+      data.dailyFreeExports = 2;
+      data.lastDailyDate = today;
+    }
+    return data;
+  }
+};
+
+/**
  * Đăng nhập bằng Google
  */
 export const signInWithGoogle = async () => {
@@ -49,7 +121,7 @@ export const signInWithGoogle = async () => {
         displayName: user.displayName || 'Người dùng',
         email: user.email,
         photoURL: user.photoURL || '',
-        coins: 20,
+        coins: isAdmin ? 9999 : 20,
         dailyFreeExports: 2,
         lastDailyDate: today,
         role: isAdmin ? 'admin' : 'user',
@@ -88,6 +160,15 @@ export const subscribeUserData = (uid, callback) => {
     if (snap.exists()) {
       const data = snap.data();
       const today = getTodayString();
+      const isAdmin = isUserAdmin(data);
+
+      if (isAdmin && data.role !== 'admin') {
+        data.role = 'admin';
+        try {
+          await updateDoc(userRef, { role: 'admin' });
+        } catch (e) {}
+      }
+
       // Tự động làm mới 2 lượt free mỗi ngày khi qua ngày mới
       if (data.lastDailyDate !== today) {
         try {
@@ -103,6 +184,32 @@ export const subscribeUserData = (uid, callback) => {
         }
       }
       callback(data);
+    } else {
+      // Document chưa tồn tại trên Firestore (VD: User vừa tạo trực tiếp từ Firebase Console) -> Tự động khởi tạo
+      const currentUser = auth.currentUser;
+      if (currentUser && currentUser.uid === uid) {
+        const today = getTodayString();
+        const isAdmin = isUserAdmin({ email: currentUser.email });
+        const initialData = {
+          uid: currentUser.uid,
+          displayName: (currentUser.email || 'User').split('@')[0],
+          email: currentUser.email || '',
+          photoURL: currentUser.photoURL || '',
+          coins: isAdmin ? 9999 : 20,
+          dailyFreeExports: 2,
+          lastDailyDate: today,
+          role: isAdmin ? 'admin' : 'user',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        try {
+          await setDoc(userRef, initialData);
+          callback(initialData);
+        } catch (err) {
+          console.error("Lỗi tự động tạo Firestore doc:", err);
+          callback(initialData);
+        }
+      }
     }
   });
 };

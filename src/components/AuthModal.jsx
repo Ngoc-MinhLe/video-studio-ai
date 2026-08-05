@@ -7,15 +7,12 @@ import {
   ShieldCheck, 
   AlertCircle, 
   Loader2,
-  ExternalLink
+  ExternalLink,
+  Mail,
+  Lock,
+  LogIn
 } from 'lucide-react';
-import { signInWithGoogle } from '../services/authService';
-
-const YoutubeIcon = ({ className = "w-5 h-5" }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-  </svg>
-);
+import { signInWithGoogle, signInWithEmail } from '../services/authService';
 
 export default function AuthModal({ 
   isOpen, 
@@ -23,10 +20,29 @@ export default function AuthModal({
   modalType = 'login', // 'login' | 'insufficient_coins'
   onLoginSuccess 
 }) {
+  const [authMethod, setAuthMethod] = useState('email'); // 'email' | 'google'
+  const [email, setEmail] = useState('admin@gmail.com');
+  const [password, setPassword] = useState('123456');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   if (!isOpen) return null;
+
+  const handleEmailLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      const userData = await signInWithEmail(email, password);
+      if (onLoginSuccess) onLoginSuccess(userData);
+      onClose();
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(err.message || 'Không thể đăng nhập bằng Email này.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -37,7 +53,13 @@ export default function AuthModal({
       onClose();
     } catch (err) {
       console.error(err);
-      setErrorMsg('Không thể đăng nhập Google. Vui lòng kiểm tra lại cửa sổ popup.');
+      if (err.code === 'auth/unauthorized-domain') {
+        setErrorMsg('Tên miền Vercel chưa được thêm vào Firebase Authorized Domains. Bạn có thể dùng Đăng Nhập bằng Email bên dưới để vào ngay!');
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        setErrorMsg('Đã đóng cửa sổ Google popup trước khi hoàn tất.');
+      } else {
+        setErrorMsg(err.message || 'Không thể đăng nhập Google.');
+      }
     } finally {
       setLoading(false);
     }
@@ -56,57 +78,129 @@ export default function AuthModal({
         </button>
 
         {modalType === 'login' ? (
-          /* MODAL ĐĂNG NHẬP GOOGLE */
-          <div className="flex flex-col items-center text-center gap-5 pt-2">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center shadow-xl shadow-purple-600/30">
-              <Sparkles className="w-8 h-8 text-white" />
+          /* MODAL ĐĂNG NHẬP (HỖ TRỢ CẢ EMAIL/PASSWORD VÀ GOOGLE) */
+          <div className="flex flex-col items-center text-center gap-4 pt-2">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center shadow-xl shadow-purple-600/30">
+              <Sparkles className="w-7 h-7 text-white" />
             </div>
 
             <div>
               <h3 className="font-bold text-xl text-white">Yêu Cầu Đăng Nhập</h3>
-              <p className="text-xs text-[#94a3b8] mt-1.5 leading-relaxed">
-                Đăng nhập để nhận ngay <strong className="text-emerald-400">2 lượt xuất video miễn phí mỗi ngày</strong> + <strong className="text-amber-400">20 Xu chào mừng</strong>!
+              <p className="text-xs text-[#94a3b8] mt-1 leading-relaxed">
+                Đăng nhập để nhận <strong className="text-emerald-400">2 lượt xuất video miễn phí/ngày</strong> + <strong className="text-amber-400">20 Xu chào mừng</strong>!
               </p>
             </div>
 
-            {/* Quyền lợi tài khoản */}
-            <div className="w-full bg-[#1a1e2b] p-3.5 rounded-xl border border-[#2b3042] flex flex-col gap-2.5 text-left text-xs">
-              <div className="flex items-center gap-2 text-emerald-300 font-medium">
-                <Gift className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Miễn phí 2 lượt xuất video mỗi ngày (tự động làm mới)</span>
-              </div>
-              <div className="flex items-center gap-2 text-amber-300 font-medium">
-                <Coins className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>Tặng ngay 20 Xu tích lũy khi tạo tài khoản</span>
-              </div>
+            {/* Chuyển đổi phương thức đăng nhập */}
+            <div className="grid grid-cols-2 w-full bg-[#1a1e2b] p-1 rounded-xl border border-[#2b3042] text-xs">
+              <button
+                type="button"
+                onClick={() => setAuthMethod('email')}
+                className={`py-1.5 rounded-lg font-semibold transition-all ${
+                  authMethod === 'email'
+                    ? 'bg-purple-600 text-white shadow-md'
+                    : 'text-[#94a3b8] hover:text-white'
+                }`}
+              >
+                ✉️ Email / Password
+              </button>
+              <button
+                type="button"
+                onClick={() => setAuthMethod('google')}
+                className={`py-1.5 rounded-lg font-semibold transition-all ${
+                  authMethod === 'google'
+                    ? 'bg-purple-600 text-white shadow-md'
+                    : 'text-[#94a3b8] hover:text-white'
+                }`}
+              >
+                🌐 Google Account
+              </button>
             </div>
 
             {errorMsg && (
-              <p className="text-xs text-red-400 bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/30">
-                {errorMsg}
-              </p>
+              <div className="w-full text-xs text-red-300 bg-red-500/10 p-3 rounded-xl border border-red-500/30 text-left">
+                ⚠️ {errorMsg}
+              </div>
             )}
 
-            {/* Nút Đăng nhập Google */}
-            <button
-              onClick={handleGoogleLogin}
-              disabled={loading}
-              className="w-full py-3.5 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-sm shadow-xl transition-all flex items-center justify-center gap-3 active:scale-98 cursor-pointer"
-            >
-              {loading ? (
-                <Loader2 className="w-5 h-5 animate-spin text-purple-600" />
-              ) : (
-                <>
-                  <svg className="w-5 h-5" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
-                    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.29v3.15C3.26 21.3 7.33 24 12 24z"/>
-                    <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.29C.47 8.21 0 10.05 0 12s.47 3.79 1.29 5.42l3.99-3.15z"/>
-                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.7 1.29 6.58l3.99 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
-                  </svg>
-                  <span>Đăng Nhập Bằng Google</span>
-                </>
-              )}
-            </button>
+            {authMethod === 'email' ? (
+              /* FORM ĐĂNG NHẬP BẰNG EMAIL */
+              <form onSubmit={handleEmailLogin} className="w-full flex flex-col gap-3 text-left">
+                <div>
+                  <label className="text-xs text-[#94a3b8] mb-1 block font-medium">Email tài khoản</label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-[#64748b] absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input 
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Nhập email (VD: admin@gmail.com)..."
+                      className="w-full bg-[#161a26] border border-[#2b3042] rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#94a3b8] mb-1 block font-medium">Mật khẩu</label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-[#64748b] absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input 
+                      type="password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Nhập mật khẩu (tự động tạo mới nếu chưa có)..."
+                      className="w-full bg-[#161a26] border border-[#2b3042] rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
+                    />
+                  </div>
+                  <span className="text-[10px] text-[#64748b] mt-1 block">* Nếu chưa có tài khoản, hệ thống sẽ tự động đăng ký mới.</span>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2 mt-1 cursor-pointer active:scale-98"
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <LogIn className="w-4 h-4" />
+                      <span>Đăng Nhập / Đăng Ký Tự Động</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            ) : (
+              /* NÚT ĐĂNG NHẬP GOOGLE */
+              <div className="w-full flex flex-col gap-3">
+                <button
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  disabled={loading}
+                  className="w-full py-3.5 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs shadow-xl transition-all flex items-center justify-center gap-3 active:scale-98 cursor-pointer"
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.29v3.15C3.26 21.3 7.33 24 12 24z"/>
+                        <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.29C.47 8.21 0 10.05 0 12s.47 3.79 1.29 5.42l3.99-3.15z"/>
+                        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.7 1.29 6.58l3.99 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                      </svg>
+                      <span>Đăng Nhập Bằng Google</span>
+                    </>
+                  )}
+                </button>
+
+                <p className="text-[11px] text-[#64748b]">
+                  * Lưu ý: Nếu dùng Google Login trên Vercel, hãy đảm bảo tên miền <code className="text-purple-400">videolengocminh.vercel.app</code> đã được thêm vào Authorized Domains trên Firebase Console.
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           /* MODAL THÔNG BÁO KHÔNG ĐỦ XU */
