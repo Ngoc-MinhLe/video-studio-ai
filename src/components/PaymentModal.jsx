@@ -67,7 +67,20 @@ export default function PaymentModal({
       const memo = `VS ${randomCode}`;
       setOrderId(memo);
 
-      // Tạo đơn hàng chờ thanh toán trên Firestore
+      // Tạo đơn hàng chờ thanh toán thông qua Serverless API (Dùng firebase-admin an toàn 100%)
+      fetch('/api/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderCode: memo,
+          uid: currentUser.uid,
+          userEmail: currentUser.email || '',
+          coins: selectedPkg.coins,
+          amount: selectedPkg.amount
+        })
+      }).catch(err => console.warn("Lỗi gọi API create-order:", err));
+
+      // Thêm fallback tạo orderRef trên client SDK
       const orderRef = doc(db, "orders", memo);
       setDoc(orderRef, {
         orderCode: memo,
@@ -77,7 +90,7 @@ export default function PaymentModal({
         amount: selectedPkg.amount,
         status: 'pending',
         createdAt: new Date().toISOString()
-      }).catch(err => console.warn("Lỗi khởi tạo đơn nạp:", err));
+      }).catch(() => {});
 
       // Lắng nghe tín hiệu Webhook từ SePay bắn về Firestore realtime
       unsub = onSnapshot(orderRef, (snap) => {

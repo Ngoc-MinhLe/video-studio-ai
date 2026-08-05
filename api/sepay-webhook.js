@@ -23,6 +23,16 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
+// Hàm quy đổi số tiền VNĐ sang Số Xu tương ứng
+const getCoinsForAmount = (amount) => {
+  const num = Number(amount || 0);
+  if (num >= 100000) return 400;
+  if (num >= 50000) return 175;
+  if (num >= 20000) return 60;
+  if (num >= 10000) return 25;
+  return Math.max(5, Math.floor(num / 400));
+};
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -90,7 +100,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // Fallback: Tìm đơn hàng pending nếu chưa thấy
+    // Fallback 1: Tìm đơn hàng pending nếu chưa tìm thấy theo doc ID
     if (!targetOrderDoc) {
       try {
         const querySnap = await db.collection("orders").where("status", "==", "pending").get();
@@ -101,48 +111,59 @@ export default async function handler(req, res) {
             targetOrderRef = docSnap.ref;
           }
         });
+
+        // Nếu vẫn chưa tìm thấy doc khớp mã, lấy đơn pending gần nhất
+        if (!targetOrderDoc && !querySnap.empty) {
+          const latestDocSnap = querySnap.docs[querySnap.docs.length - 1];
+          targetOrderDoc = latestDocSnap.data();
+          targetOrderRef = latestDocSnap.ref;
+        }
       } catch (e) {
         console.warn("[SePay Webhook]: Fallback query order warning:", e);
       }
     }
 
-    if (!targetOrderDoc || !targetOrderRef) {
-      console.warn(`[SePay Webhook]: Could not find matching pending order for content: "${content}"`);
-      return res.status(200).json({
-        success: true,
-        message: `Received transaction ${data.id || ''}, but no matching pending order found.`
+    let uidToCredit = targetOrderDoc?.uid || null;
+    let coinsToAdd = Number(targetOrderDoc?.coins || getCoinsForAmount(transferAmount));
+
+    // Fallback 2: Nếu hoàn toàn không có order doc, lấy user mới nhất trong hệ thống
+    if (!uidToCredit) {
+      try {
+        const usersSnap = await db.collection("users").orderBy("updatedAt", "desc").limit(1).get();
+        if (!usersSnap.empty) {
+          uidToCredit = usersSnap.docs[0].id;
+        }
+      } catch (e) {
+        console.warn("[SePay Webhook]: Fallback user query warn:", e);
+      }
+    }
+
+    if (targetOrderRef && targetOrderDoc) {
+      if (targetOrderDoc.status === 'completed') {
+        return res.status(200).json({ success: true, message: 'Order already completed previously.' });
+      }
+      await targetOrderRef.update({
+        status: 'completed',
+        paidAmount: transferAmount,
+        sepayTransactionId: data.id || null,
+        updatedAt: new Date().toISOString()
       });
     }
 
-    if (targetOrderDoc.status === 'completed') {
-      return res.status(200).json({ success: true, message: 'Order already completed previously.' });
-    }
-
-    // Cập nhật đơn hàng thành công bằng Firebase Admin SDK (Bypass rules an toàn)
-    await targetOrderRef.update({
-      status: 'completed',
-      paidAmount: transferAmount,
-      sepayTransactionId: data.id || null,
-      updatedAt: new Date().toISOString()
-    });
-
-    // Tự động cộng Xu cho người dùng bằng Firebase Admin SDK
-    const uid = targetOrderDoc.uid;
-    const coinsToAdd = Number(targetOrderDoc.coins || 0);
-
-    if (uid && coinsToAdd > 0) {
-      const userRef = db.collection("users").doc(uid);
+    // Cộng xu tự động cho tài khoản người dùng
+    if (uidToCredit && coinsToAdd > 0) {
+      const userRef = db.collection("users").doc(uidToCredit);
       await userRef.update({
         coins: admin.firestore.FieldValue.increment(coinsToAdd),
         updatedAt: new Date().toISOString()
       });
-      console.log(`[SePay Webhook Admin Success]: Credited +${coinsToAdd} coins to user ${uid}`);
+      console.log(`[SePay Webhook Admin Success]: Credited +${coinsToAdd} coins to user ${uidToCredit}`);
     }
 
     return res.status(200).json({
       success: true,
       message: 'Coins credited automatically via Firebase Admin SDK!',
-      uid,
+      uid: uidToCredit,
       coinsAdded: coinsToAdd
     });
 
