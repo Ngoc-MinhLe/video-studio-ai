@@ -37,8 +37,7 @@ export default function PaymentModal({
   currentUser,
   userData 
 }) {
-  const [selectedPkgId, setSelectedPkgId] = useState('pkg_20k');
-  const selectedPkg = RECHARGE_PACKAGES.find(p => p.id === selectedPkgId) || RECHARGE_PACKAGES[1];
+  const [selectedPkg, setSelectedPkg] = useState(RECHARGE_PACKAGES[1]);
   const [step, setStep] = useState('select'); // 'select' | 'qr' | 'success'
   const [orderId, setOrderId] = useState('');
   const [copiedField, setCopiedField] = useState(null);
@@ -59,7 +58,7 @@ export default function PaymentModal({
     prevCoinsRef.current = userData?.coins || 0;
   }, [userData?.coins, step]);
 
-  // Khởi tạo đơn nạp xu Firestore & Lắng nghe SePay Webhook tự động 24/7
+  // Khởi tạo đơn nạp xu Firestore & Lắng nghe SePay Webhook tự động 24/7 khi bước sang QR
   useEffect(() => {
     let unsub = () => {};
 
@@ -107,7 +106,7 @@ export default function PaymentModal({
     }
 
     return () => unsub();
-  }, [step, currentUser, selectedPkgId]);
+  }, [step, currentUser]); // Chỉ chạy lại khi bước (step) chuyển sang QR
 
   if (!isOpen) return null;
 
@@ -180,13 +179,13 @@ export default function PaymentModal({
             {/* Danh sách gói nạp */}
             <div className="grid grid-cols-2 gap-3">
               {RECHARGE_PACKAGES.map((pkg) => {
-                const isSelected = pkg.id === selectedPkgId;
+                const isSelected = selectedPkg.id === pkg.id;
                 return (
                   <div
                     key={pkg.id}
                     onClick={() => {
                       console.log('[PaymentModal Selected Package]:', pkg);
-                      setSelectedPkgId(pkg.id);
+                      setSelectedPkg(pkg);
                     }}
                     className={`relative cursor-pointer p-4 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 select-none active:scale-95 ${
                       isSelected
@@ -250,20 +249,24 @@ export default function PaymentModal({
               <div className="flex flex-col items-center justify-center bg-white p-3 rounded-2xl shadow-xl border border-slate-200">
                 <img 
                   src={vietQrUrl} 
-                  alt="Mã VietQR Ngân Hàng" 
-                  className="w-full max-w-[200px] h-auto object-contain rounded-lg"
+                  alt="VietQR Chuyển Khoản Nạp Xu" 
+                  className="w-full h-auto object-contain rounded-xl"
                 />
-                <span className="text-[10px] text-slate-500 font-bold mt-1 tracking-wider uppercase">Quét mã bằng App Ngân Hàng / MoMo</span>
+                <span className="text-[11px] text-slate-500 font-bold mt-2 uppercase tracking-wider">
+                  QUÉT MÃ BẰNG APP NGÂN HÀNG / MOMO
+                </span>
               </div>
 
-              {/* Thông tin tài khoản & Mã đơn hàng */}
+              {/* Thông tin chuyển khoản chi tiết */}
               <div className="flex flex-col gap-2.5 text-xs">
-                <div className="bg-[#161a26] p-2.5 rounded-xl border border-[#2b3042] flex flex-col gap-1">
-                  <span className="text-[11px] text-[#64748b]">Ngân hàng nhận:</span>
-                  <span className="font-bold text-white flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-purple-400" />
-                    {DEFAULT_BANK_CONFIG.bankName}
-                  </span>
+                <div className="bg-[#161a26] p-2.5 rounded-xl border border-[#2b3042] flex justify-between items-center">
+                  <div>
+                    <span className="text-[11px] text-[#64748b] block">Ngân hàng nhận:</span>
+                    <span className="font-bold text-white flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5 text-purple-400" />
+                      {DEFAULT_BANK_CONFIG.bankName}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="bg-[#161a26] p-2.5 rounded-xl border border-[#2b3042] flex justify-between items-center">
@@ -273,8 +276,8 @@ export default function PaymentModal({
                   </div>
                   <button 
                     onClick={() => copyToClipboard(DEFAULT_BANK_CONFIG.accountNo, 'acc')}
-                    className="p-1.5 rounded-lg bg-[#2b3042] hover:bg-purple-600 text-white transition-colors"
-                    title="Sao chép số tài khoản"
+                    className="p-1.5 rounded-lg bg-[#2b3042] hover:bg-[#3b4259] text-white transition-colors"
+                    title="Sao chép STK"
                   >
                     {copiedField === 'acc' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
@@ -325,28 +328,19 @@ export default function PaymentModal({
 
             <div>
               <h3 className="font-bold text-xl text-white">Nạp Xu Thành Công!</h3>
-              <p className="text-xs text-[#94a3b8] mt-1.5">
+              <p className="text-sm text-[#94a3b8] mt-1">
                 Hệ thống ngân hàng đã xác nhận và cộng thành công <strong className="text-amber-400 font-bold">{selectedPkg.coins} Xu</strong> vào tài khoản của bạn.
               </p>
             </div>
 
-            <div className="w-full bg-[#161a26] p-3.5 rounded-xl border border-[#2b3042] flex justify-between items-center text-xs font-mono">
-              <span className="text-[#94a3b8]">Số dư Xu hiện tại:</span>
-              <span className="font-bold text-amber-400 text-base flex items-center gap-1">
-                <Coins className="w-4 h-4" />
-                {(userData?.coins || 0)} Xu
-              </span>
-            </div>
-
             <button
               onClick={handleResetModal}
-              className="w-full py-3 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg transition-all cursor-pointer"
+              className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm shadow-xl shadow-emerald-600/30 transition-all cursor-pointer mt-2"
             >
-              Hoàn Tất & Tiếp Tục Xuất Video
+              TIẾP TỤC XUẤT VIDEO NGAY
             </button>
           </div>
         )}
-
       </div>
     </div>
   );
