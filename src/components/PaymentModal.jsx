@@ -116,6 +116,37 @@ export default function PaymentModal({
     return () => unsub();
   }, [step, currentUser, selectedPkg?.id]);
 
+  // Lắng nghe SePay Bridge Cache cứ 2 giây 1 lần khi ở bước QR (Dùng quyền Client Auth đã đăng nhập 100% an toàn)
+  useEffect(() => {
+    let intervalId = null;
+
+    if (step === 'qr' && orderId && currentUser) {
+      intervalId = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/check-order?memo=${encodeURIComponent(orderId)}&amount=${selectedPkg.amount}`);
+          const data = await res.json();
+          if (data.completed && data.coins > 0) {
+            console.log('[SePay Bridge Matched Completed Order! Crediting client...]:', data);
+            const currentCoins = userData?.coins || 0;
+            await updateUserCoinsInDb(currentUser.uid, currentCoins + data.coins);
+            setStep('success');
+            confetti({
+              particleCount: 150,
+              spread: 90,
+              origin: { y: 0.5 }
+            });
+          }
+        } catch (e) {
+          console.warn("Poll check-order error:", e);
+        }
+      }, 2000);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [step, orderId, currentUser, userData?.coins, selectedPkg.amount]);
+
   if (!isOpen) return null;
 
   // Sao chép thông tin vào bộ nhớ tạm
