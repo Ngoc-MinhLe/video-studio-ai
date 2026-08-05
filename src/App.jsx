@@ -37,6 +37,7 @@ import { processVideoCanvas } from './services/canvasExporter';
 import AdminModal from './components/AdminModal';
 import AuthModal from './components/AuthModal';
 import PaymentModal from './components/PaymentModal';
+import FreeCoinsModal from './components/FreeCoinsModal';
 import confetti from 'canvas-confetti';
 
 // Icon YouTube SVG sắc nét chuẩn thương hiệu
@@ -52,6 +53,7 @@ export default function App() {
   const [userData, setUserData] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isFreeCoinsModalOpen, setIsFreeCoinsModalOpen] = useState(false);
   const [authModalType, setAuthModalType] = useState('login'); // 'login' | 'insufficient_coins'
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
 
@@ -418,6 +420,19 @@ export default function App() {
                   <span>{userData.coins || 0} Xu</span>
                   <span className="ml-1 text-[10px] bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 font-extrabold px-1.5 py-0.5 rounded-md uppercase tracking-wider shadow-sm">
                     Nạp Xu
+                  </span>
+                </button>
+
+                {/* Nút Kiếm Xu Free (+50 Xu) qua YouTube */}
+                <button
+                  onClick={() => setIsFreeCoinsModalOpen(true)}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gradient-to-r from-red-600/20 to-pink-600/20 hover:from-red-600/30 hover:to-pink-600/30 text-red-300 border border-red-500/40 text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95 group"
+                  title="Kiếm Xu Miễn Phí bằng cách Đăng Ký Kênh YouTube & Xem Video"
+                >
+                  <Gift className="w-3.5 h-3.5 text-pink-400 group-hover:scale-110 transition-transform" />
+                  <span>Kiếm Xu Free</span>
+                  <span className="ml-1 text-[10px] bg-red-500 text-white font-extrabold px-1.5 py-0.5 rounded-md uppercase">
+                    +50 Xu
                   </span>
                 </button>
 
@@ -809,6 +824,14 @@ export default function App() {
       <PaymentModal 
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
+        currentUser={currentUser}
+        userData={userData}
+      />
+
+      {/* --- MODAL KIẾM XU FREE QUA YOUTUBE --- */}
+      <FreeCoinsModal 
+        isOpen={isFreeCoinsModalOpen}
+        onClose={() => setIsFreeCoinsModalOpen(false)}
         currentUser={currentUser}
         userData={userData}
       />
