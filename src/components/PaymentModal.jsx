@@ -182,14 +182,16 @@ export default function PaymentModal({
               {RECHARGE_PACKAGES.map((pkg) => {
                 const isSelected = pkg.id === selectedPkgId;
                 return (
-                  <button
+                  <div
                     key={pkg.id}
-                    type="button"
-                    onClick={() => setSelectedPkgId(pkg.id)}
+                    onClick={() => {
+                      console.log('[PaymentModal Selected Package]:', pkg);
+                      setSelectedPkgId(pkg.id);
+                    }}
                     className={`relative cursor-pointer p-4 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 select-none active:scale-95 ${
                       isSelected
-                        ? 'bg-purple-600/25 border-purple-400 shadow-lg shadow-purple-500/20 ring-2 ring-purple-500/50'
-                        : 'bg-[#161a26] border-[#2b3042] hover:border-purple-500/50 opacity-80 hover:opacity-100'
+                        ? 'bg-purple-600/25 border-purple-400 shadow-lg shadow-purple-500/20 ring-2 ring-purple-500/50 opacity-100'
+                        : 'bg-[#161a26] border-[#2b3042] hover:border-purple-500/50 opacity-70 hover:opacity-100'
                     }`}
                   >
                     {pkg.popular && (
@@ -202,15 +204,15 @@ export default function PaymentModal({
                         <Coins className="w-5 h-5" />
                         <span>{pkg.coins} Xu</span>
                       </div>
-                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected ? 'border-purple-400 bg-purple-500' : 'border-slate-600'}`}>
-                        {isSelected && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isSelected ? 'border-purple-400 bg-purple-500' : 'border-slate-600'}`}>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
                       </div>
                     </div>
                     <span className="text-[11px] text-emerald-400 font-semibold">{pkg.bonus}</span>
                     <div className="text-sm font-bold text-white border-t border-[#2b3042] pt-2 mt-1 flex justify-between items-center">
                       <span>{pkg.amount.toLocaleString('vi-VN')} VNĐ</span>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
