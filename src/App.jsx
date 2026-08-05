@@ -29,7 +29,8 @@ import {
   subscribeUserData, 
   deductForVideoExport, 
   isUserAdmin, 
-  logOutUser 
+  logOutUser,
+  checkRedirectResult
 } from './services/authService';
 import { loadFFmpeg, processVideo } from './services/ffmpegService';
 import { processVideoCanvas } from './services/canvasExporter';
@@ -83,6 +84,7 @@ export default function App() {
 
   // Lắng nghe Firebase Auth & Firestore User Data realtime
   useEffect(() => {
+    checkRedirectResult();
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       if (user) {

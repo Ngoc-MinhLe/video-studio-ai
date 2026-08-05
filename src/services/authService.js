@@ -1,5 +1,7 @@
 import { 
   signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut, 
@@ -32,41 +34,19 @@ const getTodayString = () => {
 };
 
 /**
- * Đăng nhập bằng Email & Mật khẩu (Dành cho tài khoản đã khởi tạo trên Firebase Auth)
+ * Xử lý thành công sau khi xác thực thành công (tạo hoặc lấy profile từ Firestore)
  */
-export const signInWithEmail = async (email, password) => {
-  const cleanEmail = (email || '').trim().toLowerCase();
-  if (!cleanEmail || !password) {
-    throw new Error('Vui lòng nhập đầy đủ Email và Mật khẩu.');
-  }
-
-  let userCredential;
-  try {
-    userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
-  } catch (err) {
-    console.error("Firebase Email Auth Error:", err);
-    if (
-      err.code === 'auth/wrong-password' || 
-      err.code === 'auth/invalid-credential'
-    ) {
-      throw new Error('Mật khẩu không chính xác.');
-    } else if (err.code === 'auth/user-not-found') {
-      throw new Error('Tài khoản này chưa tồn tại. Vui lòng tạo tài khoản trên Firebase Console hoặc đăng nhập bằng Google.');
-    } else {
-      throw new Error(err.message || 'Không thể đăng nhập bằng Email này.');
-    }
-  }
-
-  const user = userCredential.user;
+const handleAuthSuccess = async (user) => {
+  if (!user) return null;
   const today = getTodayString();
   const userRef = doc(db, "users", user.uid);
   const isAdmin = isUserAdmin({ email: user.email });
 
   let userData = {
     uid: user.uid,
-    displayName: cleanEmail.split('@')[0],
-    email: cleanEmail,
-    photoURL: '',
+    displayName: user.displayName || (user.email || 'User').split('@')[0],
+    email: user.email || '',
+    photoURL: user.photoURL || '',
     coins: isAdmin ? 9999 : 20,
     dailyFreeExports: 2,
     lastDailyDate: today,
@@ -96,59 +76,76 @@ export const signInWithEmail = async (email, password) => {
       } catch (e) {}
     }
   } catch (firestoreErr) {
-    console.warn("Firestore Rules warning (vẫn cho phép đăng nhập):", firestoreErr);
+    console.warn("Firestore access warning:", firestoreErr);
   }
 
   return userData;
 };
 
 /**
- * Đăng nhập bằng Google
+ * Đăng nhập bằng Email & Mật khẩu (Dành cho tài khoản đã khởi tạo trên Firebase Auth)
+ */
+export const signInWithEmail = async (email, password) => {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail || !password) {
+    throw new Error('Vui lòng nhập đầy đủ Email và Mật khẩu.');
+  }
+
+  let userCredential;
+  try {
+    userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
+  } catch (err) {
+    console.error("Firebase Email Auth Error:", err);
+    if (
+      err.code === 'auth/wrong-password' || 
+      err.code === 'auth/invalid-credential'
+    ) {
+      throw new Error('Mật khẩu không chính xác.');
+    } else if (err.code === 'auth/user-not-found') {
+      throw new Error('Tài khoản này chưa tồn tại. Vui lòng tạo tài khoản trên Firebase Console hoặc đăng nhập bằng Google.');
+    } else {
+      throw new Error(err.message || 'Không thể đăng nhập bằng Email này.');
+    }
+  }
+
+  return await handleAuthSuccess(userCredential.user);
+};
+
+/**
+ * Đăng nhập bằng Google (Tự động thử Popup, nếu bị chặn Popup do COOP thì chuyển sang Redirect)
  */
 export const signInWithGoogle = async () => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
-    const user = result.user;
-    const today = getTodayString();
-    const userRef = doc(db, "users", user.uid);
-    const userSnap = await getDoc(userRef);
-
-    const isAdmin = isUserAdmin({ email: user.email });
-
-    if (!userSnap.exists()) {
-      // Người dùng mới -> Tạo tài khoản với 20 xu chào mừng & 2 lượt free hôm nay
-      const initialData = {
-        uid: user.uid,
-        displayName: user.displayName || 'Người dùng',
-        email: user.email,
-        photoURL: user.photoURL || '',
-        coins: isAdmin ? 9999 : 20,
-        dailyFreeExports: 2,
-        lastDailyDate: today,
-        role: isAdmin ? 'admin' : 'user',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      await setDoc(userRef, initialData);
-      return initialData;
-    } else {
-      // Người dùng cũ -> Kiểm tra reset 2 lượt miễn phí ngày mới
-      const data = userSnap.data();
-      if (data.lastDailyDate !== today) {
-        await updateDoc(userRef, {
-          dailyFreeExports: 2,
-          lastDailyDate: today,
-          updatedAt: new Date().toISOString()
-        });
-        data.dailyFreeExports = 2;
-        data.lastDailyDate = today;
-      }
-      return data;
-    }
+    return await handleAuthSuccess(result.user);
   } catch (error) {
-    console.error("Lỗi đăng nhập Google:", error);
-    throw error;
+    console.warn("Lỗi Popup Google Auth, chuyển sang chế độ Redirect...", error);
+    if (
+      error.code === 'auth/popup-closed-by-user' || 
+      error.code === 'auth/popup-blocked' ||
+      error.code === 'auth/cancelled-popup-request'
+    ) {
+      // Vượt rào cản COOP / Popup Blocker bằng phương thức Redirect chuẩn
+      await signInWithRedirect(auth, googleProvider);
+    } else {
+      throw error;
+    }
   }
+};
+
+/**
+ * Kiểm tra kết quả sau khi đăng nhập bằng Google Redirect
+ */
+export const checkRedirectResult = async () => {
+  try {
+    const result = await getRedirectResult(auth);
+    if (result && result.user) {
+      return await handleAuthSuccess(result.user);
+    }
+  } catch (err) {
+    console.error("Lỗi getRedirectResult:", err);
+  }
+  return null;
 };
 
 /**
