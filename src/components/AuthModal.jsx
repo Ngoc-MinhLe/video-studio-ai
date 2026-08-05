@@ -4,10 +4,7 @@ import {
   Coins, 
   Sparkles, 
   Gift, 
-  ShieldCheck, 
-  AlertCircle, 
   Loader2,
-  ExternalLink,
   Mail,
   Lock,
   LogIn

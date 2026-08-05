@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
-  Coins, 
-  Sparkles, 
   Play, 
   Pause,
   CheckCircle2, 
@@ -12,8 +10,6 @@ import {
   ExternalLink,
   Loader2,
   Award,
-  Video,
-  AlertTriangle,
   Edit3
 } from 'lucide-react';
 import { isUserAdmin, updateUserCoinsInDb, subscribeSystemSettings, updateFeaturedVideoIdInDb } from '../services/authService';
@@ -36,7 +32,7 @@ const DEFAULT_VIDEO_ID = "wf_QEArY60s"; // Link: https://www.youtube.com/watch?v
 const extractYouTubeId = (urlOrId) => {
   if (!urlOrId) return '';
   const trimmed = urlOrId.trim();
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
   const match = trimmed.match(regExp);
   return (match && match[2].length === 11) ? match[2] : trimmed;
 };
@@ -159,7 +155,7 @@ export default function FreeCoinsModal({
         playerRef.current = null;
       }
     };
-  }, [isPlayingVideo, isOpen]);
+  }, [isPlayingVideo, isOpen, videoId]);
 
   // Đếm ngược Sub Kênh (15s)
   useEffect(() => {

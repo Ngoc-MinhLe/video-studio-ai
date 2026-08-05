@@ -303,7 +303,6 @@ export const logOutUser = async () => {
  * Lắng nghe Cài đặt Hệ thống từ Firestore (Realtime Sync Video ID cho toàn bộ người dùng)
  */
 export const subscribeSystemSettings = (callback) => {
-  const localSaved = localStorage.getItem('featured_video_id');
   const defaultId = "wf_QEArY60s"; // Link video chính chủ của bạn: https://www.youtube.com/watch?v=wf_QEArY60s
 
   const configRef = doc(db, "users", "admin_global_config");

@@ -14,8 +14,6 @@ import {
   FileVideo,
   FileAudio,
   Sliders,
-  RefreshCw,
-  AlertCircle,
   ExternalLink,
   Coins,
   ShieldCheck,
@@ -282,6 +280,9 @@ export default function App() {
     }
 
     try {
+      let generatedUrl = null;
+      let generatedExt = 'mp4';
+
       if (engineType === 'canvas') {
         // Render siêu tốc bằng Canvas Engine
         const result = await processVideoCanvas({
@@ -295,8 +296,8 @@ export default function App() {
           onStatus: (stat) => setStatusText(stat)
         });
 
-        setExportUrl(result.url);
-        setExportExtension(result.extension || 'mp4');
+        generatedUrl = result.url;
+        generatedExt = result.extension || 'mp4';
       } else {
         // Render bằng FFmpeg WASM Engine
         const outputBlobUrl = await processVideo({
@@ -308,18 +309,28 @@ export default function App() {
           subOptions: { fontSize: subFontSize, position: subPosition }
         });
 
-        setExportUrl(outputBlobUrl);
-        setExportExtension('mp4');
+        generatedUrl = outputBlobUrl;
+        generatedExt = 'mp4';
       }
 
+      setExportUrl(generatedUrl);
+      setExportExtension(generatedExt);
       setIsProcessing(false);
       setProgress(100);
-      setStatusText('Xuất Video thành công!');
+      setStatusText('Xuất Video thành công! File đã tự động tải xuống.');
+
+      // 🔥 TỰ ĐỘNG TẢI FILE MP4 XUỐNG MÁY KHÔNG CẦN CHỜ 🔥
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.href = generatedUrl;
+      downloadAnchor.download = `video_studio_${Date.now()}.${generatedExt}`;
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      document.body.removeChild(downloadAnchor);
 
       confetti({
-        particleCount: 120,
-        spread: 80,
-        origin: { y: 0.6 }
+        particleCount: 150,
+        spread: 90,
+        origin: { y: 0.5 }
       });
 
     } catch (error) {
@@ -649,23 +660,54 @@ export default function App() {
               </div>
             )}
 
-            {/* Hộp Thông Báo Tiến Trình / Tải Về Video Nút Đẹp */}
-            {exportUrl && (
-              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-4">
+            {/* Nút RENDER & TẢI XUỐNG Ngay Dưới Trình Xem Preview */}
+            {videoUrl && !isProcessing && (
+              <button
+                onClick={handleExport}
+                disabled={isProcessing || (engineType === 'ffmpeg' && !isEngineReady)}
+                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-rose-600 hover:from-purple-500 hover:to-rose-500 text-white font-extrabold text-sm shadow-xl shadow-purple-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              >
+                <Download className="w-5 h-5" />
+                <span>🚀 XUẤT VIDEO & TẢI FILE MP4 VỀ MÁY</span>
+              </button>
+            )}
+
+            {/* Hộp Thông Báo Tiến Trình Render */}
+            {isProcessing && (
+              <div className="p-4 rounded-xl bg-purple-950/40 border border-purple-500/40 flex flex-col gap-2.5 animate-pulse">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-purple-300 font-semibold flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                    {statusText}
+                  </span>
+                  <span className="font-mono text-purple-400 font-bold">{progress}%</span>
+                </div>
+                <div className="w-full bg-[#12151e] h-2 rounded-full overflow-hidden border border-[#2b3042]">
+                  <div 
+                    className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Hộp Thông Báo Tải Về Video Nút Đẹp */}
+            {exportUrl && !isProcessing && (
+              <div className="p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/40 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg shadow-emerald-500/10">
                 <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
+                  <CheckCircle2 className="w-7 h-7 text-emerald-400 shrink-0" />
                   <div>
-                    <h4 className="font-semibold text-sm text-emerald-300">Video Đã Sẵn Sàng!</h4>
-                    <p className="text-xs text-[#94a3b8]">Đã thay nhạc và chèn phụ đề thành công.</p>
+                    <h4 className="font-bold text-sm text-emerald-300">File Đã Tự Động Tải Xuống Máy!</h4>
+                    <p className="text-xs text-[#94a3b8]">Nếu file chưa xuất hiện trong thư mục Downloads, bấm nút bên phải để tải lại.</p>
                   </div>
                 </div>
                 <a 
                   href={exportUrl} 
                   download={`video_studio_output.${exportExtension}`}
-                  className="btn-primary bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30 shrink-0"
+                  className="btn-primary bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30 shrink-0 text-xs py-2.5 px-4 font-bold"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Tải Video ({exportExtension.toUpperCase()})</span>
+                  <span>Tải Lại Video ({exportExtension.toUpperCase()})</span>
                 </a>
               </div>
             )}
