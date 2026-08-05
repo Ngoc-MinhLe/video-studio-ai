@@ -298,3 +298,37 @@ export const updateUserCoinsInDb = async (targetUid, newCoins) => {
 export const logOutUser = async () => {
   await signOut(auth);
 };
+
+/**
+ * Lắng nghe Cài đặt Hệ thống từ Firestore (Realtime Sync Video ID cho toàn bộ người dùng)
+ */
+export const subscribeSystemSettings = (callback) => {
+  const configRef = doc(db, "system_config", "settings");
+  return onSnapshot(configRef, (docSnap) => {
+    if (docSnap.exists()) {
+      callback(docSnap.data());
+    } else {
+      callback({ featuredVideoId: "dQw4w9WgXcQ" });
+    }
+  }, (err) => {
+    console.warn("Lỗi đọc cài đặt hệ thống:", err);
+    callback({ featuredVideoId: "dQw4w9WgXcQ" });
+  });
+};
+
+/**
+ * Cập nhật Video ID của Kênh trên Firestore (Admin)
+ */
+export const updateFeaturedVideoIdInDb = async (videoId) => {
+  try {
+    const configRef = doc(db, "system_config", "settings");
+    await setDoc(configRef, {
+      featuredVideoId: videoId,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    return true;
+  } catch (error) {
+    console.error("Lỗi cập nhật Video ID:", error);
+    throw error;
+  }
+};

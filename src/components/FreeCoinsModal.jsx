@@ -16,7 +16,7 @@ import {
   AlertTriangle,
   Edit3
 } from 'lucide-react';
-import { isUserAdmin, updateUserCoinsInDb } from '../services/authService';
+import { isUserAdmin, updateUserCoinsInDb, subscribeSystemSettings, updateFeaturedVideoIdInDb } from '../services/authService';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import confetti from 'canvas-confetti';
@@ -30,7 +30,7 @@ const YoutubeIcon = ({ className = "w-5 h-5" }) => (
 
 // ID Video YouTube mặc định (Bạn có thể thay đổi ID video YouTube bất kỳ của kênh bạn tại đây)
 const DEFAULT_CHANNEL_URL = "https://www.youtube.com/channel/UCTH5A6CPnunCR-Iw8nvyZfw?sub_confirmation=1";
-const DEFAULT_VIDEO_ID = "dQw4w9WgXcQ"; // <-- ID Video YouTube ví dụ (dạng 11 ký tự)
+const DEFAULT_VIDEO_ID = "dQw4w9WgXcQ"; // <-- ID Video YouTube mặc định
 
 export default function FreeCoinsModal({
   isOpen,
@@ -41,6 +41,25 @@ export default function FreeCoinsModal({
   // Trạng thái Video ID
   const [videoId, setVideoId] = useState(DEFAULT_VIDEO_ID);
   const [isEditingVideoId, setIsEditingVideoId] = useState(false);
+
+  // Lắng nghe Video ID toàn hệ thống từ Firestore Realtime
+  useEffect(() => {
+    const unsub = subscribeSystemSettings((settings) => {
+      if (settings?.featuredVideoId) {
+        setVideoId(settings.featuredVideoId);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const handleSaveVideoId = async () => {
+    try {
+      await updateFeaturedVideoIdInDb(videoId);
+      setIsEditingVideoId(false);
+    } catch (e) {
+      alert("Lỗi lưu Video ID: " + e.message);
+    }
+  };
 
   // Trạng thái Nhiệm vụ 1: Sub Kênh
   const [hasOpenedSubLink, setHasOpenedSubLink] = useState(false);
@@ -302,10 +321,16 @@ export default function FreeCoinsModal({
               )}
             </div>
             <button 
-              onClick={() => setIsEditingVideoId(!isEditingVideoId)}
-              className="text-[11px] text-purple-400 hover:underline"
+              onClick={() => {
+                if (isEditingVideoId) {
+                  handleSaveVideoId();
+                } else {
+                  setIsEditingVideoId(true);
+                }
+              }}
+              className="text-[11px] font-bold text-purple-400 hover:text-purple-300 bg-purple-600/20 px-2.5 py-1 rounded-lg border border-purple-500/30 transition-all"
             >
-              {isEditingVideoId ? "Lưu" : "Đổi Video ID"}
+              {isEditingVideoId ? "💾 Lưu Video ID" : "✏️ Đổi Video ID"}
             </button>
           </div>
         )}
