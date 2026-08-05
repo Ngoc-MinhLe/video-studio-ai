@@ -2,9 +2,10 @@ import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 let ffmpeg = null;
+let isFontLoaded = false;
 
 /**
- * Khởi tạo engine FFmpeg WebAssembly từ file nội bộ (public/ffmpeg)
+ * Khởi tạo engine FFmpeg WebAssembly từ file nội bộ (public/ffmpeg) hoặc CDN dự phòng
  */
 export const loadFFmpeg = async (onProgress, onLog) => {
   if (ffmpeg && ffmpeg.loaded) return ffmpeg;
@@ -23,72 +24,75 @@ export const loadFFmpeg = async (onProgress, onLog) => {
     console.log('[FFmpeg WASM]:', message);
   });
 
-  // Tải trực tiếp từ domain nội bộ (/ffmpeg/) để đảm bảo 100% không bị lỗi CORS/CDN
   const origin = window.location.origin;
   const localBaseURL = `${origin}/ffmpeg`;
   const jsdelivrURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd';
+  const unpkgURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
 
   const sources = [
-    { core: `${localBaseURL}/ffmpeg-core.js`, wasm: `${localBaseURL}/ffmpeg-core.wasm`, label: 'Local Server' },
-    { core: `${jsdelivrURL}/ffmpeg-core.js`, wasm: `${jsdelivrURL}/ffmpeg-core.wasm`, label: 'jsDelivr CDN' }
+    { core: `${localBaseURL}/ffmpeg-core.js`, wasm: `${localBaseURL}/ffmpeg-core.wasm`, label: 'Server Nội Bộ' },
+    { core: `${jsdelivrURL}/ffmpeg-core.js`, wasm: `${jsdelivrURL}/ffmpeg-core.wasm`, label: 'jsDelivr CDN' },
+    { core: `${unpkgURL}/ffmpeg-core.js`, wasm: `${unpkgURL}/ffmpeg-core.wasm`, label: 'unpkg CDN' }
   ];
 
   let lastError = null;
 
   for (const src of sources) {
     try {
-      if (onLog) onLog(`Đang khởi tạo FFmpeg Core từ ${src.label}...`);
+      if (onLog) onLog(`Đang nạp FFmpeg Core từ ${src.label}...`);
       
       const coreURL = await toBlobURL(src.core, 'text/javascript');
       const wasmURL = await toBlobURL(src.wasm, 'application/wasm');
 
       await ffmpeg.load({ coreURL, wasmURL });
-      if (onLog) onLog('FFmpeg Core đã khởi tạo thành công!');
+      if (onLog) onLog('FFmpeg Core đã sẵn sàng!');
       return ffmpeg;
     } catch (err) {
-      console.warn(`Lỗi nạp FFmpeg từ ${src.label}:`, err);
+      console.warn(`Không thể nạp FFmpeg từ ${src.label}:`, err);
       lastError = err;
     }
   }
 
-  // Phương án dự phòng cuối cùng: Nạp trực tiếp URL không qua Blob
+  // Phương án nạp trực tiếp cuối cùng
   try {
-    if (onLog) onLog('Thử phương án nạp trực tiếp...');
+    if (onLog) onLog('Thử nạp trực tiếp URL không qua Blob...');
     await ffmpeg.load({
       coreURL: `${localBaseURL}/ffmpeg-core.js`,
       wasmURL: `${localBaseURL}/ffmpeg-core.wasm`
     });
     return ffmpeg;
   } catch (err) {
-    console.error('Lỗi khởi tạo tất cả các nguồn FFmpeg:', err);
+    console.error('Không thể khởi tạo bất kỳ nguồn FFmpeg nào:', err);
     throw lastError || err;
   }
 };
 
 /**
- * Chuyển danh sách phụ đề sang định dạng SubRip (.srt)
+ * Tải file phông chữ Roboto-Bold vào bộ nhớ ảo của FFmpeg để vẽ phụ đề (drawtext)
  */
-const formatSubtitlesToSRT = (subtitles) => {
-  const formatTime = (seconds) => {
-    const pad = (num, size = 2) => String(num).padStart(size, '0');
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-    const millis = Math.floor((seconds % 1) * 1000);
-    return `${pad(hrs)}:${pad(mins)}:${pad(secs)},${pad(millis, 3)}`;
-  };
-
-  return subtitles
-    .filter(s => s.text && s.text.trim() !== '')
-    .sort((a, b) => a.startTime - b.startTime)
-    .map((sub, index) => {
-      return `${index + 1}\n${formatTime(sub.startTime)} --> ${formatTime(sub.endTime)}\n${sub.text}\n`;
-    })
-    .join('\n');
+const ensureFontLoaded = async () => {
+  if (isFontLoaded) return;
+  try {
+    const fontUrl = `${window.location.origin}/fonts/Roboto-Bold.ttf`;
+    const fontData = await fetchFile(fontUrl);
+    await ffmpeg.writeFile('font.ttf', fontData);
+    isFontLoaded = true;
+    console.log('[FFmpeg]: Loaded font.ttf into virtual filesystem');
+  } catch (err) {
+    console.warn('[FFmpeg]: Cannot load local font.ttf, trying fallback CDN font...', err);
+    try {
+      const fallbackUrl = 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/roboto/Roboto%5Bwdth%2Cwght%5D.ttf';
+      const fontData = await fetchFile(fallbackUrl);
+      await ffmpeg.writeFile('font.ttf', fontData);
+      isFontLoaded = true;
+    } catch (fallbackErr) {
+      console.error('[FFmpeg]: Failed to load font for drawtext:', fallbackErr);
+    }
+  }
 };
 
 /**
- * Xử lý Video: Thay nhạc & chèn phụ đề
+ * Xử lý Video: Thay nhạc & chèn phụ đề bằng FFmpeg WASM
  */
 export const processVideo = async ({
   videoFile,
@@ -105,7 +109,6 @@ export const processVideo = async ({
   const inputVideoName = 'input.mp4';
   const inputAudioName = 'input_audio.mp3';
   const outputName = 'output.mp4';
-  const srtName = 'subtitles.srt';
 
   // 1. Nạp file video vào virtual filesystem
   await ffmpeg.writeFile(inputVideoName, await fetchFile(videoFile));
@@ -116,67 +119,120 @@ export const processVideo = async ({
     hasNewAudio = true;
   }
 
-  // 2. Chuẩn bị file phụ đề SRT nếu có
-  let hasSubtitles = subtitles && subtitles.length > 0;
+  // 2. Chuẩn bị phụ đề vẽ trực tiếp bằng filter `drawtext`
+  const validSubtitles = (subtitles || []).filter(s => s.text && s.text.trim() !== '');
+  const hasSubtitles = validSubtitles.length > 0;
+  const createdSubFiles = [];
+
   if (hasSubtitles) {
-    const srtContent = formatSubtitlesToSRT(subtitles);
-    await ffmpeg.writeFile(srtName, new TextEncoder().encode(srtContent));
-  }
-
-  // 3. Xây dựng câu lệnh FFmpeg
-  const ffmpegArgs = ['-i', inputVideoName];
-
-  if (hasNewAudio) {
-    ffmpegArgs.push('-i', inputAudioName);
-  }
-
-  // Xử lý Audio (Mix hoặc Thay thế)
-  let filterComplex = [];
-  
-  if (hasNewAudio) {
-    if (videoVolume > 0) {
-      filterComplex.push(`[0:a]volume=${videoVolume}[a0];[1:a]volume=${audioVolume}[a1];[a0][a1]amix=inputs=2:duration=first[aout]`);
-    } else {
-      filterComplex.push(`[1:a]volume=${audioVolume}[aout]`);
+    await ensureFontLoaded();
+    for (let i = 0; i < validSubtitles.length; i++) {
+      const filename = `sub_${i}.txt`;
+      const textContent = validSubtitles[i].text.trim();
+      await ffmpeg.writeFile(filename, new TextEncoder().encode(textContent));
+      createdSubFiles.push(filename);
     }
-  } else {
-    filterComplex.push(`[0:a]volume=${videoVolume}[aout]`);
   }
 
-  // Xử lý Subtitle Filter
-  let videoFilter = '';
-  if (hasSubtitles) {
-    videoFilter = `subtitles=${srtName}:force_style='FontSize=${subOptions.fontSize},PrimaryColour=&H00FFFFFF&,Alignment=2'`;
+  // 3. Hàm tạo danh sách câu lệnh FFmpeg với cấu hình filtergraph
+  const runFFmpegExec = async (useAudioMix) => {
+    const ffmpegArgs = ['-i', inputVideoName];
+    if (hasNewAudio) {
+      ffmpegArgs.push('-i', inputAudioName);
+    }
+
+    const filterComplexParts = [];
+
+    // --- VIDEO FILTER (Subtitles với drawtext) ---
+    if (hasSubtitles && isFontLoaded) {
+      const drawtextChain = validSubtitles.map((sub, i) => {
+        let yPos = 'h-text_h-40';
+        if (subOptions.position === 'top') yPos = '40';
+        if (subOptions.position === 'center') yPos = '(h-text_h)/2';
+
+        const start = Math.max(0, Number(sub.startTime) || 0);
+        const end = Math.max(start + 0.1, Number(sub.endTime) || (start + 2));
+        const fontSize = Math.max(12, Number(subOptions.fontSize) || 24);
+
+        return `drawtext=fontfile=font.ttf:textfile=sub_${i}.txt:fontsize=${fontSize}:fontcolor=white:box=1:boxcolor=black@0.65:boxborderw=8:x=(w-text_w)/2:y=${yPos}:enable='between(t,${start},${end})'`;
+      }).join(',');
+
+      filterComplexParts.push(`[0:v]${drawtextChain}[vout]`);
+    }
+
+    // --- AUDIO FILTER ---
+    let mappedAudioStream = null;
+    if (hasNewAudio) {
+      if (useAudioMix && videoVolume > 0) {
+        filterComplexParts.push(`[0:a]volume=${videoVolume}[a0];[1:a]volume=${audioVolume}[a1];[a0][a1]amix=inputs=2:duration=first[aout]`);
+        mappedAudioStream = '[aout]';
+      } else {
+        filterComplexParts.push(`[1:a]volume=${audioVolume}[aout]`);
+        mappedAudioStream = '[aout]';
+      }
+    } else if (videoVolume !== 1) {
+      filterComplexParts.push(`[0:a]volume=${videoVolume}[aout]`);
+      mappedAudioStream = '[aout]';
+    }
+
+    // Ghép filter_complex nếu có
+    if (filterComplexParts.length > 0) {
+      ffmpegArgs.push('-filter_complex', filterComplexParts.join(';'));
+    }
+
+    // Map các luồng (Streams)
+    if (hasSubtitles && isFontLoaded) {
+      ffmpegArgs.push('-map', '[vout]');
+    } else {
+      ffmpegArgs.push('-map', '0:v');
+    }
+
+    if (mappedAudioStream) {
+      ffmpegArgs.push('-map', mappedAudioStream);
+    } else if (hasNewAudio) {
+      ffmpegArgs.push('-map', '1:a');
+    } else {
+      ffmpegArgs.push('-map', '0:a?');
+    }
+
+    // Encoder options chuẩn MP4
+    ffmpegArgs.push(
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac',
+      '-b:a', '128k',
+      '-y', outputName
+    );
+
+    console.log('[FFmpeg Command]:', ffmpegArgs.join(' '));
+    await ffmpeg.exec(ffmpegArgs);
+  };
+
+  // 4. Tiến hành render với cơ chế Fallback tự động
+  try {
+    await runFFmpegExec(true);
+  } catch (err) {
+    console.warn('Lỗi khi mix audio (có thể video gốc không có âm thanh), đang thử lại với audio thay thế...', err);
+    if (hasNewAudio) {
+      await runFFmpegExec(false);
+    } else {
+      throw err;
+    }
   }
 
-  if (videoFilter) {
-    ffmpegArgs.push('-vf', videoFilter);
-  }
-
-  if (filterComplex.length > 0) {
-    ffmpegArgs.push('-filter_complex', filterComplex.join(';'));
-    ffmpegArgs.push('-map', '0:v');
-    ffmpegArgs.push('-map', '[aout]');
-  }
-
-  // Ép codec MP4 chuẩn
-  ffmpegArgs.push('-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-y', outputName);
-
-  console.log('[FFmpeg Command]:', ffmpegArgs.join(' '));
-
-  // 4. Chạy lệnh render
-  await ffmpeg.exec(ffmpegArgs);
-
-  // 5. Đọc kết quả xuất ra
+  // 5. Đọc kết quả file MP4 đã xuất
   const data = await ffmpeg.readFile(outputName);
   const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
   const resultUrl = URL.createObjectURL(videoBlob);
 
-  // Dọn dẹp tệp ảo
+  // 6. Dọn dẹp tệp ảo tạm thời
   try {
     await ffmpeg.deleteFile(inputVideoName);
     if (hasNewAudio) await ffmpeg.deleteFile(inputAudioName);
-    if (hasSubtitles) await ffmpeg.deleteFile(srtName);
+    for (const f of createdSubFiles) {
+      await ffmpeg.deleteFile(f);
+    }
     await ffmpeg.deleteFile(outputName);
   } catch (e) {
     console.warn('Lỗi dọn dẹp file tạm:', e);
@@ -184,3 +240,4 @@ export const processVideo = async ({
 
   return resultUrl;
 };
+
