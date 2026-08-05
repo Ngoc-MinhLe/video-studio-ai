@@ -31,12 +31,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    const data = req.body;
+    let data = req.body;
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+      } catch (e) {}
+    }
+    data = data || {};
     console.log('[SePay Webhook Received]:', JSON.stringify(data));
 
     const transferType = data.transferType || 'in';
-    const content = data.content || '';
-    const transferAmount = Number(data.transferAmount || 0);
+    const content = data.content || data.code || '';
+    const transferAmount = Number(data.transferAmount || data.amount || 0);
 
     if (transferType !== 'in') {
       return res.status(200).json({ success: true, message: 'Ignored outbound transaction' });
