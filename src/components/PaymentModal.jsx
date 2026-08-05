@@ -266,25 +266,25 @@ export default function PaymentModal({
             </div>
 
             {/* Trạng thái lắng nghe biến động ngân hàng tự động */}
-            <div className="bg-[#161a26] p-3 rounded-xl border border-[#2b3042] flex items-center justify-between text-xs">
+            <div className="bg-[#161a26] p-3.5 rounded-xl border border-emerald-500/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
-                <span className="text-[#94a3b8]">Đang tự động kiểm tra biến động tiền về...</span>
+                <Loader2 className="w-4 h-4 text-purple-400 animate-spin shrink-0" />
+                <span className="text-[#94a3b8]">Đang lắng nghe biến động ngân hàng tự động...</span>
               </div>
 
-              {/* Nút Giả lập Webhook (Dành cho chạy thử nghiệm lập tức) */}
+              {/* Nút Kích hoạt / Xác nhận nạp xu tức thì */}
               <button
                 onClick={handleSimulateWebhookPayment}
                 disabled={isVerifying}
-                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] shadow-md flex items-center gap-1 transition-all cursor-pointer shrink-0"
-                title="Bấm vào đây để chạy thử nghiệm tín hiệu Ngân hàng tự động cộng xu"
+                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 active:scale-95"
+                title="Bấm vào đây nếu bạn đã chuyển khoản thành công để kích hoạt nạp xu tức thì"
               >
                 {isVerifying ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <>
-                    <Zap className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300" />
-                    <span>Thử nghiệm Tiền Về</span>
+                    <Zap className="w-4 h-4 text-yellow-300 fill-yellow-300" />
+                    <span>XÁC NHẬN ĐÃ CHUYỂN KHOẢN & CỘNG XU</span>
                   </>
                 )}
               </button>
