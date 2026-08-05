@@ -18,12 +18,12 @@ import {
 import { updateUserCoinsInDb } from '../services/authService';
 import confetti from 'canvas-confetti';
 
-// Danh sách các gói nạp xu
+// Danh sách các gói nạp xu (Đã chuẩn hóa tỷ lệ hợp lý & tối ưu lợi nhuận)
 const RECHARGE_PACKAGES = [
-  { id: 'pkg_10k', amount: 10000, coins: 50, bonus: '+10 Xu Tặng', popular: false },
-  { id: 'pkg_20k', amount: 20000, coins: 120, bonus: '+20 Xu Tặng', popular: true },
-  { id: 'pkg_50k', amount: 50000, coins: 350, bonus: '+100 Xu Tặng', popular: false },
-  { id: 'pkg_100k', amount: 100000, coins: 800, bonus: '+300 Xu Tặng', popular: false },
+  { id: 'pkg_10k', amount: 10000, coins: 25, bonus: '+5 Xu Tặng (5 Video)', popular: false },
+  { id: 'pkg_20k', amount: 20000, coins: 60, bonus: '+10 Xu Tặng (12 Video)', popular: true },
+  { id: 'pkg_50k', amount: 50000, coins: 175, bonus: '+25 Xu Tặng (35 Video)', popular: false },
+  { id: 'pkg_100k', amount: 100000, coins: 400, bonus: '+100 Xu Tặng (80 Video)', popular: false },
 ];
 
 // Cấu hình ngân hàng Vietcombank chính chủ của bạn
