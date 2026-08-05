@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   Coins, 
   Sparkles, 
   Play, 
+  Pause,
   CheckCircle2, 
   Gift, 
   Clock, 
@@ -12,7 +13,8 @@ import {
   Loader2,
   Award,
   Video,
-  AlertTriangle
+  AlertTriangle,
+  Edit3
 } from 'lucide-react';
 import { isUserAdmin, updateUserCoinsInDb } from '../services/authService';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -26,12 +28,9 @@ const YoutubeIcon = ({ className = "w-5 h-5" }) => (
   </svg>
 );
 
-// Cấu hình Kênh YouTube & Video mặc định của bạn
-const YOUTUBE_CONFIG = {
-  channelUrl: "https://www.youtube.com/channel/UCTH5A6CPnunCR-Iw8nvyZfw?sub_confirmation=1",
-  videoUrl: "https://www.youtube.com/watch?v=UCTH5A6CPnunCR-Iw8nvyZfw",
-  embedVideoId: "UCTH5A6CPnunCR-Iw8nvyZfw" 
-};
+// ID Video YouTube mặc định (Bạn có thể thay đổi ID video YouTube bất kỳ của kênh bạn tại đây)
+const DEFAULT_CHANNEL_URL = "https://www.youtube.com/channel/UCTH5A6CPnunCR-Iw8nvyZfw?sub_confirmation=1";
+const DEFAULT_VIDEO_ID = "dQw4w9WgXcQ"; // <-- ID Video YouTube ví dụ (dạng 11 ký tự)
 
 export default function FreeCoinsModal({
   isOpen,
@@ -39,6 +38,10 @@ export default function FreeCoinsModal({
   currentUser,
   userData
 }) {
+  // Trạng thái Video ID
+  const [videoId, setVideoId] = useState(DEFAULT_VIDEO_ID);
+  const [isEditingVideoId, setIsEditingVideoId] = useState(false);
+
   // Trạng thái Nhiệm vụ 1: Sub Kênh
   const [hasOpenedSubLink, setHasOpenedSubLink] = useState(false);
   const [subTimer, setSubTimer] = useState(15);
@@ -46,6 +49,7 @@ export default function FreeCoinsModal({
 
   // Trạng thái Nhiệm vụ 2: Xem Video 60s
   const [isPlayingVideo, setIsPlayingVideo] = useState(false);
+  const [isVideoPlayingReal, setIsVideoPlayingReal] = useState(false); // Chỉ true khi Video ĐANG PHÁT THẬT
   const [watchTimer, setWatchTimer] = useState(60);
   const [watchClaiming, setWatchClaiming] = useState(false);
 
@@ -55,8 +59,56 @@ export default function FreeCoinsModal({
   const [likeClaiming, setLikeClaiming] = useState(false);
 
   const [isResetting, setIsResetting] = useState(false);
+  const playerRef = useRef(null);
 
-  // Đếm ngược Sub Kênh (Yêu cầu phải bấm mở tab YouTube thật trước)
+  // Tải YouTube IFrame API
+  useEffect(() => {
+    if (!window.YT) {
+      const tag = document.createElement('script');
+      tag.src = "https://www.youtube.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    }
+  }, []);
+
+  // Khởi tạo Player YouTube & Lắng nghe trạng thái Play / Pause thực tế
+  useEffect(() => {
+    if (isPlayingVideo && isOpen) {
+      const checkAndInitPlayer = () => {
+        if (window.YT && window.YT.Player) {
+          try {
+            playerRef.current = new window.YT.Player('youtube-player-container', {
+              height: '100%',
+              width: '100%',
+              videoId: videoId,
+              playerVars: {
+                autoplay: 1,
+                controls: 1,
+                rel: 0
+              },
+              events: {
+                onStateChange: (event) => {
+                  // 1 = PLAYING (Đang phát thật), 2 = PAUSED (Tạm dừng), 0 = ENDED
+                  if (event.data === 1) {
+                    setIsVideoPlayingReal(true);
+                  } else {
+                    setIsVideoPlayingReal(false); // Tạm dừng ➔ Dừng đếm thời gian
+                  }
+                }
+              }
+            });
+          } catch (e) {
+            console.warn("YouTube Player Init Warn:", e);
+          }
+        } else {
+          setTimeout(checkAndInitPlayer, 500);
+        }
+      };
+      checkAndInitPlayer();
+    }
+  }, [isPlayingVideo, isOpen, videoId]);
+
+  // Đếm ngược Sub Kênh (15s)
   useEffect(() => {
     let timer;
     if (hasOpenedSubLink && subTimer > 0) {
@@ -67,16 +119,16 @@ export default function FreeCoinsModal({
     return () => clearInterval(timer);
   }, [hasOpenedSubLink, subTimer]);
 
-  // Đếm ngược Xem Video (Yêu cầu bật player video thật)
+  // CHỈ ĐẾM NGƯỢC THỜI GIAN KHI VIDEO ĐANG PHÁT THẬT (isVideoPlayingReal === true)
   useEffect(() => {
     let timer;
-    if (isPlayingVideo && watchTimer > 0) {
+    if (isPlayingVideo && isVideoPlayingReal && watchTimer > 0) {
       timer = setInterval(() => {
         setWatchTimer((prev) => prev - 1);
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [isPlayingVideo, watchTimer]);
+  }, [isPlayingVideo, isVideoPlayingReal, watchTimer]);
 
   // Đếm ngược Like & Comment
   useEffect(() => {
@@ -105,6 +157,7 @@ export default function FreeCoinsModal({
       setHasOpenedSubLink(false);
       setSubTimer(15);
       setIsPlayingVideo(false);
+      setIsVideoPlayingReal(false);
       setWatchTimer(60);
       setHasOpenedLikeLink(false);
       setLikeTimer(15);
@@ -117,14 +170,15 @@ export default function FreeCoinsModal({
 
   // Mở tab đăng ký kênh thật
   const handleOpenSubChannel = () => {
-    window.open(YOUTUBE_CONFIG.channelUrl, "_blank");
+    window.open(DEFAULT_CHANNEL_URL, "_blank");
     setHasOpenedSubLink(true);
     setSubTimer(15);
   };
 
-  // Mở tab video để Like/Comment
+  // Mở tab video thật để Like/Comment
   const handleOpenLikeVideo = () => {
-    window.open(YOUTUBE_CONFIG.videoUrl, "_blank");
+    const realVideoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    window.open(realVideoUrl, "_blank");
     setHasOpenedLikeLink(true);
     setLikeTimer(15);
   };
@@ -229,8 +283,35 @@ export default function FreeCoinsModal({
           )}
         </div>
 
+        {/* Ô đổi ID Video YouTube (Dành cho Admin cài đặt Video của Kênh) */}
+        {isUserAdmin(userData) && (
+          <div className="mb-3 bg-[#161a26] p-2.5 rounded-xl border border-[#2b3042] text-xs flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Edit3 className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="text-white font-medium">ID Video YouTube:</span>
+              {isEditingVideoId ? (
+                <input 
+                  type="text" 
+                  value={videoId} 
+                  onChange={(e) => setVideoId(e.target.value)}
+                  placeholder="Nhập ID Video..."
+                  className="bg-[#2b3042] text-amber-300 font-mono px-2 py-0.5 rounded border border-amber-500/40 text-xs focus:outline-none"
+                />
+              ) : (
+                <code className="text-amber-400 font-mono font-bold bg-[#2b3042] px-2 py-0.5 rounded">{videoId}</code>
+              )}
+            </div>
+            <button 
+              onClick={() => setIsEditingVideoId(!isEditingVideoId)}
+              className="text-[11px] text-purple-400 hover:underline"
+            >
+              {isEditingVideoId ? "Lưu" : "Đổi Video ID"}
+            </button>
+          </div>
+        )}
+
         {/* Danh sách Nhiệm Vụ */}
-        <div className="flex flex-col gap-4 max-h-[68vh] overflow-y-auto pr-1">
+        <div className="flex flex-col gap-4 max-h-[65vh] overflow-y-auto pr-1">
 
           {/* NHIỆM VỤ 1: ĐĂNG KÝ KÊNH YOUTUBE (TẶNG KHỦNG 50 XU) */}
           <div className="bg-[#161a26] p-4 rounded-xl border border-red-500/30 flex flex-col gap-3 relative overflow-hidden">
@@ -245,7 +326,7 @@ export default function FreeCoinsModal({
               <div>
                 <h4 className="font-bold text-sm text-white">1. Đăng Ký Kênh LE NGOC MINH MULTIMEDIA (+50 Xu)</h4>
                 <p className="text-xs text-[#94a3b8] mt-0.5 leading-relaxed">
-                  Bắt buộc phải bấm mở link YouTube ➔ Bấm nút <strong>Đăng Ký Kênh</strong> ➔ Quay lại đây đợi kiểm tra đếm ngược để nhận 50 Xu.
+                  Bắt buộc phải bấm mở link YouTube ➔ Bấm nút <strong>Đăng Ký Kênh</strong> ➔ Quay lại đây đợi đếm ngược để nhận 50 Xu.
                 </p>
               </div>
             </div>
@@ -257,7 +338,6 @@ export default function FreeCoinsModal({
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {/* Nút 1: Mở trang Kênh YouTube thật */}
                   <button
                     onClick={handleOpenSubChannel}
                     className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
@@ -267,12 +347,11 @@ export default function FreeCoinsModal({
                     <ExternalLink className="w-3.5 h-3.5" />
                   </button>
 
-                  {/* Nút 2: Nhận Xu sau khi đã mở tab YouTube và đếm ngược */}
                   {hasOpenedSubLink && (
                     subTimer > 0 ? (
                       <div className="w-full py-2 px-3 rounded-xl bg-[#2b3042] text-amber-300 font-semibold text-xs flex items-center justify-center gap-2 border border-amber-500/30">
                         <Clock className="w-4 h-4 animate-spin text-amber-400" />
-                        <span>Đang kiểm tra trạng thái Đăng ký... ({subTimer}s)</span>
+                        <span>Đang đếm ngược kiểm tra Đăng ký... ({subTimer}s)</span>
                       </div>
                     ) : (
                       <button
@@ -303,9 +382,9 @@ export default function FreeCoinsModal({
                 <Play className="w-6 h-6" />
               </div>
               <div>
-                <h4 className="font-bold text-sm text-white">2. Xem Video Kênh YouTube 60 Giây (+10 Xu)</h4>
+                <h4 className="font-bold text-sm text-white">2. Xem Video YouTube 60 Giây Không Tạm Dừng (+10 Xu)</h4>
                 <p className="text-xs text-[#94a3b8] mt-0.5">
-                  Phát video ngay trên màn hình bên dưới và xem đủ 60 giây để nhận thưởng 10 Xu.
+                  Phát video bên dưới. Nếu bấm Tạm dừng (Pause), thời gian đếm ngược sẽ tự động DỪNG lại!
                 </p>
               </div>
             </div>
@@ -316,31 +395,34 @@ export default function FreeCoinsModal({
               </div>
             ) : (
               <div className="flex flex-col gap-3 pt-2 border-t border-[#2b3042]">
-                {/* Trình Xem Video YouTube thật dạng Embed IFrame */}
                 {isPlayingVideo ? (
                   <div className="flex flex-col gap-2">
+                    {/* Khung chứa IFrame Player YouTube chính thức */}
                     <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-[#2b3042] bg-black shadow-lg">
-                      <iframe
-                        className="w-full h-full"
-                        src={`https://www.youtube.com/embed/videoseries?list=UUTH5A6CPnunCR-Iw8nvyZfw&autoplay=1`}
-                        title="Video Kênh LE NGOC MINH MULTIMEDIA"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      ></iframe>
+                      <div id="youtube-player-container" className="w-full h-full"></div>
                     </div>
 
                     <div className="w-full bg-[#2b3042] h-2.5 rounded-full overflow-hidden">
                       <div 
-                        className="bg-gradient-to-r from-purple-500 to-pink-500 h-full transition-all duration-1000"
+                        className={`h-full transition-all duration-1000 ${
+                          isVideoPlayingReal ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-amber-500'
+                        }`}
                         style={{ width: `${((60 - watchTimer) / 60) * 100}%` }}
                       ></div>
                     </div>
 
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-purple-300 font-mono flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
-                        Đang xem video...
-                      </span>
+                      {isVideoPlayingReal ? (
+                        <span className="text-emerald-400 font-medium flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                          Đang phát video (Đồng hồ đang chạy...)
+                        </span>
+                      ) : (
+                        <span className="text-amber-400 font-medium flex items-center gap-1.5">
+                          <Pause className="w-3.5 h-3.5" />
+                          Video đang Tạm dừng (Đồng hồ TẠM DỪNG)...
+                        </span>
+                      )}
                       <span className="font-bold text-amber-400 font-mono text-sm">Còn {watchTimer} Giây</span>
                     </div>
 
@@ -367,7 +449,7 @@ export default function FreeCoinsModal({
                     className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
                   >
                     <Play className="w-4 h-4 fill-white" />
-                    <span>Mở Video YouTube & Bắt Đầu Xem (60s)</span>
+                    <span>Mở Trình Phát Video YouTube & Bắt Đầu Xem (60s)</span>
                   </button>
                 )}
               </div>
@@ -383,7 +465,7 @@ export default function FreeCoinsModal({
               <div>
                 <h4 className="font-bold text-sm text-white">3. Like & Bình Luận Video Kênh (+10 Xu)</h4>
                 <p className="text-xs text-[#94a3b8] mt-0.5">
-                  Mở bài viết video trên YouTube, bấm Thích và để lại 1 bình luận ủng hộ kênh.
+                  Mở đúng bài viết video trên YouTube, bấm Thích và để lại 1 bình luận ủng hộ kênh.
                 </p>
               </div>
             </div>
@@ -400,7 +482,7 @@ export default function FreeCoinsModal({
                     className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
                   >
                     <ThumbsUp className="w-4 h-4" />
-                    <span>Mở Video Trên YouTube Để Like & Bình Luận</span>
+                    <span>Mở Video Bài Viết Để Like & Bình Luận</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </button>
 
