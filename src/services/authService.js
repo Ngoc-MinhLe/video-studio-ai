@@ -304,7 +304,7 @@ export const logOutUser = async () => {
  */
 export const subscribeSystemSettings = (callback) => {
   const localSaved = localStorage.getItem('featured_video_id');
-  const defaultId = localSaved || "5qap5aO4i9A";
+  const defaultId = localSaved || "L_LUpnjgPso";
 
   const configRef = doc(db, "users", "admin_global_config");
   return onSnapshot(configRef, (docSnap) => {

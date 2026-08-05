@@ -28,9 +28,9 @@ const YoutubeIcon = ({ className = "w-5 h-5" }) => (
   </svg>
 );
 
-// ID Video YouTube mặc định (Mã 11 ký tự chuẩn của YouTube)
+// ID Video YouTube mặc định (Mã 11 ký tự chuẩn công khai của YouTube)
 const DEFAULT_CHANNEL_URL = "https://www.youtube.com/channel/UCTH5A6CPnunCR-Iw8nvyZfw?sub_confirmation=1";
-const DEFAULT_VIDEO_ID = "5qap5aO4i9A"; // ID Video YouTube chuẩn 11 ký tự
+const DEFAULT_VIDEO_ID = "L_LUpnjgPso"; // ID Video YouTube chuẩn đã xử lý 100%
 
 // Tự động bóc tách Video ID 11 ký tự từ link YouTube hoặc mã ID
 const extractYouTubeId = (urlOrId) => {
@@ -64,7 +64,7 @@ export default function FreeCoinsModal({
   const handleSaveVideoId = async () => {
     const cleanId = extractYouTubeId(videoId);
     if (!cleanId || cleanId.startsWith("UC") || cleanId.length !== 11) {
-      alert("⚠️ Chú ý: Bạn đang nhập ID Kênh (bắt đầu bằng UC...). Vui lòng dán Link một bài viết Video cụ thể (Ví dụ: https://www.youtube.com/watch?v=5qap5aO4i9A hoặc mã 11 ký tự 5qap5aO4i9A)!");
+      alert("⚠️ Chú ý: Bạn đang nhập ID Kênh (bắt đầu bằng UC...). Vui lòng dán Link một bài viết Video cụ thể (Ví dụ: https://www.youtube.com/watch?v=L_LUpnjgPso hoặc mã 11 ký tự L_LUpnjgPso)!");
       return;
     }
     setVideoId(cleanId);
@@ -106,13 +106,19 @@ export default function FreeCoinsModal({
     }
   }, []);
 
-  // Khởi tạo Player YouTube & Lắng nghe trạng thái Play / Pause thực tế
+  // Khởi tạo Player YouTube 1 LẦN DUY NHẤT mượt mà không bị lặp giật lag
   useEffect(() => {
+    let playerInstance = null;
+    let isCancelled = false;
+
     if (isPlayingVideo && isOpen) {
       const checkAndInitPlayer = () => {
-        if (window.YT && window.YT.Player) {
+        if (isCancelled) return;
+        const container = document.getElementById('youtube-player-container');
+        if (container && window.YT && window.YT.Player) {
           try {
-            playerRef.current = new window.YT.Player('youtube-player-container', {
+            container.innerHTML = '';
+            playerInstance = new window.YT.Player('youtube-player-container', {
               height: '100%',
               width: '100%',
               videoId: videoId,
@@ -123,25 +129,37 @@ export default function FreeCoinsModal({
               },
               events: {
                 onStateChange: (event) => {
-                  // 1 = PLAYING (Đang phát thật), 2 = PAUSED (Tạm dừng), 0 = ENDED
-                  if (event.data === 1) {
+                  if (isCancelled) return;
+                  // 1 = PLAYING
+                  if (event.data === window.YT.PlayerState.PLAYING) {
                     setIsVideoPlayingReal(true);
                   } else {
-                    setIsVideoPlayingReal(false); // Tạm dừng ➔ Dừng đếm thời gian
+                    setIsVideoPlayingReal(false);
                   }
                 }
               }
             });
+            playerRef.current = playerInstance;
           } catch (e) {
             console.warn("YouTube Player Init Warn:", e);
           }
         } else {
-          setTimeout(checkAndInitPlayer, 500);
+          setTimeout(checkAndInitPlayer, 300);
         }
       };
       checkAndInitPlayer();
     }
-  }, [isPlayingVideo, isOpen, videoId]);
+
+    return () => {
+      isCancelled = true;
+      if (playerRef.current && typeof playerRef.current.destroy === 'function') {
+        try {
+          playerRef.current.destroy();
+        } catch (e) {}
+        playerRef.current = null;
+      }
+    };
+  }, [isPlayingVideo, isOpen]);
 
   // Đếm ngược Sub Kênh (15s)
   useEffect(() => {
