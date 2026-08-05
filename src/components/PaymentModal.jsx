@@ -205,7 +205,7 @@ export default function PaymentModal({
               onClick={() => setStep('qr')}
               className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-extrabold text-sm shadow-xl shadow-purple-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
             >
-              <span>TẠO MÃ QR CHUYỂN KHOẢN ({selectedPkg.amount.toLocaleString('vi-VN')} VNĐ)</span>
+              <span>TẠO MÃ QR CHUYỂN KHOẢN</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
