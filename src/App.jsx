@@ -386,28 +386,28 @@ export default function App() {
           {/* Upload Video Gốc */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between text-sm font-medium text-[#94a3b8]">
-              <span>1. Video Gốc (.mp4)</span>
+              <span>1. Video Gốc (.mp4, .webm, .mov, .avi,...)</span>
               {videoFile && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
             </div>
             <label className="border-2 border-dashed border-[#2b3042] hover:border-purple-500/50 rounded-xl p-4 flex flex-col items-center gap-2 cursor-pointer transition-colors bg-[#12151e]">
               <FileVideo className="w-8 h-8 text-purple-400" />
               <span className="text-xs text-[#94a3b8] text-center font-medium">
-                {videoFile ? videoFile.name : 'Nhấn để chọn Video MP4'}
+                {videoFile ? videoFile.name : 'Nhấn để chọn Video (MP4, WEBM, MOV,...)'}
               </span>
-              <input type="file" accept="video/mp4,video/*" onChange={handleVideoUpload} className="hidden" />
+              <input type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
             </label>
           </div>
 
           {/* Upload Nhạc Nền Mới */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between text-sm font-medium text-[#94a3b8]">
-              <span>2. Nhạc Thay Thế (.mp3 / .wav)</span>
+              <span>2. Nhạc Thay Thế (.mp3, .wav, .m4a,...)</span>
               {audioFile && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
             </div>
             <label className="border-2 border-dashed border-[#2b3042] hover:border-pink-500/50 rounded-xl p-4 flex flex-col items-center gap-2 cursor-pointer transition-colors bg-[#12151e]">
               <FileAudio className="w-8 h-8 text-pink-400" />
               <span className="text-xs text-[#94a3b8] text-center font-medium">
-                {audioName ? audioName : 'Nhấn để chọn nhạc thay thế'}
+                {audioName ? audioName : 'Nhấn để chọn nhạc thay thế (.mp3, .wav, .m4a)'}
               </span>
               <input type="file" accept="audio/*" onChange={handleAudioUpload} className="hidden" />
             </label>
