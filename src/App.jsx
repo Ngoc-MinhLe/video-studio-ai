@@ -13,7 +13,9 @@ import {
   Loader2,
   FileVideo,
   FileAudio,
-  Sliders
+  Sliders,
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
 import { loadFFmpeg, processVideo } from './services/ffmpegService';
 import confetti from 'canvas-confetti';
@@ -44,6 +46,7 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const [exportUrl, setExportUrl] = useState(null);
   const [statusText, setStatusText] = useState('Đang khởi tạo Engine xử lý video...');
+  const [engineError, setEngineError] = useState(null);
 
   // --- Video & Audio Player Controls ---
   const [isPlaying, setIsPlaying] = useState(false);
@@ -53,31 +56,44 @@ export default function App() {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
 
-  // Khởi chạy Engine FFmpeg khi ứng dụng mở
-  useEffect(() => {
+  // Hàm kích hoạt nạp FFmpeg Engine
+  const initEngine = () => {
+    setIsEngineReady(false);
+    setEngineError(null);
+    setStatusText('Đang khởi tạo FFmpeg Engine...');
+
     loadFFmpeg(
       (prog) => setProgress(prog),
       (log) => setStatusText(log)
     )
       .then(() => {
         setIsEngineReady(true);
+        setEngineError(null);
         setStatusText('Hệ thống sẵn sàng!');
       })
       .catch((err) => {
         console.error('FFmpeg Init Error:', err);
-        setStatusText('Vui lòng làm mới trang hoặc dùng Chrome/Edge để khởi chạy Engine.');
+        setEngineError(err.message || 'Lỗi nạp WebAssembly.');
+        setStatusText('Khởi tạo chưa thành công.');
       });
+  };
+
+  useEffect(() => {
+    initEngine();
   }, []);
 
-  // Xử lý âm lượng Live Preview cho cả Video và Audio mới
+  // Đảm bảo cập nhật âm lượng âm thanh realtime
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.volume = videoVolume;
     }
+  }, [videoVolume]);
+
+  useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = audioVolume;
     }
-  }, [videoVolume, audioVolume]);
+  }, [audioVolume]);
 
   // Đồng bộ phát / dừng giữa Video và Audio mới
   const togglePlay = () => {
@@ -86,14 +102,23 @@ export default function App() {
     if (isPlaying) {
       videoRef.current.pause();
       if (audioRef.current) audioRef.current.pause();
+      setIsPlaying(false);
     } else {
-      if (audioRef.current) {
+      videoRef.current.volume = videoVolume;
+
+      if (audioRef.current && audioUrl) {
+        audioRef.current.volume = audioVolume;
         audioRef.current.currentTime = videoRef.current.currentTime;
-        audioRef.current.play().catch(e => console.log('Audio play sync error:', e));
+        audioRef.current.play().catch(e => console.log('Audio sync play warning:', e));
       }
-      videoRef.current.play();
+
+      videoRef.current.play()
+        .then(() => setIsPlaying(true))
+        .catch(e => {
+          console.error('Video play error:', e);
+          setIsPlaying(false);
+        });
     }
-    setIsPlaying(!isPlaying);
   };
 
   // Đồng bộ thời gian khi kéo Seekbar
@@ -130,12 +155,12 @@ export default function App() {
       setAudioUrl(url);
       setExportUrl(null);
 
-      // Nếu đang phát video, đồng bộ ngay phát nhạc mới
       if (isPlaying && videoRef.current) {
         setTimeout(() => {
           if (audioRef.current) {
             audioRef.current.currentTime = videoRef.current.currentTime;
-            audioRef.current.play();
+            audioRef.current.volume = audioVolume;
+            audioRef.current.play().catch(() => {});
           }
         }, 100);
       }
@@ -167,14 +192,13 @@ export default function App() {
       return;
     }
 
-    // Tạm dừng preview
     if (isPlaying) {
       togglePlay();
     }
 
     setIsProcessing(true);
     setProgress(0);
-    setStatusText('Đang ghép nhạc & chèn phụ đề vào video...');
+    setStatusText('Đang xử lý ghép nhạc & phụ đề vào file MP4...');
 
     try {
       const outputBlobUrl = await processVideo({
@@ -191,7 +215,6 @@ export default function App() {
       setProgress(100);
       setStatusText('Xuất Video thành công!');
 
-      // Hiệu ứng ăn mừng khi render xong
       confetti({
         particleCount: 120,
         spread: 80,
@@ -205,14 +228,14 @@ export default function App() {
     }
   };
 
-  // Lấy phụ đề đang hiển thị theo thời gian thực
+  // Phụ đề hiển thị live preview
   const currentSub = subtitles.find(
     s => currentTime >= Number(s.startTime) && currentTime <= Number(s.endTime)
   );
 
   return (
     <div className="min-h-screen pb-12 bg-[#0a0c10] text-[#f8fafc]">
-      {/* Element phát Audio mới ẩn để đồng bộ live preview */}
+      {/* Element phát nhạc nền phụ để đồng bộ Live Preview */}
       {audioUrl && <audio ref={audioRef} src={audioUrl} preload="auto" />}
 
       {/* --- HEADER --- */}
@@ -236,10 +259,26 @@ export default function App() {
                   <span className="text-emerald-400 font-medium">Engine FFmpeg Sẵn Sàng</span>
                 </>
               ) : (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 text-purple-400 animate-spin" />
-                  <span className="text-purple-300">{statusText}</span>
-                </>
+                <div className="flex items-center gap-2">
+                  {engineError ? (
+                    <>
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="text-amber-300 font-medium">Thử lại Engine</span>
+                      <button 
+                        onClick={initEngine} 
+                        className="hover:rotate-180 transition-transform p-0.5"
+                        title="Tải lại Engine"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 text-purple-400" />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 text-purple-400 animate-spin" />
+                      <span className="text-purple-300 max-w-[200px] truncate">{statusText}</span>
+                    </>
+                  )}
+                </div>
               )}
             </div>
 
@@ -356,6 +395,7 @@ export default function App() {
                 <video
                   ref={videoRef}
                   src={videoUrl}
+                  playsInline
                   className="w-full h-full object-contain"
                   onTimeUpdate={() => {
                     if (videoRef.current) setCurrentTime(videoRef.current.currentTime);

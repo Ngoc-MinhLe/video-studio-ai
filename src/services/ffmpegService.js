@@ -4,7 +4,7 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 let ffmpeg = null;
 
 /**
- * Khởi tạo engine FFmpeg WebAssembly với cơ chế thử lại từ nhiều CDN
+ * Khởi tạo engine FFmpeg WebAssembly từ file nội bộ (public/ffmpeg)
  */
 export const loadFFmpeg = async (onProgress, onLog) => {
   if (ffmpeg && ffmpeg.loaded) return ffmpeg;
@@ -23,30 +23,46 @@ export const loadFFmpeg = async (onProgress, onLog) => {
     console.log('[FFmpeg WASM]:', message);
   });
 
-  // Sử dụng jsDelivr CDN (có sẵn Header Cross-Origin-Resource-Policy: cross-origin)
-  const cdns = [
-    'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd',
-    'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd'
+  // Tải trực tiếp từ domain nội bộ (/ffmpeg/) để đảm bảo 100% không bị lỗi CORS/CDN
+  const origin = window.location.origin;
+  const localBaseURL = `${origin}/ffmpeg`;
+  const jsdelivrURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd';
+
+  const sources = [
+    { core: `${localBaseURL}/ffmpeg-core.js`, wasm: `${localBaseURL}/ffmpeg-core.wasm`, label: 'Local Server' },
+    { core: `${jsdelivrURL}/ffmpeg-core.js`, wasm: `${jsdelivrURL}/ffmpeg-core.wasm`, label: 'jsDelivr CDN' }
   ];
 
   let lastError = null;
-  for (const baseURL of cdns) {
+
+  for (const src of sources) {
     try {
-      if (onLog) onLog(`Đang tải FFmpeg Core từ ${new URL(baseURL).hostname}...`);
+      if (onLog) onLog(`Đang khởi tạo FFmpeg Core từ ${src.label}...`);
       
-      const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
-      const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
+      const coreURL = await toBlobURL(src.core, 'text/javascript');
+      const wasmURL = await toBlobURL(src.wasm, 'application/wasm');
 
       await ffmpeg.load({ coreURL, wasmURL });
       if (onLog) onLog('FFmpeg Core đã khởi tạo thành công!');
       return ffmpeg;
     } catch (err) {
-      console.warn(`Lỗi khi nạp từ ${baseURL}:`, err);
+      console.warn(`Lỗi nạp FFmpeg từ ${src.label}:`, err);
       lastError = err;
     }
   }
 
-  throw lastError || new Error('Không thể khởi tải các gói FFmpeg Core từ CDN.');
+  // Phương án dự phòng cuối cùng: Nạp trực tiếp URL không qua Blob
+  try {
+    if (onLog) onLog('Thử phương án nạp trực tiếp...');
+    await ffmpeg.load({
+      coreURL: `${localBaseURL}/ffmpeg-core.js`,
+      wasmURL: `${localBaseURL}/ffmpeg-core.wasm`
+    });
+    return ffmpeg;
+  } catch (err) {
+    console.error('Lỗi khởi tạo tất cả các nguồn FFmpeg:', err);
+    throw lastError || err;
+  }
 };
 
 /**
