@@ -18,6 +18,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { loadFFmpeg, processVideo } from './services/ffmpegService';
+import { processVideoCanvas } from './services/canvasExporter';
 import confetti from 'canvas-confetti';
 
 export default function App() {
@@ -40,12 +41,15 @@ export default function App() {
   const [subFontSize, setSubFontSize] = useState(24);
   const [subPosition, setSubPosition] = useState('bottom');
 
-  // --- FFmpeg Engine & Export States ---
-  const [isEngineReady, setIsEngineReady] = useState(false);
+  // --- Engine & Export States ---
+  // Mặc định chọn Canvas Engine để xuất video siêu tốc 100% không bị lỗi nạp WASM trên Cốc Cốc
+  const [engineType, setEngineType] = useState('canvas'); 
+  const [isEngineReady, setIsEngineReady] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [exportUrl, setExportUrl] = useState(null);
-  const [statusText, setStatusText] = useState('Đang khởi tạo Engine xử lý video...');
+  const [exportExtension, setExportExtension] = useState('mp4');
+  const [statusText, setStatusText] = useState('Hệ thống sẵn sàng!');
   const [engineError, setEngineError] = useState(null);
 
   // --- Video & Audio Player Controls ---
@@ -56,7 +60,7 @@ export default function App() {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
 
-  // Hàm kích hoạt nạp FFmpeg Engine
+  // Hàm kích hoạt nạp FFmpeg Engine (Nếu người dùng chuyển sang FFmpeg WASM)
   const initEngine = () => {
     setIsEngineReady(false);
     setEngineError(null);
@@ -69,7 +73,7 @@ export default function App() {
       .then(() => {
         setIsEngineReady(true);
         setEngineError(null);
-        setStatusText('Hệ thống sẵn sàng!');
+        setStatusText('FFmpeg WASM sẵn sàng!');
       })
       .catch((err) => {
         console.error('FFmpeg Init Error:', err);
@@ -79,8 +83,14 @@ export default function App() {
   };
 
   useEffect(() => {
-    initEngine();
-  }, []);
+    if (engineType === 'ffmpeg') {
+      initEngine();
+    } else {
+      setIsEngineReady(true);
+      setEngineError(null);
+      setStatusText('Canvas Engine sẵn sàng!');
+    }
+  }, [engineType]);
 
   // Đảm bảo cập nhật âm lượng âm thanh realtime
   useEffect(() => {
@@ -185,7 +195,7 @@ export default function App() {
     setSubtitles(subtitles.filter(s => s.id !== id));
   };
 
-  // Tiến hành Render Xuất Video MP4
+  // Tiến hành Render Xuất Video MP4 / WebM
   const handleExport = async () => {
     if (!videoFile) {
       alert('Vui lòng chọn một file Video trước khi xuất!');
@@ -198,19 +208,39 @@ export default function App() {
 
     setIsProcessing(true);
     setProgress(0);
-    setStatusText('Đang xử lý ghép nhạc & phụ đề vào file MP4...');
+    setStatusText('Đang bắt đầu quá trình xuất Video...');
 
     try {
-      const outputBlobUrl = await processVideo({
-        videoFile,
-        audioFile,
-        videoVolume,
-        audioVolume,
-        subtitles,
-        subOptions: { fontSize: subFontSize, position: subPosition }
-      });
+      if (engineType === 'canvas') {
+        // Render siêu tốc bằng Canvas Engine
+        const result = await processVideoCanvas({
+          videoFile,
+          audioFile,
+          videoVolume,
+          audioVolume,
+          subtitles,
+          subOptions: { fontSize: subFontSize, position: subPosition },
+          onProgress: (prog) => setProgress(prog),
+          onStatus: (stat) => setStatusText(stat)
+        });
 
-      setExportUrl(outputBlobUrl);
+        setExportUrl(result.url);
+        setExportExtension(result.extension || 'mp4');
+      } else {
+        // Render bằng FFmpeg WASM Engine
+        const outputBlobUrl = await processVideo({
+          videoFile,
+          audioFile,
+          videoVolume,
+          audioVolume,
+          subtitles,
+          subOptions: { fontSize: subFontSize, position: subPosition }
+        });
+
+        setExportUrl(outputBlobUrl);
+        setExportExtension('mp4');
+      }
+
       setIsProcessing(false);
       setProgress(100);
       setStatusText('Xuất Video thành công!');
@@ -223,8 +253,18 @@ export default function App() {
 
     } catch (error) {
       console.error('Processing error:', error);
-      alert('Đã xảy ra lỗi khi render video: ' + error.message);
       setIsProcessing(false);
+
+      if (engineType === 'ffmpeg') {
+        const confirmSwitch = window.confirm(
+          'Gặp lỗi với Engine FFmpeg WASM trên trình duyệt này. Bạn có muốn chuyển sang Engine Canvas (Chạy 100% thành công) để xuất video ngay không?'
+        );
+        if (confirmSwitch) {
+          setEngineType('canvas');
+        }
+      } else {
+        alert('Đã xảy ra lỗi khi render video: ' + error.message);
+      }
     }
   };
 
@@ -252,11 +292,42 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Bộ chọn Engine Render */}
+            <div className="flex items-center gap-1 bg-[#1a1e2b] p-1 rounded-xl border border-[#2b3042] text-xs">
+              <button
+                onClick={() => setEngineType('canvas')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  engineType === 'canvas'
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                    : 'text-[#94a3b8] hover:text-white'
+                }`}
+                title="Canvas Engine: Chạy 100% trên Cốc Cốc, Chrome, Safari không cần nạp 32MB WASM"
+              >
+                🚀 Engine Canvas (Siêu Tốc)
+              </button>
+              <button
+                onClick={() => setEngineType('ffmpeg')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  engineType === 'ffmpeg'
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                    : 'text-[#94a3b8] hover:text-white'
+                }`}
+                title="FFmpeg WASM Engine: Render bằng WebAssembly"
+              >
+                ⚡ FFmpeg WASM
+              </button>
+            </div>
+
             <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-[#1a1e2b] border border-[#2b3042]">
-              {isEngineReady ? (
+              {engineType === 'canvas' ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span className="text-emerald-400 font-medium">Engine FFmpeg Sẵn Sàng</span>
+                  <span className="text-emerald-400 font-medium">Canvas Sẵn Sàng (100% Cốc Cốc)</span>
+                </>
+              ) : isEngineReady ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span className="text-emerald-400 font-medium">FFmpeg WASM Sẵn Sàng</span>
                 </>
               ) : (
                 <div className="flex items-center gap-2">
@@ -267,7 +338,7 @@ export default function App() {
                       <button 
                         onClick={initEngine} 
                         className="hover:rotate-180 transition-transform p-0.5"
-                        title="Tải lại Engine"
+                        title="Tải lại Engine FFmpeg"
                       >
                         <RefreshCw className="w-3.5 h-3.5 text-purple-400" />
                       </button>
@@ -284,7 +355,7 @@ export default function App() {
 
             <button 
               onClick={handleExport}
-              disabled={!videoFile || !isEngineReady || isProcessing}
+              disabled={!videoFile || isProcessing || (engineType === 'ffmpeg' && !isEngineReady)}
               className="btn-primary"
             >
               {isProcessing ? (
@@ -295,7 +366,7 @@ export default function App() {
               ) : (
                 <>
                   <Download className="w-4 h-4" />
-                  <span>Xuất File MP4</span>
+                  <span>Xuất File Video</span>
                 </>
               )}
             </button>
@@ -463,11 +534,11 @@ export default function App() {
                 </div>
                 <a 
                   href={exportUrl} 
-                  download="video_studio_output.mp4"
+                  download={`video_studio_output.${exportExtension}`}
                   className="btn-primary bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30 shrink-0"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Tải MP4 Này</span>
+                  <span>Tải Video ({exportExtension.toUpperCase()})</span>
                 </a>
               </div>
             )}
