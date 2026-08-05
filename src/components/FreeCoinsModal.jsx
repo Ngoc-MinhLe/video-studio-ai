@@ -28,9 +28,9 @@ const YoutubeIcon = ({ className = "w-5 h-5" }) => (
   </svg>
 );
 
-// ID Video YouTube mặc định (Mã 11 ký tự chuẩn công khai của YouTube)
+// ID Video YouTube mặc định chính chủ kênh LE NGOC MINH MULTIMEDIA
 const DEFAULT_CHANNEL_URL = "https://www.youtube.com/channel/UCTH5A6CPnunCR-Iw8nvyZfw?sub_confirmation=1";
-const DEFAULT_VIDEO_ID = "L_LUpnjgPso"; // ID Video YouTube chuẩn đã xử lý 100%
+const DEFAULT_VIDEO_ID = "wf_QEArY60s"; // Link: https://www.youtube.com/watch?v=wf_QEArY60s
 
 // Tự động bóc tách Video ID 11 ký tự từ link YouTube hoặc mã ID
 const extractYouTubeId = (urlOrId) => {

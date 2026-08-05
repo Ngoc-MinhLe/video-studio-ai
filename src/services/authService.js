@@ -304,7 +304,7 @@ export const logOutUser = async () => {
  */
 export const subscribeSystemSettings = (callback) => {
   const localSaved = localStorage.getItem('featured_video_id');
-  const defaultId = localSaved || "L_LUpnjgPso";
+  const defaultId = "wf_QEArY60s"; // Link video chính chủ của bạn: https://www.youtube.com/watch?v=wf_QEArY60s
 
   const configRef = doc(db, "users", "admin_global_config");
   return onSnapshot(configRef, (docSnap) => {
