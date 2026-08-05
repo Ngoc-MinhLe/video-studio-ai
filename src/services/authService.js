@@ -304,9 +304,9 @@ export const logOutUser = async () => {
  */
 export const subscribeSystemSettings = (callback) => {
   const localSaved = localStorage.getItem('featured_video_id');
-  const defaultId = localSaved || "dQw4w9WgXcQ";
+  const defaultId = localSaved || "UCTH5A6CPnunCR-Iw8nvyZfw";
 
-  const configRef = doc(db, "users", "system_settings");
+  const configRef = doc(db, "edit_logs", "video_config");
   return onSnapshot(configRef, (docSnap) => {
     if (docSnap.exists() && docSnap.data()?.featuredVideoId) {
       const vid = docSnap.data().featuredVideoId;
@@ -329,7 +329,7 @@ export const updateFeaturedVideoIdInDb = async (videoId) => {
   const cleanId = videoId.trim();
   localStorage.setItem('featured_video_id', cleanId);
   try {
-    const configRef = doc(db, "users", "system_settings");
+    const configRef = doc(db, "edit_logs", "video_config");
     await setDoc(configRef, {
       featuredVideoId: cleanId,
       updatedAt: new Date().toISOString()

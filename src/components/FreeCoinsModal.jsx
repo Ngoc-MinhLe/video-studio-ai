@@ -28,9 +28,9 @@ const YoutubeIcon = ({ className = "w-5 h-5" }) => (
   </svg>
 );
 
-// ID Video YouTube mặc định (Bạn có thể thay đổi ID video YouTube bất kỳ của kênh bạn tại đây)
+// ID Video YouTube mặc định
 const DEFAULT_CHANNEL_URL = "https://www.youtube.com/channel/UCTH5A6CPnunCR-Iw8nvyZfw?sub_confirmation=1";
-const DEFAULT_VIDEO_ID = "dQw4w9WgXcQ"; // <-- ID Video YouTube mặc định
+const DEFAULT_VIDEO_ID = "UCTH5A6CPnunCR-Iw8nvyZfw"; // <-- Mặc định lấy theo ID Kênh YouTube LE NGOC MINH MULTIMEDIA
 
 // Tự động bóc tách Video ID 11 ký tự từ link YouTube hoặc mã ID
 const extractYouTubeId = (urlOrId) => {
