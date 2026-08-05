@@ -4,9 +4,7 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 let ffmpeg = null;
 
 /**
- * Khởi tạo engine FFmpeg WebAssembly
- * @param {Function} onProgress Callback nhận tiến trình % (0 - 100)
- * @param {Function} onLog Callback nhận thông báo log từ FFmpeg
+ * Khởi tạo engine FFmpeg WebAssembly với cơ chế thử lại từ nhiều CDN
  */
 export const loadFFmpeg = async (onProgress, onLog) => {
   if (ffmpeg && ffmpeg.loaded) return ffmpeg;
@@ -25,20 +23,34 @@ export const loadFFmpeg = async (onProgress, onLog) => {
     console.log('[FFmpeg WASM]:', message);
   });
 
-  // Tải core WebAssembly từ CDN (unpkg/jsdelivr)
-  const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+  // Sử dụng jsDelivr CDN (có sẵn Header Cross-Origin-Resource-Policy: cross-origin)
+  const cdns = [
+    'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd',
+    'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd'
+  ];
 
-  await ffmpeg.load({
-    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-  });
+  let lastError = null;
+  for (const baseURL of cdns) {
+    try {
+      if (onLog) onLog(`Đang tải FFmpeg Core từ ${new URL(baseURL).hostname}...`);
+      
+      const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
+      const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
 
-  return ffmpeg;
+      await ffmpeg.load({ coreURL, wasmURL });
+      if (onLog) onLog('FFmpeg Core đã khởi tạo thành công!');
+      return ffmpeg;
+    } catch (err) {
+      console.warn(`Lỗi khi nạp từ ${baseURL}:`, err);
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error('Không thể khởi tải các gói FFmpeg Core từ CDN.');
 };
 
 /**
  * Chuyển danh sách phụ đề sang định dạng SubRip (.srt)
- * @param {Array} subtitles [{ id, startTime, endTime, text }]
  */
 const formatSubtitlesToSRT = (subtitles) => {
   const formatTime = (seconds) => {
@@ -51,6 +63,7 @@ const formatSubtitlesToSRT = (subtitles) => {
   };
 
   return subtitles
+    .filter(s => s.text && s.text.trim() !== '')
     .sort((a, b) => a.startTime - b.startTime)
     .map((sub, index) => {
       return `${index + 1}\n${formatTime(sub.startTime)} --> ${formatTime(sub.endTime)}\n${sub.text}\n`;
@@ -60,14 +73,6 @@ const formatSubtitlesToSRT = (subtitles) => {
 
 /**
  * Xử lý Video: Thay nhạc & chèn phụ đề
- * @param {Object} params
- * @param {File} params.videoFile File video gốc (.mp4)
- * @param {File} params.audioFile File audio mới (.mp3/.wav, tùy chọn)
- * @param {number} params.videoVolume Âm lượng video gốc (0.0 - 1.0)
- * @param {number} params.audioVolume Âm lượng nhạc mới (0.0 - 1.0)
- * @param {Array} params.subtitles Danh sách phụ đề
- * @param {Object} params.subOptions Cấu hình phụ đề (fontSize, color, position)
- * @returns {Promise<string>} Blob URL của Video MP4 xuất ra
  */
 export const processVideo = async ({
   videoFile,
@@ -78,7 +83,7 @@ export const processVideo = async ({
   subOptions = { fontSize: 24, fontColor: 'white', position: 'bottom' }
 }) => {
   if (!ffmpeg || !ffmpeg.loaded) {
-    throw new Error('FFmpeg chưa được khởi tạo. Vui lòng thử lại.');
+    throw new Error('FFmpeg chưa sẵn sàng. Hãy đợi quá trình tải hoàn tất.');
   }
 
   const inputVideoName = 'input.mp4';
@@ -114,21 +119,17 @@ export const processVideo = async ({
   
   if (hasNewAudio) {
     if (videoVolume > 0) {
-      // Trộn cả 2 âm thanh với âm lượng tùy chỉnh
       filterComplex.push(`[0:a]volume=${videoVolume}[a0];[1:a]volume=${audioVolume}[a1];[a0][a1]amix=inputs=2:duration=first[aout]`);
     } else {
-      // Tắt hoàn toàn tiếng gốc, chỉ dùng nhạc mới
       filterComplex.push(`[1:a]volume=${audioVolume}[aout]`);
     }
   } else {
     filterComplex.push(`[0:a]volume=${videoVolume}[aout]`);
   }
 
-  // Xử lý Subtitle Filter (Drawtext / Subtitles)
+  // Xử lý Subtitle Filter
   let videoFilter = '';
   if (hasSubtitles) {
-    // Định dạng kiểu chữ và màu sắc cho srt filter
-    const yPos = subOptions.position === 'top' ? 'h/10' : subOptions.position === 'center' ? 'h/2-20' : 'h-h/8';
     videoFilter = `subtitles=${srtName}:force_style='FontSize=${subOptions.fontSize},PrimaryColour=&H00FFFFFF&,Alignment=2'`;
   }
 
@@ -142,7 +143,7 @@ export const processVideo = async ({
     ffmpegArgs.push('-map', '[aout]');
   }
 
-  // Ép codec MP4 chuẩn (H.264 + AAC)
+  // Ép codec MP4 chuẩn
   ffmpegArgs.push('-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-y', outputName);
 
   console.log('[FFmpeg Command]:', ffmpegArgs.join(' '));
