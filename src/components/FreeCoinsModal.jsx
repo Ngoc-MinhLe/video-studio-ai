@@ -14,7 +14,7 @@ import {
   Video,
   AlertTriangle
 } from 'lucide-react';
-import { updateUserCoinsInDb } from '../services/authService';
+import { isUserAdmin, updateUserCoinsInDb } from '../services/authService';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import confetti from 'canvas-confetti';
@@ -30,7 +30,6 @@ const YoutubeIcon = ({ className = "w-5 h-5" }) => (
 const YOUTUBE_CONFIG = {
   channelUrl: "https://www.youtube.com/channel/UCTH5A6CPnunCR-Iw8nvyZfw?sub_confirmation=1",
   videoUrl: "https://www.youtube.com/watch?v=UCTH5A6CPnunCR-Iw8nvyZfw",
-  // Bạn có thể dán ID Video chính của bạn vào đây (VD: "dQw4w9WgXcQ")
   embedVideoId: "UCTH5A6CPnunCR-Iw8nvyZfw" 
 };
 
@@ -54,6 +53,8 @@ export default function FreeCoinsModal({
   const [hasOpenedLikeLink, setHasOpenedLikeLink] = useState(false);
   const [likeTimer, setLikeTimer] = useState(15);
   const [likeClaiming, setLikeClaiming] = useState(false);
+
+  const [isResetting, setIsResetting] = useState(false);
 
   // Đếm ngược Sub Kênh (Yêu cầu phải bấm mở tab YouTube thật trước)
   useEffect(() => {
@@ -91,6 +92,28 @@ export default function FreeCoinsModal({
   if (!isOpen) return null;
 
   const claimedTasks = userData?.claimedTasks || {};
+
+  // Admin Reset tất cả nhiệm vụ để Test lại
+  const handleAdminResetTasks = async () => {
+    if (!currentUser) return;
+    setIsResetting(true);
+    try {
+      const userRef = doc(db, "users", currentUser.uid);
+      await updateDoc(userRef, {
+        claimedTasks: {}
+      });
+      setHasOpenedSubLink(false);
+      setSubTimer(15);
+      setIsPlayingVideo(false);
+      setWatchTimer(60);
+      setHasOpenedLikeLink(false);
+      setLikeTimer(15);
+      setIsResetting(false);
+    } catch (e) {
+      console.error(e);
+      setIsResetting(false);
+    }
+  };
 
   // Mở tab đăng ký kênh thật
   const handleOpenSubChannel = () => {
@@ -182,14 +205,28 @@ export default function FreeCoinsModal({
         </button>
 
         {/* Tiêu đề Modal */}
-        <div className="flex items-center gap-3 border-b border-[#2b3042] pb-4 mb-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-red-600 to-pink-500 flex items-center justify-center shadow-lg shadow-red-600/30 shrink-0">
-            <Gift className="w-6 h-6 text-white" />
+        <div className="flex items-center justify-between border-b border-[#2b3042] pb-4 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-red-600 to-pink-500 flex items-center justify-center shadow-lg shadow-red-600/30 shrink-0">
+              <Gift className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h3 className="font-bold text-lg text-white">Kiếm Xu Miễn Phí</h3>
+              <p className="text-xs text-[#94a3b8]">Ủng hộ Kênh YouTube <strong className="text-red-400">LE NGOC MINH MULTIMEDIA</strong></p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-bold text-lg text-white">Kiếm Xu Miễn Phí</h3>
-            <p className="text-xs text-[#94a3b8]">Ủng hộ Kênh YouTube <strong className="text-red-400">LE NGOC MINH MULTIMEDIA</strong> để nhận Xu xuất video không giới hạn!</p>
-          </div>
+
+          {/* Nút Admin Reset Trạng Thái Để Test */}
+          {isUserAdmin(userData) && (
+            <button
+              onClick={handleAdminResetTasks}
+              disabled={isResetting}
+              className="px-2.5 py-1 rounded-lg bg-purple-600/30 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer shrink-0"
+              title="Khôi phục trạng thái chưa làm nhiệm vụ để Admin test lại"
+            >
+              {isResetting ? <Loader2 className="w-3 h-3 animate-spin" /> : "🔄 Reset Test"}
+            </button>
+          )}
         </div>
 
         {/* Danh sách Nhiệm Vụ */}
