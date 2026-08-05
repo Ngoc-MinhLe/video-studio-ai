@@ -37,7 +37,8 @@ export default function PaymentModal({
   currentUser,
   userData 
 }) {
-  const [selectedPkg, setSelectedPkg] = useState(RECHARGE_PACKAGES[1]);
+  const [selectedPkgId, setSelectedPkgId] = useState('pkg_20k');
+  const selectedPkg = RECHARGE_PACKAGES.find(p => p.id === selectedPkgId) || RECHARGE_PACKAGES[1];
   const [step, setStep] = useState('select'); // 'select' | 'qr' | 'success'
   const [orderId, setOrderId] = useState('');
   const [copiedField, setCopiedField] = useState(null);
@@ -106,7 +107,7 @@ export default function PaymentModal({
     }
 
     return () => unsub();
-  }, [step, currentUser, selectedPkg]);
+  }, [step, currentUser, selectedPkgId]);
 
   if (!isOpen) return null;
 
@@ -179,12 +180,12 @@ export default function PaymentModal({
             {/* Danh sách gói nạp */}
             <div className="grid grid-cols-2 gap-3">
               {RECHARGE_PACKAGES.map((pkg) => {
-                const isSelected = selectedPkg?.id === pkg.id;
+                const isSelected = pkg.id === selectedPkgId;
                 return (
                   <button
                     key={pkg.id}
                     type="button"
-                    onClick={() => setSelectedPkg(pkg)}
+                    onClick={() => setSelectedPkgId(pkg.id)}
                     className={`relative cursor-pointer p-4 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 select-none active:scale-95 ${
                       isSelected
                         ? 'bg-purple-600/25 border-purple-400 shadow-lg shadow-purple-500/20 ring-2 ring-purple-500/50'
