@@ -2,20 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Coins, 
-  Sparkles, 
-  QrCode, 
   Copy, 
   Check, 
   ArrowRight, 
-  ShieldCheck, 
   Loader2, 
   CheckCircle2,
   Building2,
-  User,
-  CreditCard,
   Zap
 } from 'lucide-react';
 import { updateUserCoinsInDb } from '../services/authService';
+import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { db } from '../services/firebase';
 import confetti from 'canvas-confetti';
 
 // Danh sách các gói nạp xu (Đã chuẩn hóa tỷ lệ hợp lý & tối ưu lợi nhuận)
@@ -26,11 +23,11 @@ const RECHARGE_PACKAGES = [
   { id: 'pkg_100k', amount: 100000, coins: 400, bonus: '+100 Xu Tặng (80 Video)', popular: false },
 ];
 
-// Cấu hình ngân hàng Vietcombank chính chủ của bạn
+// Cấu hình ngân hàng TPBank chính chủ đã kết nối SePay thành công
 const DEFAULT_BANK_CONFIG = {
-  bankId: 'VCB', // Vietcombank
-  bankName: 'Ngân hàng TMCP Ngoại Thương Việt Nam (Vietcombank)',
-  accountNo: '0031000298465', // Số tài khoản Vietcombank chính chủ
+  bankId: 'TPB', // TPBank Napas code
+  bankName: 'Ngân hàng TMCP Tiên Phong (TPBank)',
+  accountNo: '09346666666', // Số tài khoản TPBank chính chủ của bạn
   accountName: 'LE NGOC MINH', // Tên chủ tài khoản
 };
 
@@ -46,14 +43,42 @@ export default function PaymentModal({
   const [copiedField, setCopiedField] = useState(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
-  // Khởi tạo mã đơn hàng duy nhất khi mở màn hình QR
+  // Khởi tạo đơn nạp xu Firestore & Lắng nghe SePay Webhook tự động 24/7
   useEffect(() => {
-    if (step === 'qr') {
+    let unsub = () => {};
+
+    if (step === 'qr' && currentUser) {
       const randomCode = Math.floor(100000 + Math.random() * 900000);
       const memo = `VS ${randomCode}`;
       setOrderId(memo);
+
+      // Tạo đơn hàng chờ thanh toán trên Firestore
+      const orderRef = doc(db, "orders", memo);
+      setDoc(orderRef, {
+        orderCode: memo,
+        uid: currentUser.uid,
+        userEmail: currentUser.email || '',
+        coins: selectedPkg.coins,
+        amount: selectedPkg.amount,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      }).catch(err => console.warn("Lỗi khởi tạo đơn nạp:", err));
+
+      // Lắng nghe tín hiệu Webhook từ SePay bắn về Firestore realtime
+      unsub = onSnapshot(orderRef, (snap) => {
+        if (snap.exists() && snap.data()?.status === 'completed') {
+          setStep('success');
+          confetti({
+            particleCount: 150,
+            spread: 90,
+            origin: { y: 0.5 }
+          });
+        }
+      });
     }
-  }, [step]);
+
+    return () => unsub();
+  }, [step, currentUser, selectedPkg]);
 
   if (!isOpen) return null;
 
