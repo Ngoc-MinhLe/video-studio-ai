@@ -92,12 +92,12 @@ export default function App() {
       if (user) {
         const unsubUser = subscribeUserData(user.uid, (data) => {
           setUserData(data);
-          // Tự động kiểm tra và bù +75 Xu cho 3 giao dịch nạp 10k lúc tối (VS 105705, VS 583606, VS 648946)
-          if (data && !localStorage.getItem('credited_past_3_transfers_v1')) {
-            localStorage.setItem('credited_past_3_transfers_v1', 'true');
+          // Tự động bù +100 Xu cho 4 giao dịch 10k thực tế của bạn (VS 105705, VS 583606, VS 648946, VS 498036)
+          if (data && !localStorage.getItem('credited_past_4_transfers_v2')) {
+            localStorage.setItem('credited_past_4_transfers_v2', 'true');
             const currentCoins = Number(data.coins || 0);
-            const targetCoins = currentCoins + 75; // 3 x 25 Xu = 75 Xu
-            updateUserCoinsInDb(user.uid, targetCoins).catch(e => console.warn("Lỗi cộng bù 75 xu:", e));
+            const targetCoins = currentCoins < 100 ? currentCoins + 100 : currentCoins; 
+            updateUserCoinsInDb(user.uid, targetCoins).catch(e => console.warn("Lỗi cộng bù 100 xu:", e));
           }
         });
         return () => unsubUser();
