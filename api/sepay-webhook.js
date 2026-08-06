@@ -51,35 +51,90 @@ export default async function handler(req, res) {
       if (anyDigits) matchedDigits = anyDigits[1];
     }
 
-    const coins = getCoinsForAmount(transferAmount);
+    const coinsToAdd = getCoinsForAmount(transferAmount);
+    let targetUid = null;
 
-    // 1. Cập nhật trực tiếp đơn hàng orders/{orderCode} trên Cloud Firestore bằng REST API (Nhờ Quy tắc orders đã xuất bản)
+    // 1. Tìm đơn hàng orders/{orderCode} để lấy UID người dùng
     if (matchedDigits) {
       const candidateCodes = [`VS ${matchedDigits}`, `VS${matchedDigits}`];
       for (const code of candidateCodes) {
         try {
-          const patchOrderUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/orders/${encodeURIComponent(code)}`;
-          await fetch(patchOrderUrl, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              fields: {
-                orderCode: { stringValue: code },
-                status: { stringValue: 'completed' },
-                coins: { integerValue: String(coins) },
-                paidAmount: { integerValue: String(transferAmount) },
-                updatedAt: { stringValue: new Date().toISOString() }
-              }
-            })
-          });
-          console.log(`[Firestore Order Update Success]: Marked ${code} as completed`);
+          const getOrderUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/orders/${encodeURIComponent(code)}`;
+          const orderRes = await fetch(getOrderUrl);
+          if (orderRes.ok) {
+            const orderJson = await orderRes.json();
+            if (orderJson.fields) {
+              targetUid = orderJson.fields.uid?.stringValue || null;
+
+              // Đánh dấu đơn hàng completed
+              const patchOrderUrl = `${getOrderUrl}?updateMask.fieldPaths=status&updateMask.fieldPaths=paidAmount&updateMask.fieldPaths=updatedAt`;
+              await fetch(patchOrderUrl, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  fields: {
+                    ...orderJson.fields,
+                    status: { stringValue: 'completed' },
+                    paidAmount: { integerValue: String(transferAmount) },
+                    updatedAt: { stringValue: new Date().toISOString() }
+                  }
+                })
+              });
+              console.log(`[SePay Webhook REST]: Order ${code} marked as completed for uid: ${targetUid}`);
+              break;
+            }
+          }
         } catch (err) {
-          console.warn(`[Firestore Order Update Error]:`, err);
+          console.warn(`[SePay Order Check Error]:`, err);
         }
       }
     }
 
-    // 2. Đồng thời ghi vào bộ nhớ /tmp làm Cầu nối phụ (Backup)
+    // 2. Nếu không có order Code, lấy tài khoản người dùng gần nhất hoặc theo UID
+    if (!targetUid) {
+      try {
+        const usersListUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users?pageSize=1`;
+        const usersRes = await fetch(usersListUrl);
+        if (usersRes.ok) {
+          const usersJson = await usersRes.json();
+          if (usersJson.documents && usersJson.documents.length > 0) {
+            const pathParts = usersJson.documents[0].name.split('/');
+            targetUid = pathParts[pathParts.length - 1];
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 3. Cập nhật thẳng số dư Xu vào users/{uid} trên Firestore REST API
+    if (targetUid && coinsToAdd > 0) {
+      try {
+        const getUserUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${encodeURIComponent(targetUid)}`;
+        const userRes = await fetch(getUserUrl);
+        if (userRes.ok) {
+          const userJson = await userRes.json();
+          const currentCoins = Number(userJson.fields?.coins?.integerValue || userJson.fields?.coins?.stringValue || 0);
+          const newCoins = currentCoins + coinsToAdd;
+
+          const patchUserUrl = `${getUserUrl}?updateMask.fieldPaths=coins&updateMask.fieldPaths=updatedAt`;
+          const patchRes = await fetch(patchUserUrl, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fields: {
+                ...(userJson.fields || {}),
+                coins: { integerValue: String(newCoins) },
+                updatedAt: { stringValue: new Date().toISOString() }
+              }
+            })
+          });
+          console.log(`[SePay Webhook REST Direct Coin Update]: Credited +${coinsToAdd} coins (Total: ${newCoins}) to user ${targetUid}. Patch Status: ${patchRes.status}`);
+        }
+      } catch (err) {
+        console.warn(`[SePay User Coin Update Error]:`, err);
+      }
+    }
+
+    // 4. Lưu vết bộ nhớ /tmp
     let store = {};
     const tmpPath = '/tmp/sepay_completed.json';
     try {
@@ -93,17 +148,10 @@ export default async function handler(req, res) {
         code: `VS ${matchedDigits}`,
         digits: matchedDigits,
         amount: transferAmount,
-        coins: coins,
+        coins: coinsToAdd,
         timestamp: Date.now()
       };
     }
-
-    store[`amount_${transferAmount}`] = {
-      digits: matchedDigits || 'unknown',
-      amount: transferAmount,
-      coins: coins,
-      timestamp: Date.now()
-    };
 
     try {
       fs.writeFileSync(tmpPath, JSON.stringify(store));
@@ -111,9 +159,10 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
-      message: 'Recorded transaction into Firestore order & SePay bridge cache!',
+      message: 'Directly credited user coins in Firestore!',
+      uid: targetUid,
       digits: matchedDigits,
-      coinsAdded: coins
+      coinsAdded: coinsToAdd
     });
 
   } catch (error) {
