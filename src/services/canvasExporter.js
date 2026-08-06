@@ -17,7 +17,9 @@ export const processVideoCanvas = async ({
   bgMirrorBlur = true,
   zoomSpeed = 0.2,
   zoomRange = 30,
+  activeVisualizers = ['sinewave'],
   visualizerType = 'sinewave',
+  visualizerPosX = 50,
   visualizerPosY = 50,
   videoFile,
   videoClips = [],
@@ -647,162 +649,169 @@ export const processVideoCanvas = async ({
           ctx.fillRect(0, 0, canvasW, canvasH);
         }
 
-        // 2. Vẽ Hiệu Ứng Sóng Âm / Đĩa Nhạc Quay Vinyl
-        if (visualizerType === 'sinewave') {
-          ctx.save();
-          const vY = (canvasH * (visualizerPosY !== undefined ? visualizerPosY : 50)) / 100;
-          const scaleF = canvasH / 720;
-          const amp = Math.sin(projectTime * 6) * (45 * scaleF) + (15 * scaleF);
+        // 2. Vẽ Lồng Nhau Nhiều Hiệu Ứng Sóng Âm / Đĩa Nhạc Quay Vinyl
+        const vizList = Array.isArray(activeVisualizers) ? activeVisualizers : [visualizerType || 'sinewave'];
 
-          ctx.shadowColor = '#ec4899';
-          ctx.shadowBlur = 24 * scaleF;
-
-          const grad = ctx.createLinearGradient(0, 0, canvasW, 0);
-          grad.addColorStop(0, '#ec4899');
-          grad.addColorStop(0.4, '#a855f7');
-          grad.addColorStop(0.7, '#3b82f6');
-          grad.addColorStop(1, '#06b6d4');
-
-          // Upper Wide Glow Curve
-          ctx.beginPath();
-          ctx.moveTo(0, vY);
-          ctx.bezierCurveTo(canvasW * 0.25, vY - amp, canvasW * 0.75, vY + amp, canvasW, vY);
-          ctx.strokeStyle = grad;
-          ctx.lineWidth = 7 * scaleF;
-          ctx.stroke();
-
-          // Lower Symmetric Wave
-          ctx.beginPath();
-          ctx.moveTo(0, vY);
-          ctx.bezierCurveTo(canvasW * 0.25, vY + amp, canvasW * 0.75, vY - amp, canvasW, vY);
-          ctx.strokeStyle = '#38bdf8';
-          ctx.lineWidth = 3.5 * scaleF;
-          ctx.stroke();
-
-          // Particle Dots along wave
-          const dotPositions = [0.1, 0.3, 0.5, 0.7, 0.9];
-          dotPositions.forEach((pos, idx) => {
-            const px = canvasW * pos;
-            const py = vY + Math.sin(projectTime * 6 + idx) * amp;
-            const r = (4 + Math.abs(Math.sin(projectTime * 8 + idx)) * 3) * scaleF;
-
-            ctx.fillStyle = '#f472b6';
-            ctx.shadowColor = '#f472b6';
-            ctx.shadowBlur = 12 * scaleF;
-            ctx.beginPath();
-            ctx.arc(px, py, r, 0, Math.PI * 2);
-            ctx.fill();
-          });
-
-          ctx.restore();
-        } else if (visualizerType === 'vinyl') {
-          ctx.save();
-          const centerX = canvasW / 2;
-          const centerY = canvasH / 2;
-          const radius = Math.min(canvasW, canvasH) * 0.22;
-          const scaleF = canvasH / 720;
-
-          ctx.translate(centerX, centerY);
-          const angle = (projectTime * 120 * Math.PI) / 180;
-          ctx.rotate(angle);
-
-          // Outer Glow
-          ctx.shadowColor = '#a855f7';
-          ctx.shadowBlur = 35 * scaleF;
-
-          // Outer Vinyl Black Disc
-          ctx.fillStyle = '#0c0d12';
-          ctx.beginPath();
-          ctx.arc(0, 0, radius, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = '#334155';
-          ctx.lineWidth = 4 * scaleF;
-          ctx.stroke();
-
-          // Vinyl Grooves
-          for (let r = radius * 0.45; r < radius * 0.95; r += 10 * scaleF) {
-            ctx.beginPath();
-            ctx.arc(0, 0, r, 0, Math.PI * 2);
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-            ctx.lineWidth = 1.5 * scaleF;
-            ctx.stroke();
-          }
-
-          // Center Album Artwork Badge
-          if (bgImgEl) {
+        vizList.forEach((vType) => {
+          if (vType === 'sinewave') {
             ctx.save();
-            ctx.beginPath();
-            ctx.arc(0, 0, radius * 0.4, 0, Math.PI * 2);
-            ctx.clip();
-            ctx.drawImage(bgImgEl, -radius * 0.4, -radius * 0.4, radius * 0.8, radius * 0.8);
-            ctx.restore();
-          }
+            const vY = (canvasH * (visualizerPosY !== undefined ? visualizerPosY : 50)) / 100;
+            const vX = (canvasW * (visualizerPosX !== undefined ? visualizerPosX : 50)) / 100;
+            const shiftX = vX - (canvasW / 2);
+            const scaleF = canvasH / 720;
+            const amp = Math.sin(projectTime * 6) * (45 * scaleF) + (15 * scaleF);
 
-          // Center Spindle Hole
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(0, 0, radius * 0.06, 0, Math.PI * 2);
-          ctx.fill();
+            ctx.shadowColor = '#ec4899';
+            ctx.shadowBlur = 24 * scaleF;
 
-          ctx.restore();
-        } else if (visualizerType === 'bars') {
-          ctx.save();
-          const barCount = 24;
-          const barWidth = (canvasW * 0.65) / barCount;
-          const startX = (canvasW - (barCount * barWidth)) / 2;
-          const vY = (canvasH * (visualizerPosY !== undefined ? visualizerPosY : 50)) / 100;
-          const scaleF = canvasH / 720;
-
-          for (let b = 0; b < barCount; b++) {
-            const barHeight = Math.abs(Math.sin(projectTime * 5 + b * 0.4)) * (canvasH * 0.16) + (canvasH * 0.02);
-            const bx = startX + b * barWidth;
-            const by = vY - barHeight / 2;
-
-            const grad = ctx.createLinearGradient(bx, vY + barHeight / 2, bx, by);
+            const grad = ctx.createLinearGradient(shiftX, 0, canvasW + shiftX, 0);
             grad.addColorStop(0, '#ec4899');
-            grad.addColorStop(0.5, '#a855f7');
+            grad.addColorStop(0.4, '#a855f7');
+            grad.addColorStop(0.7, '#3b82f6');
             grad.addColorStop(1, '#06b6d4');
 
-            ctx.fillStyle = grad;
-            ctx.fillRect(bx + 2 * scaleF, by, barWidth - 4 * scaleF, barHeight);
+            // Upper Wide Glow Curve
+            ctx.beginPath();
+            ctx.moveTo(shiftX, vY);
+            ctx.bezierCurveTo(canvasW * 0.25 + shiftX, vY - amp, canvasW * 0.75 + shiftX, vY + amp, canvasW + shiftX, vY);
+            ctx.strokeStyle = grad;
+            ctx.lineWidth = 7 * scaleF;
+            ctx.stroke();
 
-            // Bouncing peak indicator dot
-            ctx.fillStyle = '#67e8f9';
-            ctx.shadowColor = '#06b6d4';
-            ctx.shadowBlur = 10 * scaleF;
-            ctx.fillRect(bx + 2 * scaleF, by - 6 * scaleF, barWidth - 4 * scaleF, 3 * scaleF);
+            // Lower Symmetric Wave
+            ctx.beginPath();
+            ctx.moveTo(shiftX, vY);
+            ctx.bezierCurveTo(canvasW * 0.25 + shiftX, vY + amp, canvasW * 0.75 + shiftX, vY - amp, canvasW + shiftX, vY);
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 3.5 * scaleF;
+            ctx.stroke();
+
+            // Particle Dots along wave
+            const dotPositions = [0.1, 0.3, 0.5, 0.7, 0.9];
+            dotPositions.forEach((pos, idx) => {
+              const px = canvasW * pos + shiftX;
+              const py = vY + Math.sin(projectTime * 6 + idx) * amp;
+              const r = (4 + Math.abs(Math.sin(projectTime * 8 + idx)) * 3) * scaleF;
+
+              ctx.fillStyle = '#f472b6';
+              ctx.shadowColor = '#f472b6';
+              ctx.shadowBlur = 12 * scaleF;
+              ctx.beginPath();
+              ctx.arc(px, py, r, 0, Math.PI * 2);
+              ctx.fill();
+            });
+
+            ctx.restore();
+          } else if (vType === 'vinyl') {
+            ctx.save();
+            const centerX = (canvasW * (visualizerPosX !== undefined ? visualizerPosX : 50)) / 100;
+            const centerY = (canvasH * (visualizerPosY !== undefined ? visualizerPosY : 50)) / 100;
+            const radius = Math.min(canvasW, canvasH) * 0.22;
+            const scaleF = canvasH / 720;
+
+            ctx.translate(centerX, centerY);
+            const angle = (projectTime * 120 * Math.PI) / 180;
+            ctx.rotate(angle);
+
+            // Outer Glow
+            ctx.shadowColor = '#a855f7';
+            ctx.shadowBlur = 35 * scaleF;
+
+            // Outer Vinyl Black Disc
+            ctx.fillStyle = '#0c0d12';
+            ctx.beginPath();
+            ctx.arc(0, 0, radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 4 * scaleF;
+            ctx.stroke();
+
+            // Vinyl Grooves
+            for (let r = radius * 0.45; r < radius * 0.95; r += 10 * scaleF) {
+              ctx.beginPath();
+              ctx.arc(0, 0, r, 0, Math.PI * 2);
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+              ctx.lineWidth = 1.5 * scaleF;
+              ctx.stroke();
+            }
+
+            // Center Album Artwork Badge
+            if (bgImgEl) {
+              ctx.save();
+              ctx.beginPath();
+              ctx.arc(0, 0, radius * 0.4, 0, Math.PI * 2);
+              ctx.clip();
+              ctx.drawImage(bgImgEl, -radius * 0.4, -radius * 0.4, radius * 0.8, radius * 0.8);
+              ctx.restore();
+            }
+
+            // Center Spindle Hole
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(0, 0, radius * 0.06, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+          } else if (vType === 'bars') {
+            ctx.save();
+            const barCount = 24;
+            const barWidth = (canvasW * 0.65) / barCount;
+            const centerX = (canvasW * (visualizerPosX !== undefined ? visualizerPosX : 50)) / 100;
+            const startX = centerX - (barCount * barWidth) / 2;
+            const vY = (canvasH * (visualizerPosY !== undefined ? visualizerPosY : 50)) / 100;
+            const scaleF = canvasH / 720;
+
+            for (let b = 0; b < barCount; b++) {
+              const barHeight = Math.abs(Math.sin(projectTime * 5 + b * 0.4)) * (canvasH * 0.16) + (canvasH * 0.02);
+              const bx = startX + b * barWidth;
+              const by = vY - barHeight / 2;
+
+              const grad = ctx.createLinearGradient(bx, vY + barHeight / 2, bx, by);
+              grad.addColorStop(0, '#ec4899');
+              grad.addColorStop(0.5, '#a855f7');
+              grad.addColorStop(1, '#06b6d4');
+
+              ctx.fillStyle = grad;
+              ctx.fillRect(bx + 2 * scaleF, by, barWidth - 4 * scaleF, barHeight);
+
+              // Bouncing peak indicator dot
+              ctx.fillStyle = '#67e8f9';
+              ctx.shadowColor = '#06b6d4';
+              ctx.shadowBlur = 10 * scaleF;
+              ctx.fillRect(bx + 2 * scaleF, by - 6 * scaleF, barWidth - 4 * scaleF, 3 * scaleF);
+            }
+            ctx.restore();
+          } else if (vType === 'ring') {
+            ctx.save();
+            const centerX = (canvasW * (visualizerPosX !== undefined ? visualizerPosX : 50)) / 100;
+            const centerY = (canvasH * (visualizerPosY !== undefined ? visualizerPosY : 50)) / 100;
+            const scaleF = canvasH / 720;
+            const baseRadius = Math.min(canvasW, canvasH) * 0.22;
+            const pulseRadius = baseRadius + Math.abs(Math.sin(projectTime * 6)) * (baseRadius * 0.18);
+
+            ctx.strokeStyle = '#ec4899';
+            ctx.shadowColor = '#ec4899';
+            ctx.shadowBlur = 35 * scaleF;
+            ctx.lineWidth = 6 * scaleF;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, pulseRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Outer dashed Cyber ring
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(projectTime * 0.8);
+            ctx.strokeStyle = 'rgba(6, 182, 212, 0.7)';
+            ctx.setLineDash([12 * scaleF, 8 * scaleF]);
+            ctx.lineWidth = 3 * scaleF;
+            ctx.beginPath();
+            ctx.arc(0, 0, baseRadius * 1.3, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+
+            ctx.restore();
           }
-          ctx.restore();
-        } else if (visualizerType === 'ring') {
-          ctx.save();
-          const centerX = canvasW / 2;
-          const centerY = canvasH / 2;
-          const scaleF = canvasH / 720;
-          const baseRadius = Math.min(canvasW, canvasH) * 0.22;
-          const pulseRadius = baseRadius + Math.abs(Math.sin(projectTime * 6)) * (baseRadius * 0.18);
-
-          ctx.strokeStyle = '#ec4899';
-          ctx.shadowColor = '#ec4899';
-          ctx.shadowBlur = 35 * scaleF;
-          ctx.lineWidth = 6 * scaleF;
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, pulseRadius, 0, Math.PI * 2);
-          ctx.stroke();
-
-          // Outer dashed Cyber ring
-          ctx.save();
-          ctx.translate(centerX, centerY);
-          ctx.rotate(projectTime * 0.8);
-          ctx.strokeStyle = 'rgba(6, 182, 212, 0.7)';
-          ctx.setLineDash([12 * scaleF, 8 * scaleF]);
-          ctx.lineWidth = 3 * scaleF;
-          ctx.beginPath();
-          ctx.arc(0, 0, baseRadius * 1.3, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.restore();
-
-          ctx.restore();
-        }
+        });
       } else if (loadedVideoElements.length > 0) {
         // Chế độ Video Studio MP4 Clips
         let activeItemIndex = loadedVideoElements.findIndex(

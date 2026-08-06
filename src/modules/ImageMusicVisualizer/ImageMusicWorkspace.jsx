@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Upload, Image, Music, Disc, Activity, Sparkles, Sliders, Volume2, 
-  Trash2, Plus, Zap, RefreshCw, ZoomIn, Eye, Play, Pause, Layers, Maximize, Move, Sparkle, Waves, Gauge
+  Trash2, Plus, Zap, RefreshCw, ZoomIn, Eye, Play, Pause, Layers, Maximize, Move, Sparkle, Waves, Check
 } from 'lucide-react';
 
 export default function ImageMusicWorkspace({
@@ -24,8 +24,10 @@ export default function ImageMusicWorkspace({
   setZoomSpeed,
   zoomRange = 30,
   setZoomRange,
-  visualizerType = 'sinewave',
-  setVisualizerType,
+  activeVisualizers = ['sinewave'],
+  toggleVisualizer,
+  visualizerPosX = 50,
+  setVisualizerPosX,
   visualizerPosY = 50,
   setVisualizerPosY,
   audioFile,
@@ -232,67 +234,80 @@ export default function ImageMusicWorkspace({
         </div>
       </div>
 
-      {/* THẺ 4: HIỆU ỨNG SÓNG ÂM NEON DJ & ĐĨA VINYL */}
-      <div className="flex flex-col gap-3 bg-[#12151e] p-3.5 rounded-xl border border-[#2b3042]">
-        <span className="text-xs font-bold text-[#e2e8f0] flex items-center gap-1.5 border-b border-[#2b3042] pb-2">
-          <Waves className="w-3.5 h-3.5 text-amber-400" /> 4. Hiệu Ứng Sóng Âm & Đĩa Quay
-        </span>
-
-        <div className="grid grid-cols-2 gap-1.5 text-xs">
+      {/* THẺ 4: TÙY CHỈNH NỀN LỒNG NHIỀU SÓNG ÂM VÀ VỊ TRÍ X/Y */}
+      <div className="flex flex-col gap-3 bg-[#12151e] p-3.5 rounded-xl border border-amber-500/40">
+        <div className="flex items-center justify-between border-b border-amber-500/20 pb-2">
+          <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+            <Waves className="w-3.5 h-3.5 text-amber-400" /> 4. Lồng ghép Nhiều Hiệu Ứng Sóng Âm & Vị Trí
+          </span>
           <button
-            onClick={() => setVisualizerType('sinewave')}
-            className={`p-2 rounded-lg font-semibold transition-all text-left text-[11px] cursor-pointer flex items-center gap-1.5 ${
-              visualizerType === 'sinewave' 
-                ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-white font-bold shadow ring-1 ring-pink-400' 
-                : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
-            }`}
+            onClick={() => {
+              setVisualizerPosX(50);
+              setVisualizerPosY(50);
+            }}
+            className="text-[10px] text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded border border-amber-500/30 hover:bg-amber-600 hover:text-white transition-colors cursor-pointer"
+            title="Căn sóng âm về tâm giữa"
           >
-            🌊 Sóng Sine DJ Line
-          </button>
-          <button
-            onClick={() => setVisualizerType('vinyl')}
-            className={`p-2 rounded-lg font-semibold transition-all text-left text-[11px] cursor-pointer flex items-center gap-1.5 ${
-              visualizerType === 'vinyl' 
-                ? 'bg-amber-600 text-white font-bold shadow ring-1 ring-amber-400' 
-                : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
-            }`}
-          >
-            💿 Đĩa Quay Vinyl
-          </button>
-          <button
-            onClick={() => setVisualizerType('bars')}
-            className={`p-2 rounded-lg font-semibold transition-all text-left text-[11px] cursor-pointer flex items-center gap-1.5 ${
-              visualizerType === 'bars' 
-                ? 'bg-amber-600 text-white font-bold shadow ring-1 ring-amber-400' 
-                : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
-            }`}
-          >
-            📊 Bars Sóng Âm
-          </button>
-          <button
-            onClick={() => setVisualizerType('ring')}
-            className={`p-2 rounded-lg font-semibold transition-all text-left text-[11px] cursor-pointer flex items-center gap-1.5 ${
-              visualizerType === 'ring' 
-                ? 'bg-amber-600 text-white font-bold shadow ring-1 ring-amber-400' 
-                : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
-            }`}
-          >
-            🌟 Vòng Hào Quang
+            🎯 Căn Giữa Sóng Âm
           </button>
         </div>
 
-        {/* Slider Vị trí Sóng Âm Y */}
-        <div className="flex flex-col gap-1 text-xs pt-1 border-t border-[#2b3042]/50">
-          <div className="flex justify-between text-[11px] text-[#94a3b8]">
-            <span>Vị Trí Sóng Âm Y (Trải Ngang/Dọc):</span>
-            <span className="font-mono text-amber-300 font-bold">{visualizerPosY}%</span>
+        {/* Nút Chọn Nhiều Hiệu Ứng Lồng Nhau (Multi-select) */}
+        <div className="flex flex-col gap-1.5 text-xs">
+          <span className="text-[11px] text-[#94a3b8] font-semibold">Bật/Tắt các lớp hiệu ứng lồng nhau:</span>
+          <div className="grid grid-cols-2 gap-1.5">
+            {[
+              { id: 'sinewave', label: '🌊 Sóng Sine DJ Line', color: 'from-pink-600 to-purple-600' },
+              { id: 'vinyl', label: '💿 Đĩa Quay Vinyl', color: 'from-amber-600 to-orange-600' },
+              { id: 'bars', label: '📊 Bars Sóng Âm', color: 'from-cyan-600 to-blue-600' },
+              { id: 'ring', label: '🌟 Vòng Hào Quang', color: 'from-fuchsia-600 to-pink-600' },
+            ].map((v) => {
+              const active = activeVisualizers.includes(v.id);
+              return (
+                <button
+                  key={v.id}
+                  onClick={() => toggleVisualizer(v.id)}
+                  className={`p-2 rounded-lg font-semibold transition-all text-left text-[11px] cursor-pointer flex items-center justify-between ${
+                    active 
+                      ? `bg-gradient-to-r ${v.color} text-white font-bold shadow ring-1 ring-white/40` 
+                      : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white border border-[#2b3042]'
+                  }`}
+                >
+                  <span className="truncate">{v.label}</span>
+                  {active && <Check className="w-3.5 h-3.5 text-white shrink-0 ml-1" />}
+                </button>
+              );
+            })}
           </div>
-          <input 
-            type="range" min="10" max="90" step="1"
-            value={visualizerPosY}
-            onChange={(e) => setVisualizerPosY(Number(e.target.value))}
-            className="w-full accent-amber-500 cursor-pointer"
-          />
+        </div>
+
+        {/* Sliders Vị trí Ngang X & Vị trí Dọc Y của Sóng Âm */}
+        <div className="grid grid-cols-2 gap-3 text-xs pt-2 border-t border-amber-500/20">
+          <div className="flex flex-col gap-1">
+            <div className="flex justify-between text-[11px] text-[#94a3b8]">
+              <span>Tọa Độ Ngang X:</span>
+              <span className="font-mono text-amber-300 font-bold">{visualizerPosX}%</span>
+            </div>
+            <input 
+              type="range" min="10" max="90" step="1"
+              value={visualizerPosX}
+              onChange={(e) => setVisualizerPosX(Number(e.target.value))}
+              className="w-full accent-amber-500 cursor-pointer"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <div className="flex justify-between text-[11px] text-[#94a3b8]">
+              <span>Tọa Độ Dọc Y:</span>
+              <span className="font-mono text-amber-300 font-bold">{visualizerPosY}%</span>
+            </div>
+            <input 
+              type="range" min="10" max="90" step="1"
+              value={visualizerPosY}
+              onChange={(e) => setVisualizerPosY(Number(e.target.value))}
+              className="w-full accent-amber-500 cursor-pointer"
+            />
+          </div>
         </div>
       </div>
 

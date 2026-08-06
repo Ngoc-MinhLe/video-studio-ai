@@ -64,8 +64,17 @@ export default function App() {
   // --- States Module 2: Image Music Visualizer ---
   const [bgImage, setBgImage] = useState(null); // { file, url }
   const [bgEffect, setBgEffect] = useState('zoom'); // 'zoom' | 'pulse' | 'none'
-  const [visualizerType, setVisualizerType] = useState('sinewave'); // 'sinewave' | 'vinyl' | 'bars' | 'ring' | 'none'
+  const [activeVisualizers, setActiveVisualizers] = useState(['sinewave']); // Mảng lồng ghép nhiều hiệu ứng sóng âm cùng lúc ['sinewave', 'vinyl', 'bars', 'ring']
+  const [visualizerPosX, setVisualizerPosX] = useState(50); // 0% to 100% (Vị trí sóng âm X)
   const [visualizerPosY, setVisualizerPosY] = useState(50); // 0% to 100% (Vị trí sóng âm Y)
+
+  const toggleVisualizer = (id) => {
+    setActiveVisualizers(prev => 
+      prev.includes(id)
+        ? (prev.length > 1 ? prev.filter(v => v !== id) : prev)
+        : [...prev, id]
+    );
+  };
   const [bgFit, setBgFit] = useState('cover'); // 'cover' | 'contain'
   const [bgZoom, setBgZoom] = useState(100); // 50 to 200
   const [bgOffsetX, setBgOffsetX] = useState(0); // -50 to 50%
@@ -620,10 +629,11 @@ export default function App() {
         bgMirrorBlur,
         zoomSpeed,
         zoomRange,
-        visualizerType,
+        activeVisualizers,
+        visualizerPosX,
         visualizerPosY,
         videoFile,
-        videoClips: videoFiles,
+        videoClips: videoClips,
         audioFile,
         videoVolume,
         audioVolume,
@@ -869,8 +879,10 @@ export default function App() {
             setZoomSpeed={setZoomSpeed}
             zoomRange={zoomRange}
             setZoomRange={setZoomRange}
-            visualizerType={visualizerType}
-            setVisualizerType={setVisualizerType}
+            activeVisualizers={activeVisualizers}
+            toggleVisualizer={toggleVisualizer}
+            visualizerPosX={visualizerPosX}
+            setVisualizerPosX={setVisualizerPosX}
             visualizerPosY={visualizerPosY}
             setVisualizerPosY={setVisualizerPosY}
             audioFile={audioFile}
@@ -1165,10 +1177,14 @@ export default function App() {
                   })()}
 
                   {/* 1. SÓNG SINE DJ NEON ĐỘC ĐÁO ĐA TẦNG */}
-                  {visualizerType === 'sinewave' && (
+                  {activeVisualizers.includes('sinewave') && (
                     <div 
                       className="absolute left-0 right-0 z-20 pointer-events-none flex flex-col items-center justify-center w-full px-2"
-                      style={{ top: `${visualizerPosY}%`, transform: 'translateY(-50%)' }}
+                      style={{ 
+                        left: `${(visualizerPosX !== undefined ? visualizerPosX : 50) - 50}%`,
+                        top: `${visualizerPosY !== undefined ? visualizerPosY : 50}%`, 
+                        transform: 'translateY(-50%)' 
+                      }}
                     >
                       <svg className="w-full h-28 overflow-visible" viewBox="0 0 500 120" preserveAspectRatio="none">
                         <defs>
@@ -1227,8 +1243,15 @@ export default function App() {
                   )}
 
                   {/* 2. ĐĨA QUAY VINYL CHUYÊN NGHIỆP CÓ CẦN KIM NHẠC */}
-                  {visualizerType === 'vinyl' && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                  {activeVisualizers.includes('vinyl') && (
+                    <div 
+                      className="absolute pointer-events-none z-20"
+                      style={{ 
+                        left: `${visualizerPosX !== undefined ? visualizerPosX : 50}%`, 
+                        top: `${visualizerPosY !== undefined ? visualizerPosY : 50}%`, 
+                        transform: 'translate(-50%, -50%)' 
+                      }}
+                    >
                       <div className="relative flex items-center justify-center">
                         {/* Hào quang phát sáng sau đĩa */}
                         <div className={`absolute w-44 h-44 rounded-full bg-purple-600/30 filter blur-xl ${isPlaying ? 'animate-pulse' : ''}`} />
@@ -1269,10 +1292,14 @@ export default function App() {
                   )}
 
                   {/* 3. BARS EQUALIZER SPECTRUM 24 CỘT CÓ CHẤM ĐỈNH POKER */}
-                  {visualizerType === 'bars' && (
+                  {activeVisualizers.includes('bars') && (
                     <div 
-                      className="absolute left-1/2 -translate-x-1/2 flex items-end gap-1.5 h-20 pointer-events-none z-20"
-                      style={{ top: `${visualizerPosY}%`, transform: 'translate(-50%, -50%)' }}
+                      className="absolute flex items-end gap-1.5 h-20 pointer-events-none z-20"
+                      style={{ 
+                        left: `${visualizerPosX !== undefined ? visualizerPosX : 50}%`, 
+                        top: `${visualizerPosY !== undefined ? visualizerPosY : 50}%`, 
+                        transform: 'translate(-50%, -50%)' 
+                      }}
                     >
                       {[...Array(24)].map((_, i) => {
                         const t = isPlaying ? animTime : currentTime;
@@ -1302,8 +1329,15 @@ export default function App() {
                   )}
 
                   {/* 4. VÒNG HÀO QUANG NEON CYBER PULSE */}
-                  {visualizerType === 'ring' && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                  {activeVisualizers.includes('ring') && (
+                    <div 
+                      className="absolute pointer-events-none z-20"
+                      style={{ 
+                        left: `${visualizerPosX !== undefined ? visualizerPosX : 50}%`, 
+                        top: `${visualizerPosY !== undefined ? visualizerPosY : 50}%`, 
+                        transform: 'translate(-50%, -50%)' 
+                      }}
+                    >
                       <div className="relative flex items-center justify-center">
                         <div 
                           className="w-44 h-44 rounded-full border-4 border-pink-500 shadow-[0_0_35px_rgba(236,72,153,0.9)] transition-all duration-100"
