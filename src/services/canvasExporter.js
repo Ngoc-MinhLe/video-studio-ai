@@ -15,6 +15,8 @@ export const processVideoCanvas = async ({
   bgOffsetX = 0,
   bgOffsetY = 0,
   bgMirrorBlur = true,
+  zoomSpeed = 0.2,
+  zoomRange = 30,
   visualizerType = 'sinewave',
   visualizerPosY = 50,
   videoFile,
@@ -593,10 +595,13 @@ export const processVideoCanvas = async ({
 
           // B. Lớp Ảnh Nền Chính với Thu Phóng & Dịch Chuyển X/Y
           let motionScale = 1.0;
+          const zSpeed = zoomSpeed !== undefined ? zoomSpeed : 0.2;
+          const zRange = zoomRange !== undefined ? zoomRange : 30;
+
           if (bgEffect === 'zoom') {
-            motionScale = 1.0 + (Math.sin(projectTime * 0.15) + 1) * 0.06;
+            motionScale = 1.0 + (Math.sin(projectTime * zSpeed * 3) + 1) * (zRange / 200);
           } else if (bgEffect === 'pulse') {
-            motionScale = 1.0 + Math.abs(Math.sin(projectTime * 3)) * 0.04;
+            motionScale = 1.0 + Math.abs(Math.sin(projectTime * zSpeed * 4)) * (zRange / 200);
           }
 
           const customScale = (bgZoom !== undefined ? bgZoom : 100) / 100;

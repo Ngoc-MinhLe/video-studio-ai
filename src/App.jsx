@@ -71,6 +71,8 @@ export default function App() {
   const [bgOffsetX, setBgOffsetX] = useState(0); // -50 to 50%
   const [bgOffsetY, setBgOffsetY] = useState(0); // -50 to 50%
   const [bgMirrorBlur, setBgMirrorBlur] = useState(true); // Gương Phủ Mờ Lề Dư
+  const [zoomSpeed, setZoomSpeed] = useState(0.2); // 0.05 to 1.0
+  const [zoomRange, setZoomRange] = useState(30); // 10 to 100%
 
   const handleBgImageUpload = (e) => {
     const file = e.target.files[0];
@@ -594,6 +596,8 @@ export default function App() {
         bgOffsetX,
         bgOffsetY,
         bgMirrorBlur,
+        zoomSpeed,
+        zoomRange,
         visualizerType,
         visualizerPosY,
         videoFile,
@@ -828,6 +832,10 @@ export default function App() {
             setBgOffsetY={setBgOffsetY}
             bgMirrorBlur={bgMirrorBlur}
             setBgMirrorBlur={setBgMirrorBlur}
+            zoomSpeed={zoomSpeed}
+            setZoomSpeed={setZoomSpeed}
+            zoomRange={zoomRange}
+            setZoomRange={setZoomRange}
             visualizerType={visualizerType}
             setVisualizerType={setVisualizerType}
             visualizerPosY={visualizerPosY}
@@ -1099,18 +1107,28 @@ export default function App() {
                     />
                   )}
 
-                  {/* Ảnh Nền Chính với Thu Phóng & Di Chuyển X/Y */}
-                  <img 
-                    src={bgImage.url} 
-                    alt="Background" 
-                    className={`w-full h-full ${bgFit === 'contain' ? 'object-contain' : 'object-cover'} transition-transform duration-300 relative z-10 ${
-                      bgEffect === 'zoom' ? 'animate-pulse' :
-                      bgEffect === 'pulse' ? 'animate-bounce' : ''
-                    }`} 
-                    style={{
-                      transform: `translate(${bgOffsetX}%, ${bgOffsetY}%) scale(${bgZoom / 100})`
-                    }}
-                  />
+                  {/* Ảnh Nền Chính với Thu Phóng Focus & Di Chuyển X/Y */}
+                  {(() => {
+                    const cameraMotionScale = bgEffect === 'zoom' 
+                      ? 1.0 + (Math.sin(currentTime * (zoomSpeed || 0.2) * 3) + 1) * ((zoomRange || 30) / 200)
+                      : bgEffect === 'pulse' 
+                      ? 1.0 + Math.abs(Math.sin(currentTime * (zoomSpeed || 0.2) * 4)) * ((zoomRange || 30) / 200)
+                      : 1.0;
+
+                    const totalScale = (bgZoom / 100) * cameraMotionScale;
+
+                    return (
+                      <img 
+                        src={bgImage.url} 
+                        alt="Background" 
+                        className={`w-full h-full ${bgFit === 'contain' ? 'object-contain' : 'object-cover'} relative z-10`} 
+                        style={{
+                          transformOrigin: `${50 + bgOffsetX}% ${50 + bgOffsetY}%`,
+                          transform: `translate(${bgOffsetX}%, ${bgOffsetY}%) scale(${totalScale})`
+                        }}
+                      />
+                    );
+                  })()}
                   {visualizerType === 'sinewave' && (
                     <div 
                       className="absolute left-0 right-0 z-20 pointer-events-none flex items-center justify-center w-full px-2"
@@ -1212,134 +1230,141 @@ export default function App() {
                     }}
                   />
                   
-                  {/* Lớp Phụ Đề Live Preview chuẩn kích thước - Hỗ trợ Kéo Thả & Phong Cách Riêng Biệt ✋ */}
-                  {activeSubs.length > 0 && activeSubs.map((sub) => {
-                    const style = sub.style || 'tiktok';
-                    const anim = sub.anim || 'bounce';
-                    const fontSize = sub.fontSize || 24;
-                    const rotation = sub.rotation || 0;
-                    const color = sub.color || '#ffffff';
-                    const bgColor = sub.bgColor || '#000000';
-                    const boxWidth = sub.boxWidth || 80;
-                    const animSpeed = sub.animSpeed || 0.5;
-                    const posX = sub.x !== undefined ? sub.x : 50;
-                    const posY = sub.y !== undefined ? sub.y : 85;
-                    const isSelected = selectedSubId === sub.id;
-
-                    const alignTransformX = posX >= 75 ? '-100%' : posX <= 25 ? '0%' : '-50%';
-                    const alignTransformY = posY >= 75 ? '-100%' : posY <= 25 ? '0%' : '-50%';
-
-                    return (
-                      <div 
-                        key={sub.id}
-                        className={`absolute cursor-grab active:cursor-grabbing select-none group z-20 flex justify-center touch-none ${
-                          isSelected ? 'ring-2 ring-pink-500 rounded-lg p-0.5 shadow-[0_0_15px_rgba(236,72,153,0.8)]' : ''
-                        }`}
-                        style={{ 
-                          touchAction: 'none',
-                          left: `${posX}%`, 
-                          top: `${posY}%`,
-                          width: style === 'led' || anim === 'marquee' ? `${boxWidth}%` : 'auto',
-                          transform: `translate(${alignTransformX}, ${alignTransformY}) rotate(${rotation}deg)`
-                        }}
-                        onPointerDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setSelectedSubId(sub.id);
-                          const targetEl = e.currentTarget;
-                          const container = targetEl.parentElement;
-                          if (!container) return;
-                          setIsDraggingSub(true);
-
-                          try {
-                            targetEl.setPointerCapture(e.pointerId);
-                          } catch (err) {}
-
-                          const handlePointerMove = (moveEv) => {
-                            const rect = container.getBoundingClientRect();
-                            if (rect.width === 0 || rect.height === 0) return;
-                            const relX = moveEv.clientX - rect.left;
-                            const relY = moveEv.clientY - rect.top;
-
-                            const pctX = Math.max(5, Math.min(95, (relX / rect.width) * 100));
-                            const pctY = Math.max(5, Math.min(95, (relY / rect.height) * 100));
-
-                            updateSubtitle(sub.id, 'x', Math.round(pctX));
-                            updateSubtitle(sub.id, 'y', Math.round(pctY));
-                          };
-
-                          const handlePointerUp = (upEv) => {
-                            setIsDraggingSub(false);
-                            try {
-                              targetEl.releasePointerCapture(upEv.pointerId);
-                            } catch (err) {}
-                            window.removeEventListener('pointermove', handlePointerMove);
-                            window.removeEventListener('pointerup', handlePointerUp);
-                          };
-
-                          window.addEventListener('pointermove', handlePointerMove);
-                          window.addEventListener('pointerup', handlePointerUp);
-                        }}
-                      >
-                        {style === 'led' || anim === 'marquee' ? (
-                          /* Khung Bảng Đèn LED Chạy Chữ Quảng Cáo (LED Marquee Window) */
-                          <div className="w-full overflow-hidden border-2 border-amber-500 bg-[#06080d]/95 p-2 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.7)] text-amber-200 font-mono font-extrabold whitespace-nowrap flex items-center">
-                            <span 
-                              style={{
-                                fontSize: `${fontSize}px`,
-                                animationDuration: `${10 / animSpeed}s`
-                              }}
-                              className="animate-marquee inline-block font-mono text-amber-200 tracking-wider shadow-amber-400"
-                            >
-                              📟 {sub.text}
-                            </span>
-                          </div>
-                        ) : (
-                          <span 
-                            style={{
-                              fontSize: `${fontSize}px`,
-                              color: style === 'custom' ? color : undefined,
-                              backgroundColor: style === 'custom' ? bgColor : undefined
-                            }}
-                            className={`inline-block font-extrabold px-3.5 py-1.5 rounded-lg shadow-2xl tracking-wide whitespace-nowrap transition-all ${
-                              anim === 'bounce' ? 'animate-bounce' : 
-                              anim === 'pulse' ? 'animate-pulse' : 
-                              anim === 'shake' ? 'animate-ping' : ''
-                            } ${
-                              style === 'tiktok' ? 'bg-yellow-400 text-slate-950 border-2 border-black font-black shadow-yellow-500/20' :
-                              style === 'victory' ? 'bg-[#0f0720]/90 text-purple-200 border-2 border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.8)] font-black' :
-                              style === 'boom' ? 'bg-red-600 text-white border-2 border-yellow-300 font-black shadow-lg' :
-                              style === 'sponge' ? 'bg-green-700 text-white border-2 border-green-400 font-black shadow-green-500/30' :
-                              style === 'social' ? 'bg-blue-600 text-white border-2 border-white font-bold shadow-md' :
-                              style === 'neon' ? 'bg-[#18092b]/90 text-pink-400 border-2 border-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.6)] font-bold' :
-                              style === 'cinema' ? 'bg-black/75 text-white border border-white/20 shadow-2xl font-semibold backdrop-blur-sm' :
-                              'bg-black/85 text-white border border-white/20 shadow-xl'
-                            }`}
-                          >
-                            {(() => {
-                              let raw = sub.text;
-                              if (anim === 'typewriter') {
-                                const words = raw.split(' ');
-                                const subDur = (Number(sub.endTime) - Number(sub.startTime)) || 3;
-                                const elapsed = Math.max(0, currentTime - Number(sub.startTime));
-                                const revealProg = Math.min(1, Math.max(0, (elapsed * animSpeed) / subDur));
-                                const visibleCount = Math.max(1, Math.ceil(revealProg * words.length));
-                                raw = words.slice(0, visibleCount).join(' ');
-                              }
-                              return style === 'victory' ? `⚡ ${raw} ⚡` : style === 'boom' ? `💥 ${raw}` : style === 'social' ? `📢 ${raw}` : raw;
-                            })()}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
                 </>
               ) : (
                 <div className="flex flex-col items-center gap-3 text-[#64748b] p-8">
                   <FileVideo className="w-12 h-12 stroke-[1.5]" />
-                  <p className="text-sm font-medium text-center">Vui lòng chọn một Video từ cột bên trái để bắt đầu</p>
+                  <p className="text-sm font-medium text-center">Vui lòng chọn một Video hoặc Ảnh Nền từ cột bên trái để bắt đầu</p>
                 </div>
               )}
+
+              {/* Lớp Phụ Đề Live Preview chuẩn kích thước - Hỗ trợ Kéo Thả & Phong Cách Riêng Biệt ✋ */}
+              {(() => {
+                const displaySubs = activeSubs.length > 0 
+                  ? activeSubs 
+                  : (activeSub && activeSub.text && activeSub.text.trim() !== '') ? [activeSub] : [];
+
+                return displaySubs.map((sub) => {
+                  const style = sub.style || 'tiktok';
+                  const anim = sub.anim || 'bounce';
+                  const fontSize = sub.fontSize || 24;
+                  const rotation = sub.rotation || 0;
+                  const color = sub.color || '#ffffff';
+                  const bgColor = sub.bgColor || '#000000';
+                  const boxWidth = sub.boxWidth || 80;
+                  const animSpeed = sub.animSpeed || 0.5;
+                  const posX = sub.x !== undefined ? sub.x : 50;
+                  const posY = sub.y !== undefined ? sub.y : 85;
+                  const isSelected = selectedSubId === sub.id;
+
+                  const alignTransformX = posX >= 75 ? '-100%' : posX <= 25 ? '0%' : '-50%';
+                  const alignTransformY = posY >= 75 ? '-100%' : posY <= 25 ? '0%' : '-50%';
+
+                  return (
+                    <div 
+                      key={sub.id}
+                      className={`absolute cursor-grab active:cursor-grabbing select-none group z-30 flex justify-center touch-none ${
+                        isSelected ? 'ring-2 ring-pink-500 rounded-lg p-0.5 shadow-[0_0_15px_rgba(236,72,153,0.8)]' : ''
+                      }`}
+                      style={{ 
+                        touchAction: 'none',
+                        left: `${posX}%`, 
+                        top: `${posY}%`,
+                        width: style === 'led' || anim === 'marquee' ? `${boxWidth}%` : 'auto',
+                        transform: `translate(${alignTransformX}, ${alignTransformY}) rotate(${rotation}deg)`
+                      }}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSelectedSubId(sub.id);
+                        const targetEl = e.currentTarget;
+                        const container = targetEl.parentElement;
+                        if (!container) return;
+                        setIsDraggingSub(true);
+
+                        try {
+                          targetEl.setPointerCapture(e.pointerId);
+                        } catch (err) {}
+
+                        const handlePointerMove = (moveEv) => {
+                          const rect = container.getBoundingClientRect();
+                          if (rect.width === 0 || rect.height === 0) return;
+                          const relX = moveEv.clientX - rect.left;
+                          const relY = moveEv.clientY - rect.top;
+
+                          const pctX = Math.max(5, Math.min(95, (relX / rect.width) * 100));
+                          const pctY = Math.max(5, Math.min(95, (relY / rect.height) * 100));
+
+                          updateSubtitle(sub.id, 'x', Math.round(pctX));
+                          updateSubtitle(sub.id, 'y', Math.round(pctY));
+                        };
+
+                        const handlePointerUp = (upEv) => {
+                          setIsDraggingSub(false);
+                          try {
+                            targetEl.releasePointerCapture(upEv.pointerId);
+                          } catch (err) {}
+                          window.removeEventListener('pointermove', handlePointerMove);
+                          window.removeEventListener('pointerup', handlePointerUp);
+                        };
+
+                        window.addEventListener('pointermove', handlePointerMove);
+                        window.addEventListener('pointerup', handlePointerUp);
+                      }}
+                    >
+                      {style === 'led' || anim === 'marquee' ? (
+                        /* Khung Bảng Đèn LED Chạy Chữ Quảng Cáo (LED Marquee Window) */
+                        <div className="w-full overflow-hidden border-2 border-amber-500 bg-[#06080d]/95 p-2 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.7)] text-amber-200 font-mono font-extrabold whitespace-nowrap flex items-center">
+                          <span 
+                            style={{
+                              fontSize: `${fontSize}px`,
+                              animationDuration: `${10 / animSpeed}s`
+                            }}
+                            className="animate-marquee inline-block font-mono text-amber-200 tracking-wider shadow-amber-400"
+                          >
+                            📟 {sub.text}
+                          </span>
+                        </div>
+                      ) : (
+                        <span 
+                          style={{
+                            fontSize: `${fontSize}px`,
+                            color: style === 'custom' ? color : undefined,
+                            backgroundColor: style === 'custom' ? bgColor : undefined
+                          }}
+                          className={`inline-block font-extrabold px-3.5 py-1.5 rounded-lg shadow-2xl tracking-wide whitespace-nowrap transition-all ${
+                            anim === 'bounce' ? 'animate-bounce' : 
+                            anim === 'pulse' ? 'animate-pulse' : 
+                            anim === 'shake' ? 'animate-ping' : ''
+                          } ${
+                            style === 'tiktok' ? 'bg-yellow-400 text-slate-950 border-2 border-black font-black shadow-yellow-500/20' :
+                            style === 'victory' ? 'bg-[#0f0720]/90 text-purple-200 border-2 border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.8)] font-black' :
+                            style === 'boom' ? 'bg-red-600 text-white border-2 border-yellow-300 font-black shadow-lg' :
+                            style === 'sponge' ? 'bg-green-700 text-white border-2 border-green-400 font-black shadow-green-500/30' :
+                            style === 'social' ? 'bg-blue-600 text-white border-2 border-white font-bold shadow-md' :
+                            style === 'neon' ? 'bg-[#18092b]/90 text-pink-400 border-2 border-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.6)] font-bold' :
+                            style === 'cinema' ? 'bg-black/75 text-white border border-white/20 shadow-2xl font-semibold backdrop-blur-sm' :
+                            'bg-black/85 text-white border border-white/20 shadow-xl'
+                          }`}
+                        >
+                          {(() => {
+                            let raw = sub.text;
+                            if (anim === 'typewriter') {
+                              const words = raw.split(' ');
+                              const subDur = (Number(sub.endTime) - Number(sub.startTime)) || 3;
+                              const elapsed = Math.max(0, currentTime - Number(sub.startTime));
+                              const revealProg = Math.min(1, Math.max(0, (elapsed * animSpeed) / subDur));
+                              const visibleCount = Math.max(1, Math.ceil(revealProg * words.length));
+                              raw = words.slice(0, visibleCount).join(' ');
+                            }
+                            return style === 'victory' ? `⚡ ${raw} ⚡` : style === 'boom' ? `💥 ${raw}` : style === 'social' ? `📢 ${raw}` : raw;
+                          })()}
+                        </span>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
 
