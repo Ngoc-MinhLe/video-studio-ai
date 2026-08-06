@@ -169,6 +169,7 @@ export default function App() {
 
   const videoRef = useRef(null);
   const audioRef = useRef(null);
+  const pendingSeekTimeRef = useRef(null);
 
   // Đảm bảo cập nhật âm lượng âm thanh realtime
   useEffect(() => {
@@ -253,20 +254,26 @@ export default function App() {
 
     const clipInfo = getClipAtProjectTime(targetTime);
     if (clipInfo) {
-      if (videoUrl !== clipInfo.clip.url) {
-        setVideoFile(clipInfo.clip.file);
-        setVideoUrl(clipInfo.clip.url);
-      }
       setSelectedClipId(clipInfo.clip.id);
 
-      if (videoRef.current) {
-        videoRef.current.currentTime = clipInfo.localTime;
+      if (videoUrl !== clipInfo.clip.url) {
+        pendingSeekTimeRef.current = clipInfo.localTime;
+        setVideoFile(clipInfo.clip.file);
+        setVideoUrl(clipInfo.clip.url);
+      } else {
+        if (videoRef.current) {
+          try {
+            videoRef.current.currentTime = clipInfo.localTime;
+          } catch (e) {}
+        }
       }
     }
 
     if (audioRef.current) {
       const audioTime = Math.max(0, targetTime - audioVideoOffset + audioStartOffset);
-      audioRef.current.currentTime = audioTime;
+      try {
+        audioRef.current.currentTime = audioTime;
+      } catch (e) {}
     }
   };
 
@@ -923,6 +930,17 @@ export default function App() {
                     playsInline
                     className="w-full h-full object-contain"
                     onTimeUpdate={handleVideoTimeUpdate}
+                    onLoadedData={() => {
+                      if (pendingSeekTimeRef.current !== null && videoRef.current) {
+                        try {
+                          videoRef.current.currentTime = pendingSeekTimeRef.current;
+                        } catch (e) {}
+                        pendingSeekTimeRef.current = null;
+                      }
+                      if (isPlaying && videoRef.current) {
+                        videoRef.current.play().catch(() => {});
+                      }
+                    }}
                     onEnded={() => {
                       // Xử lý chuyển clip tiếp theo khi video hiện tại kết thúc
                       const currentClipIdx = videoClips.findIndex(c => c.id === selectedClipId);
