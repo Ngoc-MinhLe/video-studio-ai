@@ -72,12 +72,9 @@ export default function App() {
   const [audioStartOffset, setAudioStartOffset] = useState(0);
   const [audioVideoOffset, setAudioVideoOffset] = useState(0);
 
-  // --- States Phụ đề Độc Lập ---
-  const [subtitles, setSubtitles] = useState([
-    { id: 1, startTime: 0, endTime: 3, text: '👋 Chào mừng bạn đến với Studio Video!', x: 50, y: 80, style: 'tiktok', anim: 'bounce', fontSize: 24, rotation: 0, color: '#ffffff', bgColor: '#000000', boxWidth: 80, animSpeed: 0.5 },
-    { id: 2, startTime: 3, endTime: 6, text: '✨ Thay nhạc & thêm phụ đề cực kỳ dễ dàng.', x: 50, y: 88, style: 'victory', anim: 'bounce', fontSize: 24, rotation: 0, color: '#ffffff', bgColor: '#000000', boxWidth: 80, animSpeed: 0.5 }
-  ]);
-  const [selectedSubId, setSelectedSubId] = useState(1);
+  // --- States Phụ đề Độc Lập (Mặc định để trống) ---
+  const [subtitles, setSubtitles] = useState([]);
+  const [selectedSubId, setSelectedSubId] = useState(null);
   const [isDraggingSub, setIsDraggingSub] = useState(false);
   const [aspectRatio, setAspectRatio] = useState('16:9');
 
@@ -986,10 +983,11 @@ export default function App() {
                     return (
                       <div 
                         key={sub.id}
-                        className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing select-none group z-20 flex justify-center ${
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing select-none group z-20 flex justify-center touch-none ${
                           isSelected ? 'ring-2 ring-pink-500 rounded-lg p-0.5 shadow-[0_0_15px_rgba(236,72,153,0.8)]' : ''
                         }`}
                         style={{ 
+                          touchAction: 'none',
                           left: `${posX}%`, 
                           top: `${posY}%`,
                           width: style === 'led' || anim === 'marquee' ? `${boxWidth}%` : 'auto',
@@ -1374,47 +1372,139 @@ export default function App() {
 
           {/* Tùy chỉnh Kiểu Chữ & Vị Trí Kéo Thả Subtitle Chi Tiết Theo Thẻ */}
           <div className="flex flex-col gap-2.5 bg-[#12151e] p-3 rounded-xl border border-[#2b3042]">
-            <div className="flex items-center justify-between">
-              <label className="text-xs text-[#94a3b8] font-medium flex items-center gap-1.5">
-                <Sliders className="w-3.5 h-3.5 text-purple-400" /> Vị Trí Phụ Đề (Thẻ #{activeSub.id})
-              </label>
-              <span className="text-[10px] font-mono text-purple-300 font-bold bg-purple-950/60 px-2 py-0.5 rounded border border-purple-500/30">
-                X: {activeSub.x !== undefined ? activeSub.x : 50}% | Y: {activeSub.y !== undefined ? activeSub.y : 85}%
-              </span>
-            </div>
+            {activeSub ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-[#94a3b8] font-medium flex items-center gap-1.5">
+                    <Sliders className="w-3.5 h-3.5 text-purple-400" /> Vị Trí Phụ Đề (Thẻ #{activeSub.id})
+                  </label>
+                  <span className="text-[10px] font-mono text-purple-300 font-bold bg-purple-950/60 px-2 py-0.5 rounded border border-purple-500/30">
+                    X: {activeSub.x !== undefined ? activeSub.x : 50}% | Y: {activeSub.y !== undefined ? activeSub.y : 85}%
+                  </span>
+                </div>
 
-            {/* Bộ Nút Định Vị Nhanh */}
-            <div className="flex items-center gap-1.5 text-xs">
-              <button
-                onClick={() => { updateSubtitle(activeSub.id, 'x', 50); updateSubtitle(activeSub.id, 'y', 15); }}
-                className={`flex-1 py-1 px-2 rounded-lg font-medium transition-all cursor-pointer text-center text-[11px] ${
-                  activeSub.y === 15 ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
-                }`}
-              >
-                📍 Trên Cùng
-              </button>
-              <button
-                onClick={() => { updateSubtitle(activeSub.id, 'x', 50); updateSubtitle(activeSub.id, 'y', 50); }}
-                className={`flex-1 py-1 px-2 rounded-lg font-medium transition-all cursor-pointer text-center text-[11px] ${
-                  activeSub.y === 50 ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
-                }`}
-              >
-                📍 Chính Giữa
-              </button>
-              <button
-                onClick={() => { updateSubtitle(activeSub.id, 'x', 50); updateSubtitle(activeSub.id, 'y', 85); }}
-                className={`flex-1 py-1 px-2 rounded-lg font-medium transition-all cursor-pointer text-center text-[11px] ${
-                  activeSub.y === 85 ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
-                }`}
-              >
-                📍 Dưới Cùng
-              </button>
-            </div>
+                {/* Bộ Nút Định Vị 9 Ô Vị Trí Thông Minh (9-Grid Alignment Selector) */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] text-[#64748b]">🎯 Tự động căn chỉnh 9 vị trí chuẩn:</span>
+                  <div className="grid grid-cols-3 gap-1 bg-[#1a1e2b] p-1.5 rounded-xl border border-[#2b3042]">
+                    {/* Hàng 1: Trên Trái - Trên Giữa - Trên Phải */}
+                    <button
+                      onClick={() => { updateSubtitle(activeSub.id, 'x', 20); updateSubtitle(activeSub.id, 'y', 15); }}
+                      className={`py-1 px-1 rounded font-medium text-[10px] cursor-pointer transition-all ${
+                        activeSub.x === 20 && activeSub.y === 15 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
+                      }`}
+                    >
+                      ↖️ Trên Trái
+                    </button>
+                    <button
+                      onClick={() => { updateSubtitle(activeSub.id, 'x', 50); updateSubtitle(activeSub.id, 'y', 15); }}
+                      className={`py-1 px-1 rounded font-medium text-[10px] cursor-pointer transition-all ${
+                        activeSub.x === 50 && activeSub.y === 15 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
+                      }`}
+                    >
+                      ⬆️ Trên Giữa
+                    </button>
+                    <button
+                      onClick={() => { updateSubtitle(activeSub.id, 'x', 80); updateSubtitle(activeSub.id, 'y', 15); }}
+                      className={`py-1 px-1 rounded font-medium text-[10px] cursor-pointer transition-all ${
+                        activeSub.x === 80 && activeSub.y === 15 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
+                      }`}
+                    >
+                      ↗️ Trên Phải
+                    </button>
 
-            {/* Mẹo Kéo Thả Trực Tiếp */}
-            <div className="flex items-center gap-1.5 text-[10px] text-pink-300 bg-pink-950/30 p-1.5 rounded-lg border border-pink-500/20 font-medium">
-              <span>✋ Mẹo: Bấm chọn thẻ phụ đề bất kỳ rồi kéo thả trực tiếp trên màn hình!</span>
-            </div>
+                    {/* Hàng 2: Giữa Trái - Chính Giữa - Giữa Phải */}
+                    <button
+                      onClick={() => { updateSubtitle(activeSub.id, 'x', 20); updateSubtitle(activeSub.id, 'y', 50); }}
+                      className={`py-1 px-1 rounded font-medium text-[10px] cursor-pointer transition-all ${
+                        activeSub.x === 20 && activeSub.y === 50 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
+                      }`}
+                    >
+                      ⬅️ Giữa Trái
+                    </button>
+                    <button
+                      onClick={() => { updateSubtitle(activeSub.id, 'x', 50); updateSubtitle(activeSub.id, 'y', 50); }}
+                      className={`py-1 px-1 rounded font-medium text-[10px] cursor-pointer transition-all ${
+                        activeSub.x === 50 && activeSub.y === 50 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
+                      }`}
+                    >
+                      🎯 Chính Giữa
+                    </button>
+                    <button
+                      onClick={() => { updateSubtitle(activeSub.id, 'x', 80); updateSubtitle(activeSub.id, 'y', 50); }}
+                      className={`py-1 px-1 rounded font-medium text-[10px] cursor-pointer transition-all ${
+                        activeSub.x === 80 && activeSub.y === 50 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
+                      }`}
+                    >
+                      ➡️ Giữa Phải
+                    </button>
+
+                    {/* Hàng 3: Dưới Trái - Dưới Giữa - Dưới Phải */}
+                    <button
+                      onClick={() => { updateSubtitle(activeSub.id, 'x', 20); updateSubtitle(activeSub.id, 'y', 85); }}
+                      className={`py-1 px-1 rounded font-medium text-[10px] cursor-pointer transition-all ${
+                        activeSub.x === 20 && activeSub.y === 85 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
+                      }`}
+                    >
+                      ↙️ Dưới Trái
+                    </button>
+                    <button
+                      onClick={() => { updateSubtitle(activeSub.id, 'x', 50); updateSubtitle(activeSub.id, 'y', 85); }}
+                      className={`py-1 px-1 rounded font-medium text-[10px] cursor-pointer transition-all ${
+                        activeSub.x === 50 && activeSub.y === 85 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
+                      }`}
+                    >
+                      ⬇️ Dưới Giữa
+                    </button>
+                    <button
+                      onClick={() => { updateSubtitle(activeSub.id, 'x', 80); updateSubtitle(activeSub.id, 'y', 85); }}
+                      className={`py-1 px-1 rounded font-medium text-[10px] cursor-pointer transition-all ${
+                        activeSub.x === 80 && activeSub.y === 85 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
+                      }`}
+                    >
+                      ↘️ Dưới Phải
+                    </button>
+                  </div>
+                </div>
+
+                {/* Thanh trượt tinh chỉnh tọa độ X & Y % */}
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex justify-between text-[10px] text-[#94a3b8]">
+                      <span>Ngang X:</span>
+                      <span className="font-mono text-purple-300 font-bold">{activeSub.x !== undefined ? activeSub.x : 50}%</span>
+                    </div>
+                    <input 
+                      type="range" min="5" max="95" step="1"
+                      value={activeSub.x !== undefined ? activeSub.x : 50}
+                      onChange={(e) => updateSubtitle(activeSub.id, 'x', Number(e.target.value))}
+                      className="w-full accent-purple-500 cursor-pointer"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex justify-between text-[10px] text-[#94a3b8]">
+                      <span>Dọc Y:</span>
+                      <span className="font-mono text-purple-300 font-bold">{activeSub.y !== undefined ? activeSub.y : 85}%</span>
+                    </div>
+                    <input 
+                      type="range" min="5" max="95" step="1"
+                      value={activeSub.y !== undefined ? activeSub.y : 85}
+                      onChange={(e) => updateSubtitle(activeSub.id, 'y', Number(e.target.value))}
+                      className="w-full accent-purple-500 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Mẹo Kéo Thả Trực Tiếp */}
+                <div className="flex items-center gap-1.5 text-[10px] text-pink-300 bg-pink-950/30 p-1.5 rounded-lg border border-pink-500/20 font-medium">
+                  <span>✋ Mẹo: Bấm chọn thẻ phụ đề bất kỳ rồi kéo thả trực tiếp trên màn hình!</span>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-[#64748b] text-center py-2">
+                Chưa chọn thẻ phụ đề nào. Vui lòng bấm "+ Thêm Tại ..." để bắt đầu.
+              </p>
+            )}
 
             {/* Bộ Mẫu Template Phụ Đề Hot Trend (CapCut / VideoShow Style) */}
             <div className="flex flex-col gap-1.5 pt-2 border-t border-[#2b3042]/50">
