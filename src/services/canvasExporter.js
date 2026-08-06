@@ -12,6 +12,9 @@ export const processVideoCanvas = async ({
   bgEffect = 'zoom',
   bgFit = 'cover',
   bgZoom = 100,
+  bgOffsetX = 0,
+  bgOffsetY = 0,
+  bgMirrorBlur = true,
   visualizerType = 'vinyl',
   videoFile,
   videoClips = [],
@@ -568,6 +571,26 @@ export const processVideoCanvas = async ({
       if (mode === 'image_music') {
         // 1. Vẽ Ảnh Nền + Ken Burns Zoom / Pulse Effect
         if (bgImgEl) {
+          // A. Lớp Lấp Đầy Gương Kính Phủ Mờ Lề Dư (Blurred Mirror Fill)
+          if (bgMirrorBlur) {
+            ctx.save();
+            ctx.fillStyle = '#090b10';
+            ctx.fillRect(0, 0, canvasW, canvasH);
+
+            ctx.filter = 'blur(25px)';
+            const blurW = canvasW * 1.3;
+            const blurH = canvasH * 1.3;
+            const blurX = (canvasW - blurW) / 2;
+            const blurY = (canvasH - blurH) / 2;
+            ctx.globalAlpha = 0.8;
+            ctx.drawImage(bgImgEl, blurX, blurY, blurW, blurH);
+            ctx.restore();
+          } else {
+            ctx.fillStyle = '#090b10';
+            ctx.fillRect(0, 0, canvasW, canvasH);
+          }
+
+          // B. Lớp Ảnh Nền Chính với Thu Phóng & Dịch Chuyển X/Y
           let motionScale = 1.0;
           if (bgEffect === 'zoom') {
             motionScale = 1.0 + (Math.sin(projectTime * 0.15) + 1) * 0.06;
@@ -577,9 +600,6 @@ export const processVideoCanvas = async ({
 
           const customScale = (bgZoom !== undefined ? bgZoom : 100) / 100;
           const totalScale = motionScale * customScale;
-
-          ctx.fillStyle = '#090b10';
-          ctx.fillRect(0, 0, canvasW, canvasH);
 
           const imgW = bgImgEl.naturalWidth || bgImgEl.width || 1;
           const imgH = bgImgEl.naturalHeight || bgImgEl.height || 1;
@@ -608,8 +628,12 @@ export const processVideoCanvas = async ({
 
           const drawW = baseW * totalScale;
           const drawH = baseH * totalScale;
-          const drawX = (canvasW - drawW) / 2;
-          const drawY = (canvasH - drawH) / 2;
+
+          const shiftX = (canvasW * (bgOffsetX || 0)) / 100;
+          const shiftY = (canvasH * (bgOffsetY || 0)) / 100;
+
+          const drawX = ((canvasW - drawW) / 2) + shiftX;
+          const drawY = ((canvasH - drawH) / 2) + shiftY;
 
           ctx.drawImage(bgImgEl, drawX, drawY, drawW, drawH);
         } else {

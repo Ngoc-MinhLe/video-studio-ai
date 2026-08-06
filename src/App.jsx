@@ -67,6 +67,9 @@ export default function App() {
   const [visualizerType, setVisualizerType] = useState('vinyl'); // 'vinyl' | 'bars' | 'ring' | 'none'
   const [bgFit, setBgFit] = useState('cover'); // 'cover' | 'contain'
   const [bgZoom, setBgZoom] = useState(100); // 50 to 200
+  const [bgOffsetX, setBgOffsetX] = useState(0); // -50 to 50%
+  const [bgOffsetY, setBgOffsetY] = useState(0); // -50 to 50%
+  const [bgMirrorBlur, setBgMirrorBlur] = useState(true); // Gương Phủ Mờ Lề Dư
 
   const handleBgImageUpload = (e) => {
     const file = e.target.files[0];
@@ -551,6 +554,9 @@ export default function App() {
         bgEffect,
         bgFit,
         bgZoom,
+        bgOffsetX,
+        bgOffsetY,
+        bgMirrorBlur,
         visualizerType,
         videoFile,
         videoClips: videoFiles,
@@ -778,6 +784,12 @@ export default function App() {
             setBgFit={setBgFit}
             bgZoom={bgZoom}
             setBgZoom={setBgZoom}
+            bgOffsetX={bgOffsetX}
+            setBgOffsetX={setBgOffsetX}
+            bgOffsetY={bgOffsetY}
+            setBgOffsetY={setBgOffsetY}
+            bgMirrorBlur={bgMirrorBlur}
+            setBgMirrorBlur={setBgMirrorBlur}
             visualizerType={visualizerType}
             setVisualizerType={setVisualizerType}
             audioFile={audioFile}
@@ -1038,15 +1050,25 @@ export default function App() {
             }`}>
               {activeTab === 'image_music' && bgImage ? (
                 <div className="relative w-full h-full overflow-hidden flex items-center justify-center">
+                  {/* Lớp Phủ Mờ Gương Kính Lấp Đầy 2 Lề Dư (Blurred Mirror Fill) */}
+                  {bgMirrorBlur && (
+                    <img 
+                      src={bgImage.url} 
+                      alt="" 
+                      className="absolute inset-0 w-full h-full object-cover filter blur-2xl scale-125 opacity-70 pointer-events-none" 
+                    />
+                  )}
+
+                  {/* Ảnh Nền Chính với Thu Phóng & Di Chuyển X/Y */}
                   <img 
                     src={bgImage.url} 
                     alt="Background" 
-                    className={`w-full h-full ${bgFit === 'contain' ? 'object-contain' : 'object-cover'} transition-transform duration-1000 ${
+                    className={`w-full h-full ${bgFit === 'contain' ? 'object-contain' : 'object-cover'} transition-transform duration-300 relative z-10 ${
                       bgEffect === 'zoom' ? 'animate-pulse' :
                       bgEffect === 'pulse' ? 'animate-bounce' : ''
                     }`} 
                     style={{
-                      transform: `scale(${bgZoom / 100})`
+                      transform: `translate(${bgOffsetX}%, ${bgOffsetY}%) scale(${bgZoom / 100})`
                     }}
                   />
                   {visualizerType === 'vinyl' && (

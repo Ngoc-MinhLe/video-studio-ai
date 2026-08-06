@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Upload, Image, Music, Disc, Activity, Sparkles, Sliders, Volume2, 
-  Trash2, Plus, Zap, RefreshCw, ZoomIn, Eye, Play, Pause, Layers, Maximize
+  Trash2, Plus, Zap, RefreshCw, ZoomIn, Eye, Play, Pause, Layers, Maximize, Move, Sparkle
 } from 'lucide-react';
 
 export default function ImageMusicWorkspace({
@@ -14,6 +14,12 @@ export default function ImageMusicWorkspace({
   setBgFit,
   bgZoom = 100,
   setBgZoom,
+  bgOffsetX = 0,
+  setBgOffsetX,
+  bgOffsetY = 0,
+  setBgOffsetY,
+  bgMirrorBlur = true,
+  setBgMirrorBlur,
   visualizerType,
   setVisualizerType,
   audioFile,
@@ -36,7 +42,7 @@ export default function ImageMusicWorkspace({
       <div className="flex flex-col gap-4 bg-[#0d1017] p-4 rounded-2xl border border-[#1e2333] shadow-xl">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-[#e2e8f0] flex items-center gap-2">
-            <Image className="w-4 h-4 text-emerald-400" /> 1. Ảnh Nền & Âm Nhạc
+            <Image className="w-4 h-4 text-emerald-400" /> 1. Ảnh Nền & Căn Chỉnh
           </h2>
           <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-500/30">
             ⚡ GPU Render Siêu Tốc
@@ -72,7 +78,31 @@ export default function ImageMusicWorkspace({
           )}
         </div>
 
-        {/* 2. Căn Chỉnh Kích Thước & Thu Phóng Ảnh (Fit & Zoom) */}
+        {/* 2. Hiệu Ứng Gương Kính Phủ Mờ Lề Dư (Blurred Mirror Background Fill) */}
+        <div className="flex flex-col gap-2 bg-[#12151e] p-3 rounded-xl border border-emerald-500/30">
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-emerald-300 font-bold flex items-center gap-1.5">
+              <Sparkle className="w-3.5 h-3.5 text-emerald-400" /> Gương Kính Phủ Mờ Lề Dư:
+            </label>
+            <button
+              onClick={() => setBgMirrorBlur(!bgMirrorBlur)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                bgMirrorBlur 
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' 
+                  : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white border border-[#2b3042]'
+              }`}
+            >
+              {bgMirrorBlur ? '✨ Bật Gương Mờ' : '⬛ Viền Đen Tĩnh'}
+            </button>
+          </div>
+          <p className="text-[10px] text-[#94a3b8]">
+            {bgMirrorBlur 
+              ? 'Tự động lấy bóng ảnh nền phóng to phủ mờ 2 bên/trên dưới ➔ Không bao giờ bị lề đen xì!' 
+              : 'Giữ lề màu đen truyền thống xung quanh ảnh.'}
+          </p>
+        </div>
+
+        {/* 3. Căn Chỉnh Kích Thước & Thu Phóng Ảnh (Fit & Zoom) */}
         <div className="flex flex-col gap-2.5 bg-[#12151e] p-3 rounded-xl border border-[#2b3042]">
           <div className="flex items-center justify-between">
             <label className="text-xs text-[#94a3b8] font-semibold flex items-center gap-1.5">
@@ -85,7 +115,11 @@ export default function ImageMusicWorkspace({
 
           <div className="grid grid-cols-2 gap-1.5 text-xs">
             <button
-              onClick={() => setBgFit('cover')}
+              onClick={() => {
+                setBgFit('cover');
+                setBgOffsetX(0);
+                setBgOffsetY(0);
+              }}
               className={`p-2 rounded-lg font-semibold transition-all text-center text-[11px] cursor-pointer ${
                 bgFit === 'cover' 
                   ? 'bg-emerald-600 text-white font-bold shadow ring-1 ring-emerald-400' 
@@ -96,7 +130,9 @@ export default function ImageMusicWorkspace({
               📐 Lấp Đầy (Cover)
             </button>
             <button
-              onClick={() => setBgFit('contain')}
+              onClick={() => {
+                setBgFit('contain');
+              }}
               className={`p-2 rounded-lg font-semibold transition-all text-center text-[11px] cursor-pointer ${
                 bgFit === 'contain' 
                   ? 'bg-emerald-600 text-white font-bold shadow ring-1 ring-emerald-400' 
@@ -115,7 +151,7 @@ export default function ImageMusicWorkspace({
               <span className="font-mono text-emerald-300 font-bold">{bgZoom}%</span>
             </div>
             <input 
-              type="range" min="50" max="200" step="5"
+              type="range" min="50" max="250" step="5"
               value={bgZoom}
               onChange={(e) => setBgZoom(Number(e.target.value))}
               className="w-full accent-emerald-500 cursor-pointer"
@@ -123,10 +159,57 @@ export default function ImageMusicWorkspace({
           </div>
         </div>
 
-        {/* 3. Hiệu Ứng Chuyển Động Ảnh Nền (Background Image Motion) */}
+        {/* 4. Di Chuyển Vị Trí Vùng Nhìn Ảnh (Image Position X / Y Offset) */}
+        <div className="flex flex-col gap-2.5 bg-[#12151e] p-3 rounded-xl border border-[#2b3042]">
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-[#94a3b8] font-semibold flex items-center gap-1.5">
+              <Move className="w-3.5 h-3.5 text-sky-400" /> Di Chuyển Vùng Nhìn Ảnh:
+            </label>
+            <button
+              onClick={() => {
+                setBgOffsetX(0);
+                setBgOffsetY(0);
+              }}
+              className="text-[10px] text-sky-300 bg-sky-950/70 px-2 py-0.5 rounded border border-sky-500/30 hover:bg-sky-600 hover:text-white transition-colors cursor-pointer"
+              title="Đặt lại ảnh về chính giữa khung hình"
+            >
+              🎯 Căn Giữa
+            </button>
+          </div>
+
+          {/* Slider X Offset */}
+          <div className="flex flex-col gap-1 text-xs">
+            <div className="flex justify-between text-[11px] text-[#94a3b8]">
+              <span>Vị trí Trái / Phải (X):</span>
+              <span className="font-mono text-sky-300 font-bold">{bgOffsetX}%</span>
+            </div>
+            <input 
+              type="range" min="-50" max="50" step="1"
+              value={bgOffsetX}
+              onChange={(e) => setBgOffsetX(Number(e.target.value))}
+              className="w-full accent-sky-500 cursor-pointer"
+            />
+          </div>
+
+          {/* Slider Y Offset */}
+          <div className="flex flex-col gap-1 text-xs">
+            <div className="flex justify-between text-[11px] text-[#94a3b8]">
+              <span>Vị trí Trên / Dưới (Y):</span>
+              <span className="font-mono text-sky-300 font-bold">{bgOffsetY}%</span>
+            </div>
+            <input 
+              type="range" min="-50" max="50" step="1"
+              value={bgOffsetY}
+              onChange={(e) => setBgOffsetY(Number(e.target.value))}
+              className="w-full accent-sky-500 cursor-pointer"
+            />
+          </div>
+        </div>
+
+        {/* 5. Hiệu Ứng Chuyển Động Ảnh Nền (Background Image Motion) */}
         <div className="flex flex-col gap-2 bg-[#12151e] p-3 rounded-xl border border-[#2b3042]">
           <label className="text-xs text-[#94a3b8] font-semibold flex items-center gap-1.5">
-            <ZoomIn className="w-3.5 h-3.5 text-purple-400" /> Hiệu Ứng Ảnh Nền:
+            <ZoomIn className="w-3.5 h-3.5 text-purple-400" /> Hiệu Ứng Chuyển Động Ảnh:
           </label>
           <div className="grid grid-cols-2 gap-1.5 text-xs">
             <button
@@ -137,7 +220,7 @@ export default function ImageMusicWorkspace({
                   : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
               }`}
             >
-              🔍 Ken Burns Zoom (Phóng To)
+              🔍 Ken Burns Zoom
             </button>
             <button
               onClick={() => setBgEffect('pulse')}
@@ -147,7 +230,7 @@ export default function ImageMusicWorkspace({
                   : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
               }`}
             >
-              🌊 Pulse Beat (Co Giãn Nhịp)
+              🌊 Pulse Beat Co Giãn
             </button>
             <button
               onClick={() => setBgEffect('none')}
@@ -162,7 +245,7 @@ export default function ImageMusicWorkspace({
           </div>
         </div>
 
-        {/* 4. Hiệu Ứng Âm Nhạc (Audio Visualizer: Vinyl Record / Waveform Spectrum) */}
+        {/* 6. Hiệu Ứng Âm Nhạc (Audio Visualizer: Vinyl Record / Waveform Spectrum) */}
         <div className="flex flex-col gap-2 bg-[#12151e] p-3 rounded-xl border border-[#2b3042]">
           <label className="text-xs text-[#94a3b8] font-semibold flex items-center gap-1.5">
             <Disc className="w-3.5 h-3.5 text-amber-400" /> Hiệu Ứng Sóng / Đĩa Nhạc Quay:
@@ -211,7 +294,7 @@ export default function ImageMusicWorkspace({
           </div>
         </div>
 
-        {/* 5. Nạp Bài Hát MP3 / WAV (Hỗ trợ DJ 1-2 Tiếng) */}
+        {/* 7. Nạp Bài Hát MP3 / WAV (Hỗ trợ DJ 1-2 Tiếng) */}
         <div className="flex flex-col gap-2 pt-2 border-t border-[#1e2333]">
           <label className="text-xs text-[#94a3b8] font-semibold flex items-center gap-1.5">
             <Music className="w-3.5 h-3.5 text-blue-400" /> File Nhạc MP3 / DJ Mix (Hỗ trợ 1-2 tiếng):
