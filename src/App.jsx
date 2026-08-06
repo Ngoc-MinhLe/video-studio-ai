@@ -455,7 +455,7 @@ export default function App() {
 
             <button 
               onClick={handleExport}
-              disabled={!videoFile || isProcessing || (engineType === 'ffmpeg' && !isEngineReady)}
+              disabled={!videoFile || isProcessing}
               className="btn-primary"
             >
               {isProcessing ? (
@@ -626,7 +626,7 @@ export default function App() {
             {videoUrl && !isProcessing && (
               <button
                 onClick={handleExport}
-                disabled={isProcessing || (engineType === 'ffmpeg' && !isEngineReady)}
+                disabled={isProcessing}
                 className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-rose-600 hover:from-purple-500 hover:to-rose-500 text-white font-extrabold text-sm shadow-xl shadow-purple-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
               >
                 <Download className="w-5 h-5" />
