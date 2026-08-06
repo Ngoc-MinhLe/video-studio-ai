@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Upload, Image, Music, Disc, Activity, Sparkles, Sliders, Volume2, 
-  Trash2, Plus, Zap, RefreshCw, ZoomIn, Eye, Play, Pause, Layers
+  Trash2, Plus, Zap, RefreshCw, ZoomIn, Eye, Play, Pause, Layers, Maximize
 } from 'lucide-react';
 
 export default function ImageMusicWorkspace({
@@ -10,6 +10,10 @@ export default function ImageMusicWorkspace({
   removeBgImage,
   bgEffect,
   setBgEffect,
+  bgFit = 'cover',
+  setBgFit,
+  bgZoom = 100,
+  setBgZoom,
   visualizerType,
   setVisualizerType,
   audioFile,
@@ -43,7 +47,7 @@ export default function ImageMusicWorkspace({
         <div className="flex flex-col gap-2">
           <label className="text-xs text-[#94a3b8] font-semibold flex items-center justify-between">
             <span>Tải Ảnh Nền (JPG, PNG):</span>
-            {bgImage && <span className="text-[10px] text-emerald-400">Đã chọn ảnh</span>}
+            {bgImage && <span className="text-[10px] text-emerald-400 font-bold">Đã chọn ảnh</span>}
           </label>
 
           {bgImage ? (
@@ -68,7 +72,58 @@ export default function ImageMusicWorkspace({
           )}
         </div>
 
-        {/* 2. Hiệu Ứng Chuyển Động Ảnh Nền (Background Image Motion) */}
+        {/* 2. Căn Chỉnh Kích Thước & Thu Phóng Ảnh (Fit & Zoom) */}
+        <div className="flex flex-col gap-2.5 bg-[#12151e] p-3 rounded-xl border border-[#2b3042]">
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-[#94a3b8] font-semibold flex items-center gap-1.5">
+              <Maximize className="w-3.5 h-3.5 text-emerald-400" /> Căn Khung & Thu Phóng Ảnh:
+            </label>
+            <span className="text-[10px] font-mono text-emerald-300 font-bold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
+              {bgZoom}%
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1.5 text-xs">
+            <button
+              onClick={() => setBgFit('cover')}
+              className={`p-2 rounded-lg font-semibold transition-all text-center text-[11px] cursor-pointer ${
+                bgFit === 'cover' 
+                  ? 'bg-emerald-600 text-white font-bold shadow ring-1 ring-emerald-400' 
+                  : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+              }`}
+              title="Lấp đầy khung hình (Tự xén lề dư)"
+            >
+              📐 Lấp Đầy (Cover)
+            </button>
+            <button
+              onClick={() => setBgFit('contain')}
+              className={`p-2 rounded-lg font-semibold transition-all text-center text-[11px] cursor-pointer ${
+                bgFit === 'contain' 
+                  ? 'bg-emerald-600 text-white font-bold shadow ring-1 ring-emerald-400' 
+                  : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+              }`}
+              title="Hiện trọn vẹn toàn bộ bức ảnh (Giữ nguyên tỷ lệ)"
+            >
+              🖼️ Trọn Vẹn (Contain)
+            </button>
+          </div>
+
+          {/* Thanh trượt Thu Phóng Ảnh (%) */}
+          <div className="flex flex-col gap-1 text-xs mt-1">
+            <div className="flex justify-between text-[11px] text-[#94a3b8]">
+              <span>Thu phóng Zoom Ảnh:</span>
+              <span className="font-mono text-emerald-300 font-bold">{bgZoom}%</span>
+            </div>
+            <input 
+              type="range" min="50" max="200" step="5"
+              value={bgZoom}
+              onChange={(e) => setBgZoom(Number(e.target.value))}
+              className="w-full accent-emerald-500 cursor-pointer"
+            />
+          </div>
+        </div>
+
+        {/* 3. Hiệu Ứng Chuyển Động Ảnh Nền (Background Image Motion) */}
         <div className="flex flex-col gap-2 bg-[#12151e] p-3 rounded-xl border border-[#2b3042]">
           <label className="text-xs text-[#94a3b8] font-semibold flex items-center gap-1.5">
             <ZoomIn className="w-3.5 h-3.5 text-purple-400" /> Hiệu Ứng Ảnh Nền:
@@ -107,7 +162,7 @@ export default function ImageMusicWorkspace({
           </div>
         </div>
 
-        {/* 3. Hiệu Ứng Âm Nhạc (Audio Visualizer: Vinyl Record / Waveform Spectrum) */}
+        {/* 4. Hiệu Ứng Âm Nhạc (Audio Visualizer: Vinyl Record / Waveform Spectrum) */}
         <div className="flex flex-col gap-2 bg-[#12151e] p-3 rounded-xl border border-[#2b3042]">
           <label className="text-xs text-[#94a3b8] font-semibold flex items-center gap-1.5">
             <Disc className="w-3.5 h-3.5 text-amber-400" /> Hiệu Ứng Sóng / Đĩa Nhạc Quay:
@@ -156,7 +211,7 @@ export default function ImageMusicWorkspace({
           </div>
         </div>
 
-        {/* 4. Nạp Bài Hát MP3 / WAV (Hỗ trợ DJ 1-2 Tiếng) */}
+        {/* 5. Nạp Bài Hát MP3 / WAV (Hỗ trợ DJ 1-2 Tiếng) */}
         <div className="flex flex-col gap-2 pt-2 border-t border-[#1e2333]">
           <label className="text-xs text-[#94a3b8] font-semibold flex items-center gap-1.5">
             <Music className="w-3.5 h-3.5 text-blue-400" /> File Nhạc MP3 / DJ Mix (Hỗ trợ 1-2 tiếng):
@@ -184,8 +239,6 @@ export default function ImageMusicWorkspace({
           )}
         </div>
       </div>
-
-      {/* Cột 2 & 3 sẽ được ghép linh hoạt trong App.jsx */}
     </div>
   );
 }

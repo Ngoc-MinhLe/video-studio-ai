@@ -10,6 +10,8 @@ export const processVideoCanvas = async ({
   mode = 'video_studio',
   bgImage = null,
   bgEffect = 'zoom',
+  bgFit = 'cover',
+  bgZoom = 100,
   visualizerType = 'vinyl',
   videoFile,
   videoClips = [],
@@ -566,17 +568,50 @@ export const processVideoCanvas = async ({
       if (mode === 'image_music') {
         // 1. Vẽ Ảnh Nền + Ken Burns Zoom / Pulse Effect
         if (bgImgEl) {
-          let scale = 1.0;
+          let motionScale = 1.0;
           if (bgEffect === 'zoom') {
-            scale = 1.0 + (Math.sin(projectTime * 0.15) + 1) * 0.06;
+            motionScale = 1.0 + (Math.sin(projectTime * 0.15) + 1) * 0.06;
           } else if (bgEffect === 'pulse') {
-            scale = 1.0 + Math.abs(Math.sin(projectTime * 3)) * 0.04;
+            motionScale = 1.0 + Math.abs(Math.sin(projectTime * 3)) * 0.04;
           }
-          const scaledW = canvasW * scale;
-          const scaledH = canvasH * scale;
-          const offsetX = (canvasW - scaledW) / 2;
-          const offsetY = (canvasH - scaledH) / 2;
-          ctx.drawImage(bgImgEl, offsetX, offsetY, scaledW, scaledH);
+
+          const customScale = (bgZoom !== undefined ? bgZoom : 100) / 100;
+          const totalScale = motionScale * customScale;
+
+          ctx.fillStyle = '#090b10';
+          ctx.fillRect(0, 0, canvasW, canvasH);
+
+          const imgW = bgImgEl.naturalWidth || bgImgEl.width || 1;
+          const imgH = bgImgEl.naturalHeight || bgImgEl.height || 1;
+          const imgRatio = imgW / imgH;
+          const canvasRatio = canvasW / canvasH;
+
+          let baseW, baseH;
+          if (bgFit === 'contain') {
+            if (imgRatio > canvasRatio) {
+              baseW = canvasW;
+              baseH = canvasW / imgRatio;
+            } else {
+              baseH = canvasH;
+              baseW = canvasH * imgRatio;
+            }
+          } else {
+            // 'cover'
+            if (imgRatio > canvasRatio) {
+              baseH = canvasH;
+              baseW = canvasH * imgRatio;
+            } else {
+              baseW = canvasW;
+              baseH = canvasW / imgRatio;
+            }
+          }
+
+          const drawW = baseW * totalScale;
+          const drawH = baseH * totalScale;
+          const drawX = (canvasW - drawW) / 2;
+          const drawY = (canvasH - drawH) / 2;
+
+          ctx.drawImage(bgImgEl, drawX, drawY, drawW, drawH);
         } else {
           ctx.fillStyle = '#090b10';
           ctx.fillRect(0, 0, canvasW, canvasH);

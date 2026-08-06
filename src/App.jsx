@@ -65,6 +65,8 @@ export default function App() {
   const [bgImage, setBgImage] = useState(null); // { file, url }
   const [bgEffect, setBgEffect] = useState('zoom'); // 'zoom' | 'pulse' | 'none'
   const [visualizerType, setVisualizerType] = useState('vinyl'); // 'vinyl' | 'bars' | 'ring' | 'none'
+  const [bgFit, setBgFit] = useState('cover'); // 'cover' | 'contain'
+  const [bgZoom, setBgZoom] = useState(100); // 50 to 200
 
   const handleBgImageUpload = (e) => {
     const file = e.target.files[0];
@@ -200,6 +202,20 @@ export default function App() {
 
   // Đồng bộ phát / dừng giữa Video và Audio mới
   const togglePlay = () => {
+    if (activeTab === 'image_music') {
+      if (isPlaying) {
+        if (audioRef.current) audioRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        if (audioRef.current && audioUrl) {
+          audioRef.current.volume = audioVolume;
+          audioRef.current.play().catch(e => console.log('Audio play warning:', e));
+        }
+        setIsPlaying(true);
+      }
+      return;
+    }
+
     if (!videoRef.current) return;
 
     if (isPlaying) {
@@ -533,6 +549,8 @@ export default function App() {
         mode: activeTab,
         bgImage,
         bgEffect,
+        bgFit,
+        bgZoom,
         visualizerType,
         videoFile,
         videoClips: videoFiles,
@@ -756,6 +774,10 @@ export default function App() {
             removeBgImage={removeBgImage}
             bgEffect={bgEffect}
             setBgEffect={setBgEffect}
+            bgFit={bgFit}
+            setBgFit={setBgFit}
+            bgZoom={bgZoom}
+            setBgZoom={setBgZoom}
             visualizerType={visualizerType}
             setVisualizerType={setVisualizerType}
             audioFile={audioFile}
@@ -1019,10 +1041,13 @@ export default function App() {
                   <img 
                     src={bgImage.url} 
                     alt="Background" 
-                    className={`w-full h-full object-cover transition-transform duration-1000 ${
-                      bgEffect === 'zoom' ? 'scale-110 animate-pulse' :
-                      bgEffect === 'pulse' ? 'scale-105 animate-bounce' : 'scale-100'
+                    className={`w-full h-full ${bgFit === 'contain' ? 'object-contain' : 'object-cover'} transition-transform duration-1000 ${
+                      bgEffect === 'zoom' ? 'animate-pulse' :
+                      bgEffect === 'pulse' ? 'animate-bounce' : ''
                     }`} 
+                    style={{
+                      transform: `scale(${bgZoom / 100})`
+                    }}
                   />
                   {visualizerType === 'vinyl' && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -1225,9 +1250,9 @@ export default function App() {
             </div>
           </div>
 
-          {/* Controls Phát Video & Export Dialog */}
+          {/* Controls Phát Video & Live Audio Preview */}
           <div className="w-full flex flex-col gap-3">
-            {videoUrl && (
+            {(videoUrl || (activeTab === 'image_music' && (bgImage || audioFile))) && (
               <div className="flex flex-col gap-3 bg-[#12151e] p-3.5 rounded-xl border border-[#2b3042]">
                 {/* Nút Play/Pause & Sliderseek cơ bản */}
                 <div className="flex items-center gap-3">
