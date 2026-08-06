@@ -652,25 +652,26 @@ export const processVideoCanvas = async ({
           ctx.save();
           const vY = (canvasH * (visualizerPosY !== undefined ? visualizerPosY : 50)) / 100;
           const scaleF = canvasH / 720;
-          const amp = Math.sin(projectTime * 5) * (40 * scaleF) + (15 * scaleF);
+          const amp = Math.sin(projectTime * 6) * (45 * scaleF) + (15 * scaleF);
 
           ctx.shadowColor = '#ec4899';
-          ctx.shadowBlur = 22 * scaleF;
+          ctx.shadowBlur = 24 * scaleF;
 
           const grad = ctx.createLinearGradient(0, 0, canvasW, 0);
           grad.addColorStop(0, '#ec4899');
-          grad.addColorStop(0.5, '#c084fc');
-          grad.addColorStop(1, '#38bdf8');
+          grad.addColorStop(0.4, '#a855f7');
+          grad.addColorStop(0.7, '#3b82f6');
+          grad.addColorStop(1, '#06b6d4');
 
-          // Upper Sine Wave
+          // Upper Wide Glow Curve
           ctx.beginPath();
           ctx.moveTo(0, vY);
           ctx.bezierCurveTo(canvasW * 0.25, vY - amp, canvasW * 0.75, vY + amp, canvasW, vY);
           ctx.strokeStyle = grad;
-          ctx.lineWidth = 6 * scaleF;
+          ctx.lineWidth = 7 * scaleF;
           ctx.stroke();
 
-          // Lower Symmetric Sine Wave
+          // Lower Symmetric Wave
           ctx.beginPath();
           ctx.moveTo(0, vY);
           ctx.bezierCurveTo(canvasW * 0.25, vY + amp, canvasW * 0.75, vY - amp, canvasW, vY);
@@ -678,32 +679,52 @@ export const processVideoCanvas = async ({
           ctx.lineWidth = 3.5 * scaleF;
           ctx.stroke();
 
+          // Particle Dots along wave
+          const dotPositions = [0.1, 0.3, 0.5, 0.7, 0.9];
+          dotPositions.forEach((pos, idx) => {
+            const px = canvasW * pos;
+            const py = vY + Math.sin(projectTime * 6 + idx) * amp;
+            const r = (4 + Math.abs(Math.sin(projectTime * 8 + idx)) * 3) * scaleF;
+
+            ctx.fillStyle = '#f472b6';
+            ctx.shadowColor = '#f472b6';
+            ctx.shadowBlur = 12 * scaleF;
+            ctx.beginPath();
+            ctx.arc(px, py, r, 0, Math.PI * 2);
+            ctx.fill();
+          });
+
           ctx.restore();
         } else if (visualizerType === 'vinyl') {
           ctx.save();
           const centerX = canvasW / 2;
           const centerY = canvasH / 2;
           const radius = Math.min(canvasW, canvasH) * 0.22;
+          const scaleF = canvasH / 720;
 
           ctx.translate(centerX, centerY);
-          const angle = (projectTime * 90 * Math.PI) / 180;
+          const angle = (projectTime * 120 * Math.PI) / 180;
           ctx.rotate(angle);
 
+          // Outer Glow
+          ctx.shadowColor = '#a855f7';
+          ctx.shadowBlur = 35 * scaleF;
+
           // Outer Vinyl Black Disc
-          ctx.fillStyle = '#111319';
+          ctx.fillStyle = '#0c0d12';
           ctx.beginPath();
           ctx.arc(0, 0, radius, 0, Math.PI * 2);
           ctx.fill();
-          ctx.strokeStyle = '#2b3042';
-          ctx.lineWidth = 4 * (canvasH / 720);
+          ctx.strokeStyle = '#334155';
+          ctx.lineWidth = 4 * scaleF;
           ctx.stroke();
 
           // Vinyl Grooves
-          for (let r = radius * 0.45; r < radius * 0.95; r += 10 * (canvasH / 720)) {
+          for (let r = radius * 0.45; r < radius * 0.95; r += 10 * scaleF) {
             ctx.beginPath();
             ctx.arc(0, 0, r, 0, Math.PI * 2);
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
-            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.lineWidth = 1.5 * scaleF;
             ctx.stroke();
           }
 
@@ -727,37 +748,59 @@ export const processVideoCanvas = async ({
         } else if (visualizerType === 'bars') {
           ctx.save();
           const barCount = 24;
-          const barWidth = (canvasW * 0.6) / barCount;
+          const barWidth = (canvasW * 0.65) / barCount;
           const startX = (canvasW - (barCount * barWidth)) / 2;
-          const baseY = canvasH * 0.82;
+          const vY = (canvasH * (visualizerPosY !== undefined ? visualizerPosY : 50)) / 100;
+          const scaleF = canvasH / 720;
 
           for (let b = 0; b < barCount; b++) {
-            const barHeight = Math.abs(Math.sin(projectTime * 4 + b * 0.4)) * (canvasH * 0.15) + (canvasH * 0.02);
+            const barHeight = Math.abs(Math.sin(projectTime * 5 + b * 0.4)) * (canvasH * 0.16) + (canvasH * 0.02);
             const bx = startX + b * barWidth;
-            const by = baseY - barHeight;
+            const by = vY - barHeight / 2;
 
-            const grad = ctx.createLinearGradient(bx, baseY, bx, by);
-            grad.addColorStop(0, '#c084fc');
-            grad.addColorStop(1, '#38bdf8');
+            const grad = ctx.createLinearGradient(bx, vY + barHeight / 2, bx, by);
+            grad.addColorStop(0, '#ec4899');
+            grad.addColorStop(0.5, '#a855f7');
+            grad.addColorStop(1, '#06b6d4');
 
             ctx.fillStyle = grad;
-            ctx.fillRect(bx + 2, by, barWidth - 4, barHeight);
+            ctx.fillRect(bx + 2 * scaleF, by, barWidth - 4 * scaleF, barHeight);
+
+            // Bouncing peak indicator dot
+            ctx.fillStyle = '#67e8f9';
+            ctx.shadowColor = '#06b6d4';
+            ctx.shadowBlur = 10 * scaleF;
+            ctx.fillRect(bx + 2 * scaleF, by - 6 * scaleF, barWidth - 4 * scaleF, 3 * scaleF);
           }
           ctx.restore();
         } else if (visualizerType === 'ring') {
           ctx.save();
           const centerX = canvasW / 2;
           const centerY = canvasH / 2;
+          const scaleF = canvasH / 720;
           const baseRadius = Math.min(canvasW, canvasH) * 0.22;
-          const pulseRadius = baseRadius + Math.abs(Math.sin(projectTime * 5)) * (baseRadius * 0.1);
+          const pulseRadius = baseRadius + Math.abs(Math.sin(projectTime * 6)) * (baseRadius * 0.18);
 
           ctx.strokeStyle = '#ec4899';
-          ctx.shadowColor = '#f472b6';
-          ctx.shadowBlur = 30 * (canvasH / 720);
-          ctx.lineWidth = 6 * (canvasH / 720);
+          ctx.shadowColor = '#ec4899';
+          ctx.shadowBlur = 35 * scaleF;
+          ctx.lineWidth = 6 * scaleF;
           ctx.beginPath();
           ctx.arc(centerX, centerY, pulseRadius, 0, Math.PI * 2);
           ctx.stroke();
+
+          // Outer dashed Cyber ring
+          ctx.save();
+          ctx.translate(centerX, centerY);
+          ctx.rotate(projectTime * 0.8);
+          ctx.strokeStyle = 'rgba(6, 182, 212, 0.7)';
+          ctx.setLineDash([12 * scaleF, 8 * scaleF]);
+          ctx.lineWidth = 3 * scaleF;
+          ctx.beginPath();
+          ctx.arc(0, 0, baseRadius * 1.3, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+
           ctx.restore();
         }
       } else if (loadedVideoElements.length > 0) {

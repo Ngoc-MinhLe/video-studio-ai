@@ -193,6 +193,28 @@ export default function App() {
   const audioRef = useRef(null);
   const pendingSeekTimeRef = useRef(null);
 
+  const [animTime, setAnimTime] = useState(0);
+
+  // Vòng lặp 60 FPS mượt mà cho hiệu ứng Thu Phóng Camera và Sóng Âm Visualizer
+  useEffect(() => {
+    let animId;
+    let lastT = performance.now();
+
+    const loop = (now) => {
+      const dt = Math.min((now - lastT) / 1000, 0.1);
+      lastT = now;
+      if (isPlaying) {
+        setAnimTime(prev => prev + dt);
+      }
+      animId = requestAnimationFrame(loop);
+    };
+
+    if (isPlaying) {
+      animId = requestAnimationFrame(loop);
+    }
+    return () => cancelAnimationFrame(animId);
+  }, [isPlaying]);
+
   // Đảm bảo cập nhật âm lượng âm thanh realtime
   useEffect(() => {
     if (videoRef.current) {
@@ -791,9 +813,20 @@ export default function App() {
               </button>
             )}
 
+            {exportUrl && (
+              <a
+                href={exportUrl}
+                download={`video_studio_${Date.now()}.${exportExtension || 'mp4'}`}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-xs shadow-lg shadow-emerald-500/30 transition-all animate-pulse cursor-pointer border border-emerald-300/40"
+              >
+                <Download className="w-4 h-4" />
+                <span>📥 TẢI VIDEO MP4 VỀ MÁY</span>
+              </a>
+            )}
+
             <button 
               onClick={handleExport}
-              disabled={!videoFile || isProcessing}
+              disabled={isProcessing || (activeTab === 'image_music' ? (!bgImage && !audioFile) : !videoFile)}
               className="btn-primary"
             >
               {isProcessing ? (
@@ -1107,12 +1140,13 @@ export default function App() {
                     />
                   )}
 
-                  {/* Ảnh Nền Chính với Thu Phóng Focus & Di Chuyển X/Y */}
+                  {/* Ảnh Nền Chính với Thu Phóng Focus & Di Chuyển X/Y 60 FPS Mượt Mà */}
                   {(() => {
+                    const activeTime = isPlaying ? animTime : currentTime;
                     const cameraMotionScale = bgEffect === 'zoom' 
-                      ? 1.0 + (Math.sin(currentTime * (zoomSpeed || 0.2) * 3) + 1) * ((zoomRange || 30) / 200)
+                      ? 1.0 + (Math.sin(activeTime * (zoomSpeed || 0.2) * 3) + 1) * ((zoomRange || 30) / 200)
                       : bgEffect === 'pulse' 
-                      ? 1.0 + Math.abs(Math.sin(currentTime * (zoomSpeed || 0.2) * 4)) * ((zoomRange || 30) / 200)
+                      ? 1.0 + Math.abs(Math.sin(activeTime * (zoomSpeed || 0.2) * 4)) * ((zoomRange || 30) / 200)
                       : 1.0;
 
                     const totalScale = (bgZoom / 100) * cameraMotionScale;
@@ -1129,64 +1163,161 @@ export default function App() {
                       />
                     );
                   })()}
+
+                  {/* 1. SÓNG SINE DJ NEON ĐỘC ĐÁO ĐA TẦNG */}
                   {visualizerType === 'sinewave' && (
                     <div 
-                      className="absolute left-0 right-0 z-20 pointer-events-none flex items-center justify-center w-full px-2"
+                      className="absolute left-0 right-0 z-20 pointer-events-none flex flex-col items-center justify-center w-full px-2"
                       style={{ top: `${visualizerPosY}%`, transform: 'translateY(-50%)' }}
                     >
-                      <svg className="w-full h-24 overflow-visible" viewBox="0 0 500 100" preserveAspectRatio="none">
+                      <svg className="w-full h-28 overflow-visible" viewBox="0 0 500 120" preserveAspectRatio="none">
                         <defs>
                           <linearGradient id="neonSineGlow" x1="0%" y1="0%" x2="100%" y2="0%">
                             <stop offset="0%" stopColor="#ec4899" />
-                            <stop offset="50%" stopColor="#c084fc" />
-                            <stop offset="100%" stopColor="#38bdf8" />
+                            <stop offset="40%" stopColor="#a855f7" />
+                            <stop offset="70%" stopColor="#3b82f6" />
+                            <stop offset="100%" stopColor="#06b6d4" />
                           </linearGradient>
+                          <filter id="glowEffect" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="6" result="blur" />
+                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                          </filter>
                         </defs>
+
+                        {/* Sóng Sine Nền Phát Sáng Rộng */}
                         <path 
-                          d={`M 0 50 Q 125 ${50 + (isPlaying ? Math.sin(currentTime * 5) * 35 : 10)} 250 50 T 500 50`} 
+                          d={`M 0 60 Q 125 ${60 + (isPlaying ? Math.sin((isPlaying ? animTime : currentTime) * 6) * 45 : 15)} 250 60 T 500 60`} 
                           fill="none" 
                           stroke="url(#neonSineGlow)" 
-                          strokeWidth="5" 
-                          className="filter drop-shadow-[0_0_12px_rgba(236,72,153,0.9)]"
+                          strokeWidth="8" 
+                          opacity="0.6"
+                          filter="url(#glowEffect)"
                         />
+
+                        {/* Sóng Sine Chính Sắc Nét */}
                         <path 
-                          d={`M 0 50 Q 125 ${50 - (isPlaying ? Math.sin(currentTime * 5) * 35 : 10)} 250 50 T 500 50`} 
+                          d={`M 0 60 Q 125 ${60 + (isPlaying ? Math.sin((isPlaying ? animTime : currentTime) * 6) * 40 : 10)} 250 60 T 500 60`} 
+                          fill="none" 
+                          stroke="url(#neonSineGlow)" 
+                          strokeWidth="4" 
+                        />
+
+                        {/* Sóng Sine Đối Xứng Nhảy Nhịp */}
+                        <path 
+                          d={`M 0 60 Q 125 ${60 - (isPlaying ? Math.sin((isPlaying ? animTime : currentTime) * 6) * 40 : 10)} 250 60 T 500 60`} 
                           fill="none" 
                           stroke="#38bdf8" 
                           strokeWidth="3" 
-                          className="filter drop-shadow-[0_0_10px_rgba(56,189,248,0.9)] opacity-85"
+                          className="opacity-90"
                         />
+
+                        {/* Các Hạt Kim Cương Nhấp Nháy Theo Nhạc */}
+                        {[50, 150, 250, 350, 450].map((px, idx) => (
+                          <circle 
+                            key={idx}
+                            cx={px}
+                            cy={60 + (isPlaying ? Math.sin((isPlaying ? animTime : currentTime) * 6 + idx) * 35 : 0)}
+                            r={isPlaying ? 4 + Math.abs(Math.sin((isPlaying ? animTime : currentTime) * 8 + idx)) * 3 : 3}
+                            fill="#f472b6"
+                            className="filter drop-shadow-[0_0_8px_rgba(244,114,182,1)]"
+                          />
+                        ))}
                       </svg>
                     </div>
                   )}
 
+                  {/* 2. ĐĨA QUAY VINYL CHUYÊN NGHIỆP CÓ CẦN KIM NHẠC */}
                   {visualizerType === 'vinyl' && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className={`w-36 h-36 rounded-full border-4 border-[#2b3042] bg-[#111319] shadow-2xl flex items-center justify-center relative ${isPlaying ? 'animate-spin' : ''}`} style={{ animationDuration: '4s' }}>
-                        <div className="w-14 h-14 rounded-full overflow-hidden border border-white/20">
-                          <img src={bgImage.url} alt="" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                      <div className="relative flex items-center justify-center">
+                        {/* Hào quang phát sáng sau đĩa */}
+                        <div className={`absolute w-44 h-44 rounded-full bg-purple-600/30 filter blur-xl ${isPlaying ? 'animate-pulse' : ''}`} />
+
+                        {/* Đĩa Than Quay */}
+                        <div 
+                          className="w-40 h-40 rounded-full border-4 border-slate-700 bg-[#0c0d12] shadow-2xl flex items-center justify-center relative transition-transform"
+                          style={{
+                            transform: `rotate(${(isPlaying ? animTime : currentTime) * 120}deg)`
+                          }}
+                        >
+                          {/* Đường Rãnh Đĩa Than */}
+                          {[...Array(5)].map((_, i) => (
+                            <div 
+                              key={i} 
+                              className="absolute rounded-full border border-white/10"
+                              style={{ width: `${60 + i * 14}%`, height: `${60 + i * 14}%` }}
+                            />
+                          ))}
+
+                          {/* Nhãn Artwork Ở Giữa */}
+                          <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-amber-400/80 shadow-inner">
+                            <img src={bgImage.url} alt="" className="w-full h-full object-cover" />
+                          </div>
+                          <div className="absolute w-3.5 h-3.5 rounded-full bg-white border-2 border-slate-900 shadow" />
                         </div>
-                        <div className="absolute w-3 h-3 rounded-full bg-white border-2 border-slate-900" />
+
+                        {/* Cần Kim Đĩa Nhạc (Tonearm Needle) */}
+                        <div 
+                          className="absolute -top-6 -right-6 w-16 h-20 pointer-events-none transition-transform duration-500"
+                          style={{ transform: isPlaying ? 'rotate(12deg)' : 'rotate(-10deg)', transformOrigin: 'top right' }}
+                        >
+                          <div className="w-2 h-14 bg-gradient-to-b from-slate-400 to-slate-200 rounded-full ml-auto shadow-md" />
+                          <div className="w-4 h-4 bg-amber-500 rounded-sm ml-auto -mt-1 shadow-lg border border-amber-300" />
+                        </div>
                       </div>
                     </div>
                   )}
+
+                  {/* 3. BARS EQUALIZER SPECTRUM 24 CỘT CÓ CHẤM ĐỈNH POKER */}
                   {visualizerType === 'bars' && (
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-end gap-1.5 h-14 pointer-events-none">
-                      {[...Array(16)].map((_, i) => (
-                        <div 
-                          key={i} 
-                          className="w-2.5 bg-gradient-to-t from-purple-500 to-sky-400 rounded-t-full"
-                          style={{
-                            height: isPlaying ? `${Math.floor(15 + Math.sin(currentTime * 4 + i) * 30)}px` : '8px',
-                            transition: 'height 0.15s ease'
-                          }}
-                        />
-                      ))}
+                    <div 
+                      className="absolute left-1/2 -translate-x-1/2 flex items-end gap-1.5 h-20 pointer-events-none z-20"
+                      style={{ top: `${visualizerPosY}%`, transform: 'translate(-50%, -50%)' }}
+                    >
+                      {[...Array(24)].map((_, i) => {
+                        const t = isPlaying ? animTime : currentTime;
+                        const h = isPlaying ? Math.floor(10 + Math.abs(Math.sin(t * 5 + i * 0.4)) * 55) : 8;
+                        return (
+                          <div key={i} className="flex flex-col items-center gap-1">
+                            {/* Chấm Đỉnh Bouncing Peak */}
+                            <div 
+                              className="w-2 h-1.5 rounded-full bg-cyan-300 shadow-[0_0_8px_rgba(6,182,212,1)]"
+                              style={{
+                                transform: `translateY(-${h + 4}px)`,
+                                transition: 'transform 0.1s ease-out'
+                              }}
+                            />
+                            {/* Cột Sóng Âm Neon Gradient */}
+                            <div 
+                              className="w-2 bg-gradient-to-t from-pink-500 via-purple-500 to-cyan-400 rounded-t-full shadow-[0_0_10px_rgba(168,85,247,0.7)]"
+                              style={{
+                                height: `${h}px`,
+                                transition: 'height 0.08s ease'
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
+
+                  {/* 4. VÒNG HÀO QUANG NEON CYBER PULSE */}
                   {visualizerType === 'ring' && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className={`w-40 h-40 rounded-full border-4 border-pink-500 shadow-[0_0_30px_rgba(244,114,182,0.8)] ${isPlaying ? 'animate-ping' : ''}`} style={{ animationDuration: '2s' }} />
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                      <div className="relative flex items-center justify-center">
+                        <div 
+                          className="w-44 h-44 rounded-full border-4 border-pink-500 shadow-[0_0_35px_rgba(236,72,153,0.9)] transition-all duration-100"
+                          style={{
+                            transform: `scale(${1 + Math.abs(Math.sin((isPlaying ? animTime : currentTime) * 6)) * 0.18})`
+                          }}
+                        />
+                        <div 
+                          className="absolute w-56 h-56 rounded-full border-2 border-dashed border-cyan-400/70"
+                          style={{
+                            transform: `rotate(${(isPlaying ? animTime : currentTime) * 60}deg)`
+                          }}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1370,6 +1501,22 @@ export default function App() {
 
           {/* Controls Phát Video & Live Audio Preview */}
           <div className="w-full flex flex-col gap-3">
+            {exportUrl && (
+              <div className="flex flex-col items-center gap-2 p-3 bg-emerald-950/80 border-2 border-emerald-500 rounded-xl shadow-xl">
+                <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                  🎉 Video đã render thành công! Bấm nút để tải file MP4 về máy:
+                </span>
+                <a
+                  href={exportUrl}
+                  download={`video_studio_${Date.now()}.${exportExtension || 'mp4'}`}
+                  className="w-full text-center py-2.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-sm rounded-lg shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-all"
+                >
+                  <Download className="w-5 h-5 animate-bounce" />
+                  <span>📥 TẢI VIDEO MP4 VỀ MÁY (TẢI FILE GỐC)</span>
+                </a>
+              </div>
+            )}
+
             {(videoUrl || (activeTab === 'image_music' && (bgImage || audioFile))) && (
               <div className="flex flex-col gap-3 bg-[#12151e] p-3.5 rounded-xl border border-[#2b3042]">
                 {/* Nút Play/Pause & Sliderseek cơ bản */}
