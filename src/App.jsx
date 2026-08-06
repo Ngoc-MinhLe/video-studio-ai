@@ -154,6 +154,14 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
+  // Tính tổng thời lượng Dự án của tất cả các Video Clips
+  const totalProjectDuration = videoClips.reduce((acc, clip) => {
+    const clipDur = (clip.clipEnd && clip.clipEnd > clip.clipStart) 
+      ? (clip.clipEnd - clip.clipStart) 
+      : (clip.duration || 10);
+    return acc + clipDur;
+  }, 0);
+
   const videoRef = useRef(null);
   const audioRef = useRef(null);
 
@@ -209,22 +217,36 @@ export default function App() {
   };
 
   // Xử lý upload Thêm Video Clip (Cho phép nạp nhiều video nối đuôi)
-  const handleVideoUpload = (e) => {
+  const handleVideoUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    const newClips = files.map((file, idx) => {
+    const newClipsPromises = files.map(async (file, idx) => {
       const url = URL.createObjectURL(file);
       const id = Date.now() + idx;
+
+      // Đọc thời lượng của từng clip video
+      const tempVideo = document.createElement('video');
+      tempVideo.src = url;
+      await new Promise((res) => {
+        tempVideo.onloadedmetadata = res;
+        tempVideo.onerror = res;
+      });
+
+      const fileDur = tempVideo.duration || 10;
+
       return {
         id,
         file,
         url,
         name: file.name,
         clipStart: 0,
-        clipEnd: 0
+        clipEnd: fileDur,
+        duration: fileDur
       };
     });
+
+    const newClips = await Promise.all(newClipsPromises);
 
     setVideoClips(prev => {
       const updated = [...prev, ...newClips];
@@ -248,12 +270,6 @@ export default function App() {
     const targetClip = videoClips[clipIdx];
     const nowSec = Math.floor(currentTime * 10) / 10;
 
-    // Giới hạn tách clip hợp lệ
-    if (nowSec <= targetClip.clipStart + 0.5) {
-      alert('Vị trí kim thời gian quá gần đầu clip, không thể tách!');
-      return;
-    }
-
     const firstPart = {
       ...targetClip,
       clipEnd: nowSec
@@ -263,7 +279,8 @@ export default function App() {
       ...targetClip,
       id: Date.now(),
       name: `${targetClip.name} (Phần 2)`,
-      clipStart: nowSec
+      clipStart: nowSec,
+      clipEnd: targetClip.clipEnd || targetClip.duration
     };
 
     const nextClips = [...videoClips];
@@ -271,7 +288,6 @@ export default function App() {
 
     setVideoClips(nextClips);
     setSelectedClipId(secondPart.id);
-    console.log(`[Split Clip Success]: Tách clip ${targetClip.name} tại mốc ${nowSec}s`);
   };
 
   // Hàm Xóa Video Clip được chọn (Delete Clip 🗑️)
@@ -851,13 +867,13 @@ export default function App() {
 
                   <div className="flex-1 flex items-center gap-2">
                     <input 
-                      type="range" min="0" max={duration || 100} step="0.1"
+                      type="range" min="0" max={totalProjectDuration || duration || 100} step="0.1"
                       value={currentTime}
                       onChange={handleSeek}
                       className="flex-1 accent-purple-500 cursor-pointer"
                     />
-                    <span className="text-xs font-mono text-[#94a3b8] shrink-0 min-w-[70px] text-right">
-                      {Math.floor(currentTime)}s / {Math.floor(duration || 0)}s
+                    <span className="text-xs font-mono text-purple-300 font-bold shrink-0 min-w-[90px] text-right">
+                      {Math.floor(currentTime)}s / {Math.floor(totalProjectDuration || duration || 0)}s
                     </span>
                   </div>
                 </div>
@@ -893,14 +909,40 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* --- THƯỚC ĐO THỜI GIAN CHUYÊN NGHIỆP (TIME RULER 📐) --- */}
+                  <div className="relative w-full h-5 bg-[#12151e] rounded border border-[#2b3042] flex items-center px-1 font-mono text-[9px] text-[#64748b] select-none">
+                    {(() => {
+                      const totalDur = Math.max(10, Math.ceil(totalProjectDuration || duration || 10));
+                      const steps = 10;
+                      const interval = totalDur / steps;
+                      const ticks = [];
+                      for (let i = 0; i <= steps; i++) {
+                        const sec = Math.round(i * interval);
+                        const pct = (i / steps) * 100;
+                        ticks.push(
+                          <div 
+                            key={i} 
+                            className="absolute flex flex-col items-center -translate-x-1/2"
+                            style={{ left: `${pct}%` }}
+                          >
+                            <span className="text-[9px] font-bold text-[#94a3b8]">{sec}s</span>
+                            <div className="w-[1px] h-1.5 bg-[#2b3042]" />
+                          </div>
+                        );
+                      }
+                      return ticks;
+                    })()}
+                  </div>
+
                   {/* Khung Trục Thời Gian Đa Luồng */}
                   <div 
-                    className="relative w-full bg-[#090b10] rounded-lg p-2 border border-[#2b3042] flex flex-col gap-1.5 cursor-pointer select-none overflow-hidden"
+                    className="relative w-full bg-[#090b10] rounded-lg p-2 border border-[#2b3042] flex flex-col gap-2 cursor-pointer select-none overflow-hidden"
                     onClick={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
                       const clickX = e.clientX - rect.left;
                       const ratio = clickX / rect.width;
-                      const newTime = ratio * (duration || 1);
+                      const totalDur = totalProjectDuration || duration || 1;
+                      const newTime = ratio * totalDur;
                       if (videoRef.current) {
                         videoRef.current.currentTime = newTime;
                         setCurrentTime(newTime);
@@ -908,32 +950,73 @@ export default function App() {
                     }}
                   >
                     {/* Kim Thời Gian (Playhead Red Line) */}
-                    {duration > 0 && (
+                    {(totalProjectDuration > 0 || duration > 0) && (
                       <div 
-                        className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-20 shadow-[0_0_8px_rgba(239,68,68,0.8)] pointer-events-none"
-                        style={{ left: `${Math.min(100, Math.max(0, (currentTime / duration) * 100))}%` }}
+                        className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 shadow-[0_0_10px_rgba(239,68,68,0.9)] pointer-events-none"
+                        style={{ left: `${Math.min(100, Math.max(0, (currentTime / (totalProjectDuration || duration || 1)) * 100))}%` }}
                       >
-                        <div className="w-2.5 h-2.5 bg-red-500 rotate-45 -translate-x-[3px] -mt-1 rounded-sm shadow-md" />
+                        <div className="w-3 h-3 bg-red-500 rotate-45 -translate-x-[4px] -mt-1 rounded-sm shadow-md" />
                       </div>
                     )}
 
-                    {/* Track 1: Luồng Video */}
-                    <div className="w-full h-4 bg-[#1a1e2b] rounded flex items-center relative overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-purple-700/80 to-purple-500/80 rounded transition-all duration-100"
-                        style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
-                      />
-                      <span className="absolute left-2 text-[10px] text-purple-200 font-bold pointer-events-none drop-shadow">
-                        🎬 Video Gốc ({Math.floor(duration || 0)}s)
-                      </span>
+                    {/* Track 1: Luồng Đa Clip Video (Hiển thị đầy đủ từng clip) */}
+                    <div className="w-full h-7 bg-[#12151e] rounded flex items-center relative overflow-hidden p-0.5 border border-[#2b3042]/70">
+                      {videoClips.length > 0 ? (
+                        (() => {
+                          const totalDur = totalProjectDuration || 1;
+                          let accumTime = 0;
+
+                          return videoClips.map((clip, idx) => {
+                            const clipDur = (clip.clipEnd && clip.clipEnd > clip.clipStart) 
+                              ? (clip.clipEnd - clip.clipStart) 
+                              : (clip.duration || 10);
+
+                            const startPct = (accumTime / totalDur) * 100;
+                            const widthPct = Math.max(3, (clipDur / totalDur) * 100);
+                            const isSelected = selectedClipId === clip.id;
+
+                            accumTime += clipDur;
+
+                            return (
+                              <div
+                                key={clip.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedClipId(clip.id);
+                                  setVideoFile(clip.file);
+                                  setVideoUrl(clip.url);
+                                  if (videoRef.current) {
+                                    videoRef.current.currentTime = clip.clipStart;
+                                    setCurrentTime(clip.clipStart);
+                                  }
+                                }}
+                                className={`absolute h-6 rounded text-[10px] font-bold px-2 flex items-center justify-between truncate transition-all ${
+                                  isSelected
+                                    ? 'bg-gradient-to-r from-purple-600 via-pink-600 to-purple-600 text-white ring-2 ring-purple-400 z-10 shadow-lg shadow-purple-500/30'
+                                    : 'bg-purple-900/60 hover:bg-purple-800/80 text-purple-200 border border-purple-500/30'
+                                }`}
+                                style={{ left: `${startPct}%`, width: `${widthPct}%` }}
+                                title={`Clip ${idx + 1}: ${clip.name} (Tách từ ${clip.clipStart}s đến ${clip.clipEnd || clip.duration}s)`}
+                              >
+                                <span className="truncate max-w-[120px]">🎬 {idx + 1}. {clip.name}</span>
+                                <span className="text-[9px] font-mono opacity-80 shrink-0">({Math.round(clipDur)}s)</span>
+                              </div>
+                            );
+                          });
+                        })()
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-[10px] text-[#64748b]">
+                          🎬 Chưa có Video Clip
+                        </div>
+                      )}
                     </div>
 
                     {/* Track 2: Luồng Nhạc Nền Mới */}
                     {audioFile && (
-                      <div className="w-full h-4 bg-[#1a1e2b] rounded flex items-center relative overflow-hidden">
+                      <div className="w-full h-5 bg-[#12151e] rounded flex items-center relative overflow-hidden border border-pink-500/30">
                         <div 
                           className="h-full bg-gradient-to-r from-pink-600/80 to-rose-500/80 rounded transition-all duration-100"
-                          style={{ width: `${duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0}%` }}
+                          style={{ width: `${(totalProjectDuration || duration) > 0 ? Math.min(100, (currentTime / (totalProjectDuration || duration)) * 100) : 0}%` }}
                         />
                         <span className="absolute left-2 text-[10px] text-pink-200 font-bold pointer-events-none drop-shadow">
                           🎵 Nhạc Nền ({audioName || 'File Nhạc'}) (Từ {audioVideoOffset}s)
@@ -944,7 +1027,7 @@ export default function App() {
                     {/* Track 3: Dải Băng Các Câu Phụ Đề */}
                     <div className="w-full h-6 bg-[#12151e] rounded relative flex items-center overflow-hidden border border-[#2b3042]/50">
                       {subtitles.map((sub) => {
-                        const totalDur = duration || 1;
+                        const totalDur = totalProjectDuration || duration || 1;
                         const startPct = Math.min(100, Math.max(0, (sub.startTime / totalDur) * 100));
                         const endPct = Math.min(100, Math.max(0, (sub.endTime / totalDur) * 100));
                         const widthPct = Math.max(2, endPct - startPct);
