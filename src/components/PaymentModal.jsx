@@ -101,8 +101,15 @@ export default function PaymentModal({
       }).catch(() => {});
 
       // Lắng nghe tín hiệu Webhook từ SePay bắn về Firestore realtime
-      unsub = onSnapshot(orderRef, (snap) => {
+      unsub = onSnapshot(orderRef, async (snap) => {
         if (snap.exists() && snap.data()?.status === 'completed') {
+          const coinsToAdd = Number(snap.data()?.coins || selectedPkg.coins || 25);
+          const currentCoins = Number(userData?.coins || 0);
+          try {
+            await updateUserCoinsInDb(currentUser.uid, currentCoins + coinsToAdd);
+          } catch (e) {
+            console.warn("Lỗi cộng xu trong onSnapshot:", e);
+          }
           setStep('success');
           confetti({
             particleCount: 150,
@@ -114,7 +121,7 @@ export default function PaymentModal({
     }
 
     return () => unsub();
-  }, [step, currentUser, selectedPkg?.id]);
+  }, [step, currentUser, selectedPkg?.id, userData?.coins]);
 
   // Lắng nghe SePay Bridge Cache cứ 2 giây 1 lần khi ở bước QR (Dùng quyền Client Auth đã đăng nhập 100% an toàn)
   useEffect(() => {
