@@ -93,10 +93,6 @@ export default function App() {
       if (user) {
         const unsubUser = subscribeUserData(user.uid, (data) => {
           setUserData(data);
-          // Tự động đồng bộ 155 Xu cho 4 giao dịch nạp 10k thực tế (VS 105705, VS 583606, VS 648946, VS 498036)
-          if (data && Number(data.coins || 0) < 155) {
-            updateUserCoinsInDb(user.uid, 155).catch(e => console.warn("Lỗi cộng bù 155 xu:", e));
-          }
         });
         return () => unsubUser();
       } else {
