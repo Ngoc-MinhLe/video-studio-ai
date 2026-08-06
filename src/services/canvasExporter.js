@@ -46,8 +46,11 @@ export const processVideoCanvas = async ({
   let bgImgEl = null;
   if (mode === 'image_music' && bgImage) {
     bgImgEl = new Image();
-    bgImgEl.src = bgImage.url || (bgImage.file ? URL.createObjectURL(bgImage.file) : bgImage);
-    bgImgEl.crossOrigin = 'anonymous';
+    const srcStr = bgImage.url || (bgImage.file ? URL.createObjectURL(bgImage.file) : bgImage);
+    bgImgEl.src = srcStr;
+    if (srcStr && !srcStr.startsWith('blob:') && !srcStr.startsWith('data:')) {
+      bgImgEl.crossOrigin = 'anonymous';
+    }
     await new Promise((resolve) => {
       bgImgEl.onload = resolve;
       bgImgEl.onerror = resolve;
@@ -82,10 +85,13 @@ export const processVideoCanvas = async ({
   for (let i = 0; i < clipsToProcess.length; i++) {
     const clip = clipsToProcess[i];
     const videoEl = document.createElement('video');
-    videoEl.src = clip.url || URL.createObjectURL(clip.file);
+    const srcStr = clip.url || URL.createObjectURL(clip.file);
+    videoEl.src = srcStr;
     videoEl.muted = false;
     videoEl.playsInline = true;
-    videoEl.crossOrigin = 'anonymous';
+    if (srcStr && !srcStr.startsWith('blob:') && !srcStr.startsWith('data:')) {
+      videoEl.crossOrigin = 'anonymous';
+    }
 
     await new Promise((resolve, reject) => {
       videoEl.onloadedmetadata = resolve;
@@ -172,10 +178,15 @@ export const processVideoCanvas = async ({
       const audioGain = audioCtx.createGain();
       audioGain.gain.value = audioVolume;
       audioSource.connect(audioGain);
-      audioSource.connect(dest);
+      audioGain.connect(dest);
     } catch (e) {
       console.warn('Lỗi kết nối nhạc nền:', e);
     }
+    if (mode === 'image_music') {
+      totalProjectDuration = audioEl.duration || 30;
+    }
+  } else if (mode === 'image_music') {
+    totalProjectDuration = 30;
   }
 
   // 5. Khởi tạo Canvas & Hàm Vẽ
