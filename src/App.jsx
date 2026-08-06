@@ -22,6 +22,7 @@ import {
   User,
   Gift
 } from 'lucide-react';
+import ImageMusicWorkspace from './modules/ImageMusicVisualizer/ImageMusicWorkspace';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { auth, db } from './services/firebase';
@@ -56,6 +57,26 @@ export default function App() {
   const [isFreeCoinsModalOpen, setIsFreeCoinsModalOpen] = useState(false);
   const [authModalType, setAuthModalType] = useState('login'); // 'login' | 'insufficient_coins'
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+
+  // --- States Workspace Module ---
+  const [activeTab, setActiveTab] = useState('video_studio'); // 'video_studio' | 'image_music'
+
+  // --- States Module 2: Image Music Visualizer ---
+  const [bgImage, setBgImage] = useState(null); // { file, url }
+  const [bgEffect, setBgEffect] = useState('zoom'); // 'zoom' | 'pulse' | 'none'
+  const [visualizerType, setVisualizerType] = useState('vinyl'); // 'vinyl' | 'bars' | 'ring' | 'none'
+
+  const handleBgImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setBgImage({ file, url });
+  };
+
+  const removeBgImage = () => {
+    if (bgImage && bgImage.url) URL.revokeObjectURL(bgImage.url);
+    setBgImage(null);
+  };
 
   // --- States Quản lý Multi-Clip Video & Audio ---
   const [videoClips, setVideoClips] = useState([]);
@@ -462,8 +483,12 @@ export default function App() {
 
   // Tiến hành Render Xuất Video MP4 / WebM
   const handleExport = async () => {
-    if (!videoFile) {
-      alert('Vui lòng chọn một file Video trước khi xuất!');
+    if (activeTab === 'video_studio' && !videoFile && videoFiles.length === 0) {
+      alert('Vui lòng nạp ít nhất một file Video trước khi xuất!');
+      return;
+    }
+    if (activeTab === 'image_music' && !bgImage && !audioFile) {
+      alert('Vui lòng nạp Ảnh Nền hoặc Bài Hát MP3 trước khi xuất!');
       return;
     }
 
@@ -498,18 +523,21 @@ export default function App() {
     try {
       // Render siêu tốc bằng Native GPU Canvas Engine
       const result = await processVideoCanvas({
+        mode: activeTab,
+        bgImage,
+        bgEffect,
+        visualizerType,
         videoFile,
-        videoClips,
+        videoClips: videoFiles,
         audioFile,
         videoVolume,
         audioVolume,
         audioStartOffset,
         audioVideoOffset,
         subtitles,
-        subOptions: { fontSize: activeSub.fontSize || 24, subStyle: activeSub.style || 'tiktok', subAnimation: activeSub.anim || 'bounce', subAnimSpeed: activeSub.animSpeed || 0.5, subBoxWidth: activeSub.boxWidth || 80, subColor: activeSub.color || '#ffffff', subBgColor: activeSub.bgColor || '#000000', subRotation: activeSub.rotation || 0 },
         aspectRatio,
-        onProgress: (prog) => setProgress(prog),
-        onStatus: (stat) => setStatusText(stat)
+        onProgress: (p) => setProgress(p),
+        onStatus: (s) => setStatusText(s)
       });
 
       const generatedUrl = result.url;
@@ -555,13 +583,41 @@ export default function App() {
       {/* --- HEADER --- */}
       <header className="border-b border-[#2b3042] bg-[#12151e]/80 px-6 py-4 sticky top-0 z-50 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
-              <Sparkles className="w-5 h-5 text-white" />
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
+                <Sparkles className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="font-bold text-xl leading-tight gradient-text">Video Studio AI</h1>
+                <p className="text-xs text-[#94a3b8]">Thay nhạc & Chèn phụ đề TikTok/Reels tự động</p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-bold text-xl leading-tight gradient-text">Video Studio AI</h1>
-              <p className="text-xs text-[#94a3b8]">Thay nhạc & Chèn phụ đề TikTok/Reels tự động</p>
+
+            {/* Thanh Chuyển Module Độc Lập (Tab Bar Switcher) */}
+            <div className="flex items-center gap-1 bg-[#0d1017] p-1 rounded-xl border border-[#1e2333]">
+              <button
+                onClick={() => setActiveTab('video_studio')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'video_studio'
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                    : 'text-[#94a3b8] hover:text-white hover:bg-[#1a1e2b]'
+                }`}
+              >
+                <Video className="w-3.5 h-3.5" />
+                <span>🎬 Studio Video</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('image_music')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'image_music'
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                    : 'text-[#94a3b8] hover:text-white hover:bg-[#1a1e2b]'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>🖼️ Tạo Video Từ 1 Ảnh</span>
+              </button>
             </div>
           </div>
 
@@ -685,171 +741,196 @@ export default function App() {
 
       {/* --- STUDIO CONTAINER --- */}
       <main className="studio-container">
-        {/* --- CỘT 1: UPLOAD & CẤU HÌNH ÂM THANH --- */}
-        <section className="glass-panel p-5 flex flex-col gap-5">
-          <div className="flex items-center gap-2 border-b border-[#2b3042] pb-3">
-            <Sliders className="w-5 h-5 text-purple-400" />
-            <h2 className="font-semibold text-lg">Mặt Bằng Âm Thanh</h2>
-          </div>
+        {/* --- CỘT 1: UPLOAD & CẤU HÌNH THEO PHÂN HỆ WORKSPACE --- */}
+        {activeTab === 'image_music' ? (
+          <ImageMusicWorkspace
+            bgImage={bgImage}
+            handleBgImageUpload={handleBgImageUpload}
+            removeBgImage={removeBgImage}
+            bgEffect={bgEffect}
+            setBgEffect={setBgEffect}
+            visualizerType={visualizerType}
+            setVisualizerType={setVisualizerType}
+            audioFile={audioFile}
+            handleAudioUpload={handleAudioUpload}
+            removeAudioTrack={removeAudioTrack}
+            audioVolume={audioVolume}
+            setAudioVolume={setAudioVolume}
+            subtitles={subtitles}
+            selectedSubId={selectedSubId}
+            setSelectedSubId={setSelectedSubId}
+            updateSubtitle={updateSubtitle}
+            deleteSubtitle={deleteSubtitle}
+            activeSub={activeSub}
+            aspectRatio={aspectRatio}
+            setAspectRatio={setAspectRatio}
+          />
+        ) : (
+          <section className="glass-panel p-5 flex flex-col gap-5">
+            <div className="flex items-center gap-2 border-b border-[#2b3042] pb-3">
+              <Sliders className="w-5 h-5 text-purple-400" />
+              <h2 className="font-semibold text-lg">Mặt Bằng Âm Thanh</h2>
+            </div>
 
-          {/* Upload Video Gốc (Cho phép chọn nhiều Video nối đuôi) */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between text-sm font-medium text-[#94a3b8]">
-              <span>1. Nạp Video Clips (Có thể chọn nhiều Video)</span>
-              {videoClips.length > 0 && (
-                <span className="text-xs text-purple-400 font-bold bg-purple-950/60 px-2 py-0.5 rounded border border-purple-500/30">
-                  {videoClips.length} Clip
+            {/* Upload Video Gốc (Cho phép chọn nhiều Video nối đuôi) */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between text-sm font-medium text-[#94a3b8]">
+                <span>1. Nạp Video Clips (Có thể chọn nhiều Video)</span>
+                {videoClips.length > 0 && (
+                  <span className="text-xs text-purple-400 font-bold bg-purple-950/60 px-2 py-0.5 rounded border border-purple-500/30">
+                    {videoClips.length} Clip
+                  </span>
+                )}
+              </div>
+              <label className="border-2 border-dashed border-[#2b3042] hover:border-purple-500/50 rounded-xl p-4 flex flex-col items-center gap-2 cursor-pointer transition-colors bg-[#12151e]">
+                <FileVideo className="w-8 h-8 text-purple-400" />
+                <span className="text-xs text-[#94a3b8] text-center font-medium">
+                  {videoClips.length > 0 ? `Đã nạp ${videoClips.length} video (Nhấn để nạp thêm)` : 'Nhấn để chọn 1 hoặc nhiều Video (.MP4, .WEBM, .MOV)'}
                 </span>
+                <input type="file" accept="video/*" multiple onChange={handleVideoUpload} className="hidden" />
+              </label>
+
+              {/* Danh sách các Clip Video đã nạp */}
+              {videoClips.length > 0 && (
+                <div className="flex flex-col gap-1.5 mt-1 max-h-36 overflow-y-auto pr-1">
+                  {videoClips.map((clip, i) => (
+                    <div 
+                      key={clip.id}
+                      onClick={() => {
+                        setSelectedClipId(clip.id);
+                        setVideoFile(clip.file);
+                        setVideoUrl(clip.url);
+                      }}
+                      className={`flex items-center justify-between p-2 rounded-lg text-xs transition-all cursor-pointer ${
+                        selectedClipId === clip.id 
+                          ? 'bg-purple-950/70 border border-purple-500/70 text-purple-200 shadow-md ring-1 ring-purple-500/30' 
+                          : 'bg-[#12151e] border border-[#2b3042] text-[#94a3b8] hover:bg-[#1a1e2b]'
+                      }`}
+                    >
+                      <span className="truncate max-w-[170px] font-medium">
+                        {i + 1}. {clip.name}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeClip(clip.id);
+                        }}
+                        className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-500/20 transition-colors"
+                        title="Xóa clip này"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-            <label className="border-2 border-dashed border-[#2b3042] hover:border-purple-500/50 rounded-xl p-4 flex flex-col items-center gap-2 cursor-pointer transition-colors bg-[#12151e]">
-              <FileVideo className="w-8 h-8 text-purple-400" />
-              <span className="text-xs text-[#94a3b8] text-center font-medium">
-                {videoClips.length > 0 ? `Đã nạp ${videoClips.length} video (Nhấn để nạp thêm)` : 'Nhấn để chọn 1 hoặc nhiều Video (.MP4, .WEBM, .MOV)'}
-              </span>
-              <input type="file" accept="video/*" multiple onChange={handleVideoUpload} className="hidden" />
-            </label>
 
-            {/* Danh sách các Clip Video đã nạp */}
-            {videoClips.length > 0 && (
-              <div className="flex flex-col gap-1.5 mt-1 max-h-36 overflow-y-auto pr-1">
-                {videoClips.map((clip, i) => (
-                  <div 
-                    key={clip.id}
-                    onClick={() => {
-                      setSelectedClipId(clip.id);
-                      setVideoFile(clip.file);
-                      setVideoUrl(clip.url);
-                    }}
-                    className={`flex items-center justify-between p-2 rounded-lg text-xs transition-all cursor-pointer ${
-                      selectedClipId === clip.id 
-                        ? 'bg-purple-950/70 border border-purple-500/70 text-purple-200 shadow-md ring-1 ring-purple-500/30' 
-                        : 'bg-[#12151e] border border-[#2b3042] text-[#94a3b8] hover:bg-[#1a1e2b]'
-                    }`}
-                  >
-                    <span className="truncate max-w-[170px] font-medium">
-                      {i + 1}. {clip.name}
-                    </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeClip(clip.id);
-                      }}
-                      className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-500/20 transition-colors"
-                      title="Xóa clip này"
+            {/* Upload Nhạc Nền Mới */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between text-sm font-medium text-[#94a3b8]">
+                <span>2. Nhạc Thay Thế (.mp3, .wav, .m4a,...)</span>
+                {audioFile && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+              </div>
+              <label className="border-2 border-dashed border-[#2b3042] hover:border-pink-500/50 rounded-xl p-4 flex flex-col items-center gap-2 cursor-pointer transition-colors bg-[#12151e]">
+                <FileAudio className="w-8 h-8 text-pink-400" />
+                <span className="text-xs text-[#94a3b8] text-center font-medium">
+                  {audioName ? audioName : 'Nhấn để chọn nhạc thay thế (.mp3, .wav, .m4a)'}
+                </span>
+                <input type="file" accept="audio/*" onChange={handleAudioUpload} className="hidden" />
+              </label>
+            </div>
+
+            {/* Thanh chỉnh âm lượng Video gốc */}
+            <div className="flex flex-col gap-2 bg-[#12151e] p-3.5 rounded-xl border border-[#2b3042]">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-[#94a3b8] flex items-center gap-1.5 font-medium">
+                  <Video className="w-3.5 h-3.5 text-purple-400" /> Tiếng Video Gốc
+                </span>
+                <span className="font-mono text-purple-300 font-semibold">{Math.round(videoVolume * 100)}%</span>
+              </div>
+              <input 
+                type="range" min="0" max="1" step="0.05"
+                value={videoVolume}
+                onChange={(e) => setVideoVolume(parseFloat(e.target.value))}
+                className="w-full accent-purple-500 cursor-pointer"
+              />
+            </div>
+
+            {/* Thanh chỉnh âm lượng Nhạc Mới */}
+            <div className="flex flex-col gap-2 bg-[#12151e] p-3.5 rounded-xl border border-[#2b3042]">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-[#94a3b8] flex items-center gap-1.5 font-medium">
+                  <Music className="w-3.5 h-3.5 text-pink-400" /> Nhạc Nền Mới
+                </span>
+                <span className="font-mono text-pink-300 font-semibold">{Math.round(audioVolume * 100)}%</span>
+              </div>
+              <input 
+                type="range" min="0" max="1" step="0.05"
+                value={audioVolume}
+                onChange={(e) => setAudioVolume(parseFloat(e.target.value))}
+                className="w-full accent-pink-500 cursor-pointer"
+              />
+            </div>
+
+            {/* Cấu Hình Cắt Ghép Nhạc Nền */}
+            {audioFile && (
+              <div className="flex flex-col gap-3 bg-[#12151e] p-3.5 rounded-xl border border-pink-500/30">
+                <div className="flex items-center justify-between text-xs font-semibold text-pink-300 border-b border-[#2b3042] pb-2">
+                  <span className="flex items-center gap-1.5">
+                    <Sliders className="w-3.5 h-3.5 text-pink-400" /> Cắt & Khớp Thời Gian Nhạc
+                  </span>
+                </div>
+
+                {/* 1. Bắt đầu phát từ giây bao nhiêu của file MP3 */}
+                <div className="flex flex-col gap-1">
+                  <div className="flex justify-between text-[11px] text-[#94a3b8]">
+                    <span>Cắt nhạc từ giây thứ của MP3:</span>
+                    <span className="font-mono text-pink-300 font-bold">{audioStartOffset}s</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="range" min="0" max="120" step="1"
+                      value={audioStartOffset}
+                      onChange={(e) => setAudioStartOffset(Number(e.target.value))}
+                      className="flex-1 accent-pink-500 cursor-pointer"
+                    />
+                    <button 
+                      onClick={() => setAudioStartOffset(Math.floor(currentTime))}
+                      className="text-[10px] px-2 py-0.5 rounded bg-pink-600/30 text-pink-300 border border-pink-500/40 hover:bg-pink-600 transition-colors shrink-0 cursor-pointer"
+                      title="Đặt giây bắt đầu nhạc = Giây hiện tại đang xem"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      Lấy {Math.floor(currentTime)}s
                     </button>
                   </div>
-                ))}
+                </div>
+
+                {/* 2. Lồng vào Video từ giây thứ bao nhiêu của Video */}
+                <div className="flex flex-col gap-1">
+                  <div className="flex justify-between text-[11px] text-[#94a3b8]">
+                    <span>Lồng vào Video từ giây thứ của Video:</span>
+                    <span className="font-mono text-purple-300 font-bold">{audioVideoOffset}s</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="range" min="0" max={Math.floor(duration || 100)} step="1"
+                      value={audioVideoOffset}
+                      onChange={(e) => setAudioVideoOffset(Number(e.target.value))}
+                      className="flex-1 accent-purple-500 cursor-pointer"
+                    />
+                    <button 
+                      onClick={() => setAudioVideoOffset(Math.floor(currentTime))}
+                      className="text-[10px] px-2 py-0.5 rounded bg-purple-600/30 text-purple-300 border border-purple-500/40 hover:bg-purple-600 transition-colors shrink-0 cursor-pointer"
+                      title="Đặt vị trí lồng nhạc = Giây hiện tại đang xem"
+                    >
+                      Lấy {Math.floor(currentTime)}s
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
-          </div>
-
-          {/* Upload Nhạc Nền Mới */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between text-sm font-medium text-[#94a3b8]">
-              <span>2. Nhạc Thay Thế (.mp3, .wav, .m4a,...)</span>
-              {audioFile && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-            </div>
-            <label className="border-2 border-dashed border-[#2b3042] hover:border-pink-500/50 rounded-xl p-4 flex flex-col items-center gap-2 cursor-pointer transition-colors bg-[#12151e]">
-              <FileAudio className="w-8 h-8 text-pink-400" />
-              <span className="text-xs text-[#94a3b8] text-center font-medium">
-                {audioName ? audioName : 'Nhấn để chọn nhạc thay thế (.mp3, .wav, .m4a)'}
-              </span>
-              <input type="file" accept="audio/*" onChange={handleAudioUpload} className="hidden" />
-            </label>
-          </div>
-
-          {/* Thanh chỉnh âm lượng Video gốc */}
-          <div className="flex flex-col gap-2 bg-[#12151e] p-3.5 rounded-xl border border-[#2b3042]">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-[#94a3b8] flex items-center gap-1.5 font-medium">
-                <Video className="w-3.5 h-3.5 text-purple-400" /> Tiếng Video Gốc
-              </span>
-              <span className="font-mono text-purple-300 font-semibold">{Math.round(videoVolume * 100)}%</span>
-            </div>
-            <input 
-              type="range" min="0" max="1" step="0.05"
-              value={videoVolume}
-              onChange={(e) => setVideoVolume(parseFloat(e.target.value))}
-              className="w-full accent-purple-500 cursor-pointer"
-            />
-          </div>
-
-          {/* Thanh chỉnh âm lượng Nhạc Mới */}
-          <div className="flex flex-col gap-2 bg-[#12151e] p-3.5 rounded-xl border border-[#2b3042]">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-[#94a3b8] flex items-center gap-1.5 font-medium">
-                <Music className="w-3.5 h-3.5 text-pink-400" /> Nhạc Nền Mới
-              </span>
-              <span className="font-mono text-pink-300 font-semibold">{Math.round(audioVolume * 100)}%</span>
-            </div>
-            <input 
-              type="range" min="0" max="1" step="0.05"
-              value={audioVolume}
-              onChange={(e) => setAudioVolume(parseFloat(e.target.value))}
-              className="w-full accent-pink-500 cursor-pointer"
-            />
-          </div>
-
-          {/* Cấu Hình Cắt Ghép Nhạc Nền */}
-          {audioFile && (
-            <div className="flex flex-col gap-3 bg-[#12151e] p-3.5 rounded-xl border border-pink-500/30">
-              <div className="flex items-center justify-between text-xs font-semibold text-pink-300 border-b border-[#2b3042] pb-2">
-                <span className="flex items-center gap-1.5">
-                  <Sliders className="w-3.5 h-3.5 text-pink-400" /> Cắt & Khớp Thời Gian Nhạc
-                </span>
-              </div>
-
-              {/* 1. Bắt đầu phát từ giây bao nhiêu của file MP3 */}
-              <div className="flex flex-col gap-1">
-                <div className="flex justify-between text-[11px] text-[#94a3b8]">
-                  <span>Cắt nhạc từ giây thứ của MP3:</span>
-                  <span className="font-mono text-pink-300 font-bold">{audioStartOffset}s</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="range" min="0" max="120" step="1"
-                    value={audioStartOffset}
-                    onChange={(e) => setAudioStartOffset(Number(e.target.value))}
-                    className="flex-1 accent-pink-500 cursor-pointer"
-                  />
-                  <button 
-                    onClick={() => setAudioStartOffset(Math.floor(currentTime))}
-                    className="text-[10px] px-2 py-0.5 rounded bg-pink-600/30 text-pink-300 border border-pink-500/40 hover:bg-pink-600 transition-colors shrink-0 cursor-pointer"
-                    title="Đặt giây bắt đầu nhạc = Giây hiện tại đang xem"
-                  >
-                    Lấy {Math.floor(currentTime)}s
-                  </button>
-                </div>
-              </div>
-
-              {/* 2. Lồng vào Video từ giây thứ bao nhiêu của Video */}
-              <div className="flex flex-col gap-1">
-                <div className="flex justify-between text-[11px] text-[#94a3b8]">
-                  <span>Lồng vào Video từ giây thứ của Video:</span>
-                  <span className="font-mono text-purple-300 font-bold">{audioVideoOffset}s</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="range" min="0" max={Math.floor(duration || 100)} step="1"
-                    value={audioVideoOffset}
-                    onChange={(e) => setAudioVideoOffset(Number(e.target.value))}
-                    className="flex-1 accent-purple-500 cursor-pointer"
-                  />
-                  <button 
-                    onClick={() => setAudioVideoOffset(Math.floor(currentTime))}
-                    className="text-[10px] px-2 py-0.5 rounded bg-purple-600/30 text-purple-300 border border-purple-500/40 hover:bg-purple-600 transition-colors shrink-0 cursor-pointer"
-                    title="Đặt vị trí lồng nhạc = Giây hiện tại đang xem"
-                  >
-                    Lấy {Math.floor(currentTime)}s
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </section>
+          </section>
+        )}
 
         {/* --- CỘT 2: VIDEO PREVIEW & TIMELINE --- */}
         <section className="glass-panel p-5 flex flex-col items-center justify-between gap-4">
@@ -926,7 +1007,47 @@ export default function App() {
               aspectRatio === '4:5' ? 'w-[320px] h-[400px]' :
               'w-full aspect-video max-h-[500px]'
             }`}>
-              {videoUrl ? (
+              {activeTab === 'image_music' && bgImage ? (
+                <div className="relative w-full h-full overflow-hidden flex items-center justify-center">
+                  <img 
+                    src={bgImage.url} 
+                    alt="Background" 
+                    className={`w-full h-full object-cover transition-transform duration-1000 ${
+                      bgEffect === 'zoom' ? 'scale-110 animate-pulse' :
+                      bgEffect === 'pulse' ? 'scale-105 animate-bounce' : 'scale-100'
+                    }`} 
+                  />
+                  {visualizerType === 'vinyl' && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className={`w-36 h-36 rounded-full border-4 border-[#2b3042] bg-[#111319] shadow-2xl flex items-center justify-center relative ${isPlaying ? 'animate-spin' : ''}`} style={{ animationDuration: '4s' }}>
+                        <div className="w-14 h-14 rounded-full overflow-hidden border border-white/20">
+                          <img src={bgImage.url} alt="" className="w-full h-full object-cover" />
+                        </div>
+                        <div className="absolute w-3 h-3 rounded-full bg-white border-2 border-slate-900" />
+                      </div>
+                    </div>
+                  )}
+                  {visualizerType === 'bars' && (
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-end gap-1.5 h-14 pointer-events-none">
+                      {[...Array(16)].map((_, i) => (
+                        <div 
+                          key={i} 
+                          className="w-2.5 bg-gradient-to-t from-purple-500 to-sky-400 rounded-t-full"
+                          style={{
+                            height: isPlaying ? `${Math.floor(15 + Math.sin(currentTime * 4 + i) * 30)}px` : '8px',
+                            transition: 'height 0.15s ease'
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {visualizerType === 'ring' && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className={`w-40 h-40 rounded-full border-4 border-pink-500 shadow-[0_0_30px_rgba(244,114,182,0.8)] ${isPlaying ? 'animate-ping' : ''}`} style={{ animationDuration: '2s' }} />
+                    </div>
+                  )}
+                </div>
+              ) : videoUrl ? (
                 <>
                   <video
                     ref={videoRef}

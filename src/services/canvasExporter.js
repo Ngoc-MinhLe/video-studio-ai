@@ -7,6 +7,10 @@
  */
 
 export const processVideoCanvas = async ({
+  mode = 'video_studio',
+  bgImage = null,
+  bgEffect = 'zoom',
+  visualizerType = 'vinyl',
   videoFile,
   videoClips = [],
   audioFile,
@@ -24,6 +28,17 @@ export const processVideoCanvas = async ({
   if (onStatus) onStatus('Đang khởi tạo Trình Render Đa Luồng Canvas...');
   if (onProgress) onProgress(5);
 
+  let bgImgEl = null;
+  if (mode === 'image_music' && bgImage) {
+    bgImgEl = new Image();
+    bgImgEl.src = bgImage.url || (bgImage.file ? URL.createObjectURL(bgImage.file) : bgImage);
+    bgImgEl.crossOrigin = 'anonymous';
+    await new Promise((resolve) => {
+      bgImgEl.onload = resolve;
+      bgImgEl.onerror = resolve;
+    });
+  }
+
   // 1. Chuẩn hóa danh sách Video Clips
   let clipsToProcess = [];
   if (videoClips && videoClips.length > 0) {
@@ -39,7 +54,7 @@ export const processVideoCanvas = async ({
     }];
   }
 
-  if (clipsToProcess.length === 0) {
+  if (mode !== 'image_music' && clipsToProcess.length === 0) {
     throw new Error('Chưa có Video Clip nào được nạp!');
   }
 
@@ -547,52 +562,152 @@ export const processVideoCanvas = async ({
         }
       }
 
-      // Tìm clip tương ứng với projectTime hiện tại
-      let activeItemIndex = loadedVideoElements.findIndex(
-        item => projectTime >= item.timelineStart && projectTime < item.timelineEnd
-      );
+      // Nếu ở chế độ Image Music Visualizer
+      if (mode === 'image_music') {
+        // 1. Vẽ Ảnh Nền + Ken Burns Zoom / Pulse Effect
+        if (bgImgEl) {
+          let scale = 1.0;
+          if (bgEffect === 'zoom') {
+            scale = 1.0 + (Math.sin(projectTime * 0.15) + 1) * 0.06;
+          } else if (bgEffect === 'pulse') {
+            scale = 1.0 + Math.abs(Math.sin(projectTime * 3)) * 0.04;
+          }
+          const scaledW = canvasW * scale;
+          const scaledH = canvasH * scale;
+          const offsetX = (canvasW - scaledW) / 2;
+          const offsetY = (canvasH - scaledH) / 2;
+          ctx.drawImage(bgImgEl, offsetX, offsetY, scaledW, scaledH);
+        } else {
+          ctx.fillStyle = '#090b10';
+          ctx.fillRect(0, 0, canvasW, canvasH);
+        }
 
-      if (activeItemIndex === -1) activeItemIndex = loadedVideoElements.length - 1;
+        // 2. Vẽ Hiệu Ứng Sóng Âm / Đĩa Nhạc Quay Vinyl
+        if (visualizerType === 'vinyl') {
+          ctx.save();
+          const centerX = canvasW / 2;
+          const centerY = canvasH / 2;
+          const radius = Math.min(canvasW, canvasH) * 0.22;
 
-      if (activeItemIndex !== currentClipIdx) {
-        // Dừng clip cũ, bật clip mới
-        loadedVideoElements[currentClipIdx].videoEl.pause();
-        currentClipIdx = activeItemIndex;
-        const newItem = loadedVideoElements[currentClipIdx];
-        const offsetInClip = projectTime - newItem.timelineStart;
-        newItem.videoEl.currentTime = newItem.clipStart + offsetInClip;
-        newItem.videoEl.play().catch(() => {});
+          ctx.translate(centerX, centerY);
+          const angle = (projectTime * 90 * Math.PI) / 180;
+          ctx.rotate(angle);
+
+          // Outer Vinyl Black Disc
+          ctx.fillStyle = '#111319';
+          ctx.beginPath();
+          ctx.arc(0, 0, radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#2b3042';
+          ctx.lineWidth = 4 * (canvasH / 720);
+          ctx.stroke();
+
+          // Vinyl Grooves
+          for (let r = radius * 0.45; r < radius * 0.95; r += 10 * (canvasH / 720)) {
+            ctx.beginPath();
+            ctx.arc(0, 0, r, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          }
+
+          // Center Album Artwork Badge
+          if (bgImgEl) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(0, 0, radius * 0.4, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.drawImage(bgImgEl, -radius * 0.4, -radius * 0.4, radius * 0.8, radius * 0.8);
+            ctx.restore();
+          }
+
+          // Center Spindle Hole
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(0, 0, radius * 0.06, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.restore();
+        } else if (visualizerType === 'bars') {
+          ctx.save();
+          const barCount = 24;
+          const barWidth = (canvasW * 0.6) / barCount;
+          const startX = (canvasW - (barCount * barWidth)) / 2;
+          const baseY = canvasH * 0.82;
+
+          for (let b = 0; b < barCount; b++) {
+            const barHeight = Math.abs(Math.sin(projectTime * 4 + b * 0.4)) * (canvasH * 0.15) + (canvasH * 0.02);
+            const bx = startX + b * barWidth;
+            const by = baseY - barHeight;
+
+            const grad = ctx.createLinearGradient(bx, baseY, bx, by);
+            grad.addColorStop(0, '#c084fc');
+            grad.addColorStop(1, '#38bdf8');
+
+            ctx.fillStyle = grad;
+            ctx.fillRect(bx + 2, by, barWidth - 4, barHeight);
+          }
+          ctx.restore();
+        } else if (visualizerType === 'ring') {
+          ctx.save();
+          const centerX = canvasW / 2;
+          const centerY = canvasH / 2;
+          const baseRadius = Math.min(canvasW, canvasH) * 0.22;
+          const pulseRadius = baseRadius + Math.abs(Math.sin(projectTime * 5)) * (baseRadius * 0.1);
+
+          ctx.strokeStyle = '#ec4899';
+          ctx.shadowColor = '#f472b6';
+          ctx.shadowBlur = 30 * (canvasH / 720);
+          ctx.lineWidth = 6 * (canvasH / 720);
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, pulseRadius, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+      } else if (loadedVideoElements.length > 0) {
+        // Chế độ Video Studio MP4 Clips
+        let activeItemIndex = loadedVideoElements.findIndex(
+          item => projectTime >= item.timelineStart && projectTime < item.timelineEnd
+        );
+        if (activeItemIndex === -1) activeItemIndex = loadedVideoElements.length - 1;
+
+        if (activeItemIndex !== currentClipIdx) {
+          loadedVideoElements[currentClipIdx].videoEl.pause();
+          currentClipIdx = activeItemIndex;
+          const newItem = loadedVideoElements[currentClipIdx];
+          const offsetInClip = projectTime - newItem.timelineStart;
+          newItem.videoEl.currentTime = newItem.clipStart + offsetInClip;
+          newItem.videoEl.play().catch(() => {});
+        }
+
+        const activeItem = loadedVideoElements[currentClipIdx];
+        const activeVideoEl = activeItem.videoEl;
+
+        ctx.fillStyle = '#090b10';
+        ctx.fillRect(0, 0, canvasW, canvasH);
+
+        const vW = activeVideoEl.videoWidth || 1280;
+        const vH = activeVideoEl.videoHeight || 720;
+        const srcR = vW / vH;
+        const targetR = canvasW / canvasH;
+
+        let dW = canvasW;
+        let dH = canvasH;
+        let dX = 0;
+        let dY = 0;
+
+        if (srcR > targetR) {
+          dW = canvasW;
+          dH = canvasW / srcR;
+          dY = (canvasH - dH) / 2;
+        } else {
+          dH = canvasH;
+          dW = canvasH * srcR;
+          dX = (canvasW - dW) / 2;
+        }
+
+        ctx.drawImage(activeVideoEl, dX, dY, dW, dH);
       }
-
-      const activeItem = loadedVideoElements[currentClipIdx];
-      const activeVideoEl = activeItem.videoEl;
-
-      // Xóa Canvas & Vẽ Nền tối
-      ctx.fillStyle = '#090b10';
-      ctx.fillRect(0, 0, canvasW, canvasH);
-
-      // Căn giữa Frame Video trên Canvas
-      const vW = activeVideoEl.videoWidth || 1280;
-      const vH = activeVideoEl.videoHeight || 720;
-      const srcR = vW / vH;
-      const targetR = canvasW / canvasH;
-
-      let dW = canvasW;
-      let dH = canvasH;
-      let dX = 0;
-      let dY = 0;
-
-      if (srcR > targetR) {
-        dW = canvasW;
-        dH = canvasW / srcR;
-        dY = (canvasH - dH) / 2;
-      } else {
-        dH = canvasH;
-        dW = canvasH * srcR;
-        dX = (canvasW - dW) / 2;
-      }
-
-      ctx.drawImage(activeVideoEl, dX, dY, dW, dH);
 
       // Vẽ phụ đề
       drawSubtitles(projectTime);
