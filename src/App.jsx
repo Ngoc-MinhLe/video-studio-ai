@@ -969,8 +969,12 @@ export default function App() {
                   {/* Lớp Phụ Đề Live Preview chuẩn kích thước - Hỗ trợ Kéo Thả Trực Tiếp ✋ */}
                   {currentSub && (
                     <div 
-                      className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing select-none group z-20"
-                      style={{ left: `${subX}%`, top: `${subY}%` }}
+                      className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing select-none group z-20 transition-transform"
+                      style={{ 
+                        left: subAnimation === 'marquee' ? '50%' : `${subX}%`, 
+                        top: `${subY}%`,
+                        transform: `translate(-50%, -50%) rotate(${subRotation}deg)`
+                      }}
                       onPointerDown={(e) => {
                         e.preventDefault();
                         const container = e.currentTarget.parentElement;
@@ -1000,17 +1004,28 @@ export default function App() {
                       }}
                     >
                       <span 
-                        className={`inline-block font-extrabold px-3.5 py-1.5 rounded-lg shadow-2xl tracking-wide text-xs sm:text-sm transition-all ${
-                          subAnimation === 'bounce' ? 'animate-bounce' : subAnimation === 'pulse' ? 'animate-pulse' : ''
+                        style={{
+                          fontSize: `${subFontSize}px`,
+                          color: subStyle === 'custom' ? subColor : undefined,
+                          backgroundColor: subStyle === 'custom' ? subBgColor : undefined
+                        }}
+                        className={`inline-block font-extrabold px-3.5 py-1.5 rounded-lg shadow-2xl tracking-wide whitespace-nowrap transition-all ${
+                          subAnimation === 'bounce' ? 'animate-bounce' : 
+                          subAnimation === 'pulse' ? 'animate-pulse' : 
+                          subAnimation === 'shake' ? 'animate-ping' : 
+                          subAnimation === 'marquee' ? 'animate-marquee' : ''
                         } ${
                           subStyle === 'tiktok' ? 'bg-yellow-400 text-slate-950 border-2 border-black font-black shadow-yellow-500/20' :
+                          subStyle === 'victory' ? 'bg-[#0f0720]/90 text-purple-200 border-2 border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.8)] font-black' :
+                          subStyle === 'boom' ? 'bg-red-600 text-white border-2 border-yellow-300 font-black shadow-lg' :
+                          subStyle === 'sponge' ? 'bg-green-700 text-white border-2 border-green-400 font-black shadow-green-500/30' :
+                          subStyle === 'social' ? 'bg-blue-600 text-white border-2 border-white font-bold shadow-md' :
                           subStyle === 'neon' ? 'bg-[#18092b]/90 text-pink-400 border-2 border-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.6)] font-bold' :
-                          subStyle === 'comic' ? 'bg-amber-500 text-black border-2 border-black font-black shadow-md' :
                           subStyle === 'cinema' ? 'bg-black/75 text-white border border-white/20 shadow-2xl font-semibold backdrop-blur-sm' :
                           'bg-black/85 text-white border border-white/20 shadow-xl'
                         }`}
                       >
-                        {currentSub.text}
+                        {subStyle === 'victory' ? `⚡ ${currentSub.text} ⚡` : subStyle === 'boom' ? `💥 ${currentSub.text}` : subStyle === 'social' ? `📢 ${currentSub.text}` : currentSub.text}
                       </span>
                     </div>
                   )}
@@ -1444,6 +1459,14 @@ export default function App() {
                 <Zap className="w-3.5 h-3.5 text-amber-400" /> Hiệu Ứng Chữ Nhảy Múa
               </label>
               <div className="grid grid-cols-2 gap-1.5 text-xs">
+                <button
+                  onClick={() => setSubAnimation('marquee')}
+                  className={`p-1.5 rounded-lg font-medium transition-all text-center text-[11px] cursor-pointer ${
+                    subAnimation === 'marquee' ? 'bg-indigo-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  }`}
+                >
+                  ➡️ Trái Sang Phải
+                </button>
                 <button
                   onClick={() => setSubAnimation('shake')}
                   className={`p-1.5 rounded-lg font-medium transition-all text-center text-[11px] cursor-pointer ${

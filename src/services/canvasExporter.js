@@ -197,6 +197,11 @@ export const processVideoCanvas = async ({
       animShakeX = (Math.random() - 0.5) * (6 * scaleFactor);
       animShakeY = (Math.random() - 0.5) * (6 * scaleFactor);
       animScale = 1.0 + Math.sin(elapsed * 8) * 0.03;
+    } else if (anim === 'marquee') {
+      // Hiệu ứng Chạy từ Trái sang Phải (Left-to-Right Crawl)
+      const subDuration = (Number(currentSub.endTime) - Number(currentSub.startTime)) || 3;
+      const progress = Math.min(1, Math.max(0, elapsed / subDuration));
+      animShakeX = (progress - 0.5) * (canvasW * 1.2);
     }
 
     const fontSize = Math.round(baseFontSize * animScale);
