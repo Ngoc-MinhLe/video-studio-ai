@@ -86,7 +86,7 @@ export default function App() {
   const [subRotation, setSubRotation] = useState(0);
   const [subStyle, setSubStyle] = useState('tiktok'); // 'tiktok' | 'led' | 'victory' | 'boom' | 'sponge' | 'social' | 'neon' | 'cinema' | 'custom'
   const [subAnimation, setSubAnimation] = useState('bounce'); // 'typewriter' | 'marquee' | 'shake' | 'bounce' | 'fade' | 'pulse' | 'none'
-  const [subAnimSpeed, setSubAnimSpeed] = useState(1.0); // Tốc độ chạy hiệu ứng (0.5x -> 2.5x)
+  const [subAnimSpeed, setSubAnimSpeed] = useState(0.5); // Tốc độ chạy hiệu ứng (0.1x -> 1.5x)
   const [subBoxWidth, setSubBoxWidth] = useState(80); // Độ rộng khung LED/Banner (30% -> 100%)
   const [isDraggingSub, setIsDraggingSub] = useState(false);
   const [aspectRatio, setAspectRatio] = useState('16:9');
@@ -1012,7 +1012,7 @@ export default function App() {
                           <span 
                             style={{
                               fontSize: `${subFontSize}px`,
-                              animationDuration: `${3.5 / subAnimSpeed}s`
+                              animationDuration: `${10 / subAnimSpeed}s`
                             }}
                             className="animate-marquee inline-block font-mono text-amber-200 tracking-wider shadow-amber-400"
                           >
@@ -1573,15 +1573,15 @@ export default function App() {
                 </span>
               </div>
               <input 
-                type="range" min="0.5" max="2.5" step="0.1"
+                type="range" min="0.1" max="1.5" step="0.05"
                 value={subAnimSpeed}
                 onChange={(e) => setSubAnimSpeed(Number(e.target.value))}
                 className="w-full accent-amber-500 cursor-pointer"
               />
               <div className="flex justify-between text-[10px] text-[#64748b] px-0.5">
-                <span>0.5x (Chậm)</span>
-                <span>1.0x (Chuẩn)</span>
-                <span>2.5x (Nhanh)</span>
+                <span>0.1x (Siêu Chậm)</span>
+                <span>0.5x (Vừa Vặn)</span>
+                <span>1.5x (Nhanh)</span>
               </div>
             </div>
 

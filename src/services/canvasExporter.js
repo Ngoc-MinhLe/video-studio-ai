@@ -278,7 +278,7 @@ export const processVideoCanvas = async ({
       ctx.clip();
 
       if (isMarqueeMode) {
-        const scrollSpeed = 160 * scaleFactor * animSpeed;
+        const scrollSpeed = 65 * scaleFactor * animSpeed;
         const totalDist = textWidth + boxWidth;
         const currentOffset = (elapsed * scrollSpeed) % totalDist;
         const textX = (boxWidth / 2) - currentOffset + (textWidth / 2);
