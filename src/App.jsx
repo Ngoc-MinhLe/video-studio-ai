@@ -75,15 +75,12 @@ export default function App() {
   const [subFontSize, setSubFontSize] = useState(24);
   const [subPosition, setSubPosition] = useState('bottom');
 
-  // --- Engine & Export States ---
-  const [engineType, setEngineType] = useState('canvas'); 
-  const [isEngineReady, setIsEngineReady] = useState(true);
+  // --- Export States ---
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [exportUrl, setExportUrl] = useState(null);
   const [exportExtension, setExportExtension] = useState('mp4');
   const [statusText, setStatusText] = useState('Hệ thống sẵn sàng!');
-  const [engineError, setEngineError] = useState(null);
 
   // Lắng nghe Firebase Auth & Firestore User Data realtime
   useEffect(() => {
@@ -154,38 +151,6 @@ export default function App() {
 
   const videoRef = useRef(null);
   const audioRef = useRef(null);
-
-  // Hàm kích hoạt nạp FFmpeg Engine (Nếu người dùng chuyển sang FFmpeg WASM)
-  const initEngine = async () => {
-    setIsEngineReady(false);
-    setEngineError(null);
-    setStatusText('Đang khởi tạo FFmpeg Engine...');
-
-    try {
-      const { loadFFmpeg } = await import('./services/ffmpegService');
-      await loadFFmpeg(
-        (prog) => setProgress(prog),
-        (log) => setStatusText(log)
-      );
-      setIsEngineReady(true);
-      setEngineError(null);
-      setStatusText('FFmpeg WASM sẵn sàng!');
-    } catch (err) {
-      console.error('FFmpeg Init Error:', err);
-      setEngineError(err.message || 'Lỗi nạp WebAssembly.');
-      setStatusText('Khởi tạo chưa thành công.');
-    }
-  };
-
-  useEffect(() => {
-    if (engineType === 'ffmpeg') {
-      initEngine();
-    } else {
-      setIsEngineReady(true);
-      setEngineError(null);
-      setStatusText('Canvas Engine sẵn sàng!');
-    }
-  }, [engineType]);
 
   // Đảm bảo cập nhật âm lượng âm thanh realtime
   useEffect(() => {
@@ -326,39 +291,20 @@ export default function App() {
     }
 
     try {
-      let generatedUrl = null;
-      let generatedExt = 'mp4';
+      // Render siêu tốc bằng Native GPU Canvas Engine
+      const result = await processVideoCanvas({
+        videoFile,
+        audioFile,
+        videoVolume,
+        audioVolume,
+        subtitles,
+        subOptions: { fontSize: subFontSize, position: subPosition },
+        onProgress: (prog) => setProgress(prog),
+        onStatus: (stat) => setStatusText(stat)
+      });
 
-      if (engineType === 'canvas') {
-        // Render siêu tốc bằng Canvas Engine
-        const result = await processVideoCanvas({
-          videoFile,
-          audioFile,
-          videoVolume,
-          audioVolume,
-          subtitles,
-          subOptions: { fontSize: subFontSize, position: subPosition },
-          onProgress: (prog) => setProgress(prog),
-          onStatus: (stat) => setStatusText(stat)
-        });
-
-        generatedUrl = result.url;
-        generatedExt = result.extension || 'mp4';
-      } else {
-        // Render bằng FFmpeg WASM Engine
-        const { processVideo } = await import('./services/ffmpegService');
-        const outputBlobUrl = await processVideo({
-          videoFile,
-          audioFile,
-          videoVolume,
-          audioVolume,
-          subtitles,
-          subOptions: { fontSize: subFontSize, position: subPosition }
-        });
-
-        generatedUrl = outputBlobUrl;
-        generatedExt = 'mp4';
-      }
+      const generatedUrl = result.url;
+      const generatedExt = result.extension || 'mp4';
 
       setExportUrl(generatedUrl);
       setExportExtension(generatedExt);
@@ -383,17 +329,7 @@ export default function App() {
     } catch (error) {
       console.error('Processing error:', error);
       setIsProcessing(false);
-
-      if (engineType === 'ffmpeg') {
-        const confirmSwitch = window.confirm(
-          'Gặp lỗi với Engine FFmpeg WASM trên trình duyệt này. Bạn có muốn chuyển sang Engine Canvas (Chạy 100% thành công) để xuất video ngay không?'
-        );
-        if (confirmSwitch) {
-          setEngineType('canvas');
-        }
-      } else {
-        alert('Đã xảy ra lỗi khi render video: ' + error.message);
-      }
+      alert('Đã xảy ra lỗi khi render video: ' + error.message);
     }
   };
 
