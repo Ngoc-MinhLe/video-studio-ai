@@ -64,16 +64,30 @@ export default function App() {
   // --- States Module 2: Image Music Visualizer ---
   const [bgImage, setBgImage] = useState(null); // { file, url }
   const [bgEffect, setBgEffect] = useState('zoom'); // 'zoom' | 'pulse' | 'none'
-  const [activeVisualizers, setActiveVisualizers] = useState(['sinewave']); // Mảng lồng ghép nhiều hiệu ứng sóng âm cùng lúc ['sinewave', 'vinyl', 'bars', 'ring']
-  const [visualizerPosX, setVisualizerPosX] = useState(50); // 0% to 100% (Vị trí sóng âm X)
-  const [visualizerPosY, setVisualizerPosY] = useState(50); // 0% to 100% (Vị trí sóng âm Y)
+  const [activeVisualizers, setActiveVisualizers] = useState(['sinewave']); // Mảng lồng ghép nhiều hiệu ứng sóng âm cùng lúc
+  const [selectedVizId, setSelectedVizId] = useState('sinewave'); // ID Sóng âm đang được lựa chọn để kéo thả / biên tập
+  
+  // Tọa độ riêng biệt cho từng hiệu ứng sóng âm độc lập
+  const [sinePosX, setSinePosX] = useState(50);
+  const [sinePosY, setSinePosY] = useState(50);
+  const [vinylPosX, setVinylPosX] = useState(50);
+  const [vinylPosY, setVinylPosY] = useState(50);
+  const [barsPosX, setBarsPosX] = useState(50);
+  const [barsPosY, setBarsPosY] = useState(75);
+  const [ringPosX, setRingPosX] = useState(50);
+  const [ringPosY, setRingPosY] = useState(50);
 
   const toggleVisualizer = (id) => {
-    setActiveVisualizers(prev => 
-      prev.includes(id)
+    setActiveVisualizers(prev => {
+      const next = prev.includes(id)
         ? (prev.length > 1 ? prev.filter(v => v !== id) : prev)
-        : [...prev, id]
-    );
+        : [...prev, id];
+      // Nếu hiệu ứng vừa được bật, tự động chọn hiệu ứng đó làm tiêu điểm biên tập
+      if (!prev.includes(id)) {
+        setSelectedVizId(id);
+      }
+      return next;
+    });
   };
   const [bgFit, setBgFit] = useState('cover'); // 'cover' | 'contain'
   const [bgZoom, setBgZoom] = useState(100); // 50 to 200
@@ -630,8 +644,14 @@ export default function App() {
         zoomSpeed,
         zoomRange,
         activeVisualizers,
-        visualizerPosX,
-        visualizerPosY,
+        sinePosX,
+        sinePosY,
+        vinylPosX,
+        vinylPosY,
+        barsPosX,
+        barsPosY,
+        ringPosX,
+        ringPosY,
         videoFile,
         videoClips: videoClips,
         audioFile,
@@ -881,10 +901,24 @@ export default function App() {
             setZoomRange={setZoomRange}
             activeVisualizers={activeVisualizers}
             toggleVisualizer={toggleVisualizer}
-            visualizerPosX={visualizerPosX}
-            setVisualizerPosX={setVisualizerPosX}
-            visualizerPosY={visualizerPosY}
-            setVisualizerPosY={setVisualizerPosY}
+            selectedVizId={selectedVizId}
+            setSelectedVizId={setSelectedVizId}
+            sinePosX={sinePosX}
+            setSinePosX={setSinePosX}
+            sinePosY={sinePosY}
+            setSinePosY={setSinePosY}
+            vinylPosX={vinylPosX}
+            setVinylPosX={setVinylPosX}
+            vinylPosY={vinylPosY}
+            setVinylPosY={setVinylPosY}
+            barsPosX={barsPosX}
+            setBarsPosX={setBarsPosX}
+            barsPosY={barsPosY}
+            setBarsPosY={setBarsPosY}
+            ringPosX={ringPosX}
+            setRingPosX={setRingPosX}
+            ringPosY={ringPosY}
+            setRingPosY={setRingPosY}
             audioFile={audioFile}
             handleAudioUpload={handleAudioUpload}
             removeAudioTrack={removeAudioTrack}
@@ -1179,14 +1213,44 @@ export default function App() {
                   {/* 1. SÓNG SINE DJ NEON ĐỘC ĐÁO ĐA TẦNG */}
                   {activeVisualizers.includes('sinewave') && (
                     <div 
-                      className="absolute left-0 right-0 z-20 pointer-events-none flex flex-col items-center justify-center w-full px-2"
+                      className={`absolute z-20 pointer-events-auto cursor-grab active:cursor-grabbing select-none flex flex-col items-center justify-center px-2 py-3 ${
+                        selectedVizId === 'sinewave' ? 'ring-2 ring-pink-500 rounded border border-dashed border-pink-400 shadow-[0_0_15px_rgba(236,72,153,0.5)] bg-pink-500/5' : ''
+                      }`}
                       style={{ 
-                        left: `${(visualizerPosX !== undefined ? visualizerPosX : 50) - 50}%`,
-                        top: `${visualizerPosY !== undefined ? visualizerPosY : 50}%`, 
+                        left: `${(sinePosX !== undefined ? sinePosX : 50) - 50}%`,
+                        top: `${sinePosY !== undefined ? sinePosY : 50}%`, 
+                        width: '100%',
                         transform: 'translateY(-50%)' 
                       }}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSelectedVizId('sinewave');
+                        const targetEl = e.currentTarget;
+                        const container = targetEl.parentElement;
+                        if (!container) return;
+
+                        try { targetEl.setPointerCapture(e.pointerId); } catch (err) {}
+
+                        const handlePointerMove = (moveEv) => {
+                          const rect = container.getBoundingClientRect();
+                          if (rect.width === 0 || rect.height === 0) return;
+                          const relY = moveEv.clientY - rect.top;
+                          const pctY = Math.max(10, Math.min(90, (relY / rect.height) * 100));
+                          setSinePosY(Math.round(pctY));
+                        };
+
+                        const handlePointerUp = (upEv) => {
+                          try { targetEl.releasePointerCapture(upEv.pointerId); } catch (err) {}
+                          window.removeEventListener('pointermove', handlePointerMove);
+                          window.removeEventListener('pointerup', handlePointerUp);
+                        };
+
+                        window.addEventListener('pointermove', handlePointerMove);
+                        window.addEventListener('pointerup', handlePointerUp);
+                      }}
                     >
-                      <svg className="w-full h-28 overflow-visible" viewBox="0 0 500 120" preserveAspectRatio="none">
+                      <svg className="w-full h-28 overflow-visible pointer-events-none" viewBox="0 0 500 120" preserveAspectRatio="none">
                         <defs>
                           <linearGradient id="neonSineGlow" x1="0%" y1="0%" x2="100%" y2="0%">
                             <stop offset="0%" stopColor="#ec4899" />
@@ -1245,14 +1309,46 @@ export default function App() {
                   {/* 2. ĐĨA QUAY VINYL CHUYÊN NGHIỆP CÓ CẦN KIM NHẠC */}
                   {activeVisualizers.includes('vinyl') && (
                     <div 
-                      className="absolute pointer-events-none z-20"
+                      className={`absolute z-25 pointer-events-auto cursor-grab active:cursor-grabbing select-none p-4 rounded-full ${
+                        selectedVizId === 'vinyl' ? 'ring-2 ring-amber-500 border border-dashed border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.5)] bg-amber-500/5' : ''
+                      }`}
                       style={{ 
-                        left: `${visualizerPosX !== undefined ? visualizerPosX : 50}%`, 
-                        top: `${visualizerPosY !== undefined ? visualizerPosY : 50}%`, 
+                        left: `${vinylPosX !== undefined ? vinylPosX : 50}%`, 
+                        top: `${vinylPosY !== undefined ? vinylPosY : 50}%`, 
                         transform: 'translate(-50%, -50%)' 
                       }}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSelectedVizId('vinyl');
+                        const targetEl = e.currentTarget;
+                        const container = targetEl.parentElement;
+                        if (!container) return;
+
+                        try { targetEl.setPointerCapture(e.pointerId); } catch (err) {}
+
+                        const handlePointerMove = (moveEv) => {
+                          const rect = container.getBoundingClientRect();
+                          if (rect.width === 0 || rect.height === 0) return;
+                          const relX = moveEv.clientX - rect.left;
+                          const relY = moveEv.clientY - rect.top;
+                          const pctX = Math.max(10, Math.min(90, (relX / rect.width) * 100));
+                          const pctY = Math.max(10, Math.min(90, (relY / rect.height) * 100));
+                          setVinylPosX(Math.round(pctX));
+                          setVinylPosY(Math.round(pctY));
+                        };
+
+                        const handlePointerUp = (upEv) => {
+                          try { targetEl.releasePointerCapture(upEv.pointerId); } catch (err) {}
+                          window.removeEventListener('pointermove', handlePointerMove);
+                          window.removeEventListener('pointerup', handlePointerUp);
+                        };
+
+                        window.addEventListener('pointermove', handlePointerMove);
+                        window.addEventListener('pointerup', handlePointerUp);
+                      }}
                     >
-                      <div className="relative flex items-center justify-center">
+                      <div className="relative flex items-center justify-center pointer-events-none">
                         {/* Hào quang phát sáng sau đĩa */}
                         <div className={`absolute w-44 h-44 rounded-full bg-purple-600/30 filter blur-xl ${isPlaying ? 'animate-pulse' : ''}`} />
 
@@ -1294,18 +1390,50 @@ export default function App() {
                   {/* 3. BARS EQUALIZER SPECTRUM 24 CỘT CÓ CHẤM ĐỈNH POKER */}
                   {activeVisualizers.includes('bars') && (
                     <div 
-                      className="absolute flex items-end gap-1.5 h-20 pointer-events-none z-20"
+                      className={`absolute z-20 pointer-events-auto cursor-grab active:cursor-grabbing select-none flex items-end gap-1.5 h-24 p-2 rounded-lg ${
+                        selectedVizId === 'bars' ? 'ring-2 ring-cyan-500 border border-dashed border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.5)] bg-cyan-500/5' : ''
+                      }`}
                       style={{ 
-                        left: `${visualizerPosX !== undefined ? visualizerPosX : 50}%`, 
-                        top: `${visualizerPosY !== undefined ? visualizerPosY : 50}%`, 
+                        left: `${barsPosX !== undefined ? barsPosX : 50}%`, 
+                        top: `${barsPosY !== undefined ? barsPosY : 75}%`, 
                         transform: 'translate(-50%, -50%)' 
+                      }}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSelectedVizId('bars');
+                        const targetEl = e.currentTarget;
+                        const container = targetEl.parentElement;
+                        if (!container) return;
+
+                        try { targetEl.setPointerCapture(e.pointerId); } catch (err) {}
+
+                        const handlePointerMove = (moveEv) => {
+                          const rect = container.getBoundingClientRect();
+                          if (rect.width === 0 || rect.height === 0) return;
+                          const relX = moveEv.clientX - rect.left;
+                          const relY = moveEv.clientY - rect.top;
+                          const pctX = Math.max(10, Math.min(90, (relX / rect.width) * 100));
+                          const pctY = Math.max(10, Math.min(90, (relY / rect.height) * 100));
+                          setBarsPosX(Math.round(pctX));
+                          setBarsPosY(Math.round(pctY));
+                        };
+
+                        const handlePointerUp = (upEv) => {
+                          try { targetEl.releasePointerCapture(upEv.pointerId); } catch (err) {}
+                          window.removeEventListener('pointermove', handlePointerMove);
+                          window.removeEventListener('pointerup', handlePointerUp);
+                        };
+
+                        window.addEventListener('pointermove', handlePointerMove);
+                        window.addEventListener('pointerup', handlePointerUp);
                       }}
                     >
                       {[...Array(24)].map((_, i) => {
                         const t = isPlaying ? animTime : currentTime;
                         const h = isPlaying ? Math.floor(10 + Math.abs(Math.sin(t * 5 + i * 0.4)) * 55) : 8;
                         return (
-                          <div key={i} className="flex flex-col items-center gap-1">
+                          <div key={i} className="flex flex-col items-center gap-1 pointer-events-none">
                             {/* Chấm Đỉnh Bouncing Peak */}
                             <div 
                               className="w-2 h-1.5 rounded-full bg-cyan-300 shadow-[0_0_8px_rgba(6,182,212,1)]"
@@ -1331,14 +1459,46 @@ export default function App() {
                   {/* 4. VÒNG HÀO QUANG NEON CYBER PULSE */}
                   {activeVisualizers.includes('ring') && (
                     <div 
-                      className="absolute pointer-events-none z-20"
+                      className={`absolute z-20 pointer-events-auto cursor-grab active:cursor-grabbing select-none p-4 rounded-full ${
+                        selectedVizId === 'ring' ? 'ring-2 ring-fuchsia-500 border border-dashed border-fuchsia-400 shadow-[0_0_15px_rgba(217,70,239,0.5)] bg-fuchsia-500/5' : ''
+                      }`}
                       style={{ 
-                        left: `${visualizerPosX !== undefined ? visualizerPosX : 50}%`, 
-                        top: `${visualizerPosY !== undefined ? visualizerPosY : 50}%`, 
+                        left: `${ringPosX !== undefined ? ringPosX : 50}%`, 
+                        top: `${ringPosY !== undefined ? ringPosY : 50}%`, 
                         transform: 'translate(-50%, -50%)' 
                       }}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSelectedVizId('ring');
+                        const targetEl = e.currentTarget;
+                        const container = targetEl.parentElement;
+                        if (!container) return;
+
+                        try { targetEl.setPointerCapture(e.pointerId); } catch (err) {}
+
+                        const handlePointerMove = (moveEv) => {
+                          const rect = container.getBoundingClientRect();
+                          if (rect.width === 0 || rect.height === 0) return;
+                          const relX = moveEv.clientX - rect.left;
+                          const relY = moveEv.clientY - rect.top;
+                          const pctX = Math.max(10, Math.min(90, (relX / rect.width) * 100));
+                          const pctY = Math.max(10, Math.min(90, (relY / rect.height) * 100));
+                          setRingPosX(Math.round(pctX));
+                          setRingPosY(Math.round(pctY));
+                        };
+
+                        const handlePointerUp = (upEv) => {
+                          try { targetEl.releasePointerCapture(upEv.pointerId); } catch (err) {}
+                          window.removeEventListener('pointermove', handlePointerMove);
+                          window.removeEventListener('pointerup', handlePointerUp);
+                        };
+
+                        window.addEventListener('pointermove', handlePointerMove);
+                        window.addEventListener('pointerup', handlePointerUp);
+                      }}
                     >
-                      <div className="relative flex items-center justify-center">
+                      <div className="relative flex items-center justify-center pointer-events-none">
                         <div 
                           className="w-44 h-44 rounded-full border-4 border-pink-500 shadow-[0_0_35px_rgba(236,72,153,0.9)] transition-all duration-100"
                           style={{

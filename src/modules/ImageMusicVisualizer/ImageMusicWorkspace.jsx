@@ -26,10 +26,24 @@ export default function ImageMusicWorkspace({
   setZoomRange,
   activeVisualizers = ['sinewave'],
   toggleVisualizer,
-  visualizerPosX = 50,
-  setVisualizerPosX,
-  visualizerPosY = 50,
-  setVisualizerPosY,
+  selectedVizId = 'sinewave',
+  setSelectedVizId,
+  sinePosX = 50,
+  setSinePosX,
+  sinePosY = 50,
+  setSinePosY,
+  vinylPosX = 50,
+  setVinylPosX,
+  vinylPosY = 50,
+  setVinylPosY,
+  barsPosX = 50,
+  setBarsPosX,
+  barsPosY = 75,
+  setBarsPosY,
+  ringPosX = 50,
+  setRingPosX,
+  ringPosY = 50,
+  setRingPosY,
   audioFile,
   handleAudioUpload,
   removeAudioTrack,
@@ -44,6 +58,39 @@ export default function ImageMusicWorkspace({
   aspectRatio,
   setAspectRatio
 }) {
+  // Trích xuất tọa độ đang chỉnh sửa của hiệu ứng được chọn
+  let currentVizX = 50;
+  let currentVizY = 50;
+  let setVizX = () => {};
+  let setVizY = () => {};
+  let vizLabel = 'Sóng Sine';
+
+  if (selectedVizId === 'sinewave') {
+    currentVizX = sinePosX;
+    currentVizY = sinePosY;
+    setVizX = setSinePosX;
+    setVizY = setSinePosY;
+    vizLabel = '🌊 Sóng Sine';
+  } else if (selectedVizId === 'vinyl') {
+    currentVizX = vinylPosX;
+    currentVizY = vinylPosY;
+    setVizX = setVinylPosX;
+    setVizY = setVinylPosY;
+    vizLabel = '💿 Đĩa Quay';
+  } else if (selectedVizId === 'bars') {
+    currentVizX = barsPosX;
+    currentVizY = barsPosY;
+    setVizX = setBarsPosX;
+    setVizY = setBarsPosY;
+    vizLabel = '📊 Bars Sóng Âm';
+  } else if (selectedVizId === 'ring') {
+    currentVizX = ringPosX;
+    currentVizY = ringPosY;
+    setVizX = setRingPosX;
+    setVizY = setRingPosY;
+    vizLabel = '🌟 Vòng Hào Quang';
+  }
+
   return (
     <section className="glass-panel p-4 flex flex-col gap-4 overflow-y-auto max-h-[82vh] custom-scrollbar">
       {/* Header Module */}
@@ -234,27 +281,27 @@ export default function ImageMusicWorkspace({
         </div>
       </div>
 
-      {/* THẺ 4: TÙY CHỈNH NỀN LỒNG NHIỀU SÓNG ÂM VÀ VỊ TRÍ X/Y */}
+      {/* THẺ 4: TÙY CHỈNH NỀN LỒNG NHIỀU SÓNG ÂM VÀ VỊ TRÍ X/Y TỪNG LAYER ĐỘC LẬP */}
       <div className="flex flex-col gap-3 bg-[#12151e] p-3.5 rounded-xl border border-amber-500/40">
         <div className="flex items-center justify-between border-b border-amber-500/20 pb-2">
           <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-            <Waves className="w-3.5 h-3.5 text-amber-400" /> 4. Lồng ghép Nhiều Hiệu Ứng Sóng Âm & Vị Trí
+            <Waves className="w-3.5 h-3.5 text-amber-400" /> 4. Lập Vị Trí Sóng Âm (Kéo thả chuột / Slider)
           </span>
           <button
             onClick={() => {
-              setVisualizerPosX(50);
-              setVisualizerPosY(50);
+              setVizX(50);
+              setVizY(selectedVizId === 'bars' ? 75 : 50);
             }}
             className="text-[10px] text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded border border-amber-500/30 hover:bg-amber-600 hover:text-white transition-colors cursor-pointer"
-            title="Căn sóng âm về tâm giữa"
+            title="Đưa hiệu ứng đang chọn về tâm"
           >
-            🎯 Căn Giữa Sóng Âm
+            🎯 Đưa Về Giữa
           </button>
         </div>
 
         {/* Nút Chọn Nhiều Hiệu Ứng Lồng Nhau (Multi-select) */}
         <div className="flex flex-col gap-1.5 text-xs">
-          <span className="text-[11px] text-[#94a3b8] font-semibold">Bật/Tắt các lớp hiệu ứng lồng nhau:</span>
+          <span className="text-[11px] text-[#94a3b8] font-semibold">1. Bật/Tắt các hiệu ứng sóng âm lồng nhau:</span>
           <div className="grid grid-cols-2 gap-1.5">
             {[
               { id: 'sinewave', label: '🌊 Sóng Sine DJ Line', color: 'from-pink-600 to-purple-600' },
@@ -281,30 +328,60 @@ export default function ImageMusicWorkspace({
           </div>
         </div>
 
-        {/* Sliders Vị trí Ngang X & Vị trí Dọc Y của Sóng Âm */}
-        <div className="grid grid-cols-2 gap-3 text-xs pt-2 border-t border-amber-500/20">
+        {/* Chọn Tiêu Điểm Hiệu Ứng Để Căn Chỉnh */}
+        <div className="flex flex-col gap-1.5 text-xs pt-1 border-t border-[#2b3042]/50">
+          <span className="text-[11px] text-[#94a3b8] font-semibold">2. Chọn hiệu ứng để chỉnh tọa độ X/Y:</span>
+          <div className="grid grid-cols-4 gap-1">
+            {[
+              { id: 'sinewave', label: '🌊 Sine' },
+              { id: 'vinyl', label: '💿 Vinyl' },
+              { id: 'bars', label: '📊 Bars' },
+              { id: 'ring', label: '🌟 Ring' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setSelectedVizId(tab.id)}
+                className={`py-1 px-1.5 rounded-lg text-[10px] font-bold text-center transition-all cursor-pointer ${
+                  selectedVizId === tab.id 
+                    ? 'bg-purple-600 text-white shadow' 
+                    : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white border border-[#2b3042]/80'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Mẹo Kéo Thả Trực Tiếp */}
+        <div className="text-[10px] text-pink-400 bg-pink-950/40 p-1.5 rounded border border-pink-500/20 text-center font-medium leading-relaxed">
+          💡 Mẹo: Bấm & kéo trực tiếp hiệu ứng trên khung xem bằng chuột để di chuyển mượt mà!
+        </div>
+
+        {/* Sliders Tọa độ của hiệu ứng đang được lựa chọn */}
+        <div className="grid grid-cols-2 gap-3 text-xs pt-1.5 border-t border-[#2b3042]/50">
           <div className="flex flex-col gap-1">
             <div className="flex justify-between text-[11px] text-[#94a3b8]">
-              <span>Tọa Độ Ngang X:</span>
-              <span className="font-mono text-amber-300 font-bold">{visualizerPosX}%</span>
+              <span>Ngang (X) của {vizLabel}:</span>
+              <span className="font-mono text-amber-300 font-bold">{currentVizX}%</span>
             </div>
             <input 
               type="range" min="10" max="90" step="1"
-              value={visualizerPosX}
-              onChange={(e) => setVisualizerPosX(Number(e.target.value))}
+              value={currentVizX}
+              onChange={(e) => setVizX(Number(e.target.value))}
               className="w-full accent-amber-500 cursor-pointer"
             />
           </div>
 
           <div className="flex flex-col gap-1">
             <div className="flex justify-between text-[11px] text-[#94a3b8]">
-              <span>Tọa Độ Dọc Y:</span>
-              <span className="font-mono text-amber-300 font-bold">{visualizerPosY}%</span>
+              <span>Dọc (Y) của {vizLabel}:</span>
+              <span className="font-mono text-amber-300 font-bold">{currentVizY}%</span>
             </div>
             <input 
               type="range" min="10" max="90" step="1"
-              value={visualizerPosY}
-              onChange={(e) => setVisualizerPosY(Number(e.target.value))}
+              value={currentVizY}
+              onChange={(e) => setVizY(Number(e.target.value))}
               className="w-full accent-amber-500 cursor-pointer"
             />
           </div>

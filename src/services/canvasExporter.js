@@ -18,9 +18,14 @@ export const processVideoCanvas = async ({
   zoomSpeed = 0.2,
   zoomRange = 30,
   activeVisualizers = ['sinewave'],
-  visualizerType = 'sinewave',
-  visualizerPosX = 50,
-  visualizerPosY = 50,
+  sinePosX = 50,
+  sinePosY = 50,
+  vinylPosX = 50,
+  vinylPosY = 50,
+  barsPosX = 50,
+  barsPosY = 75,
+  ringPosX = 50,
+  ringPosY = 50,
   videoFile,
   videoClips = [],
   audioFile,
@@ -519,12 +524,19 @@ export const processVideoCanvas = async ({
 
     const cleanup = () => {
       if (animId) cancelAnimationFrame(animId);
-      loadedVideoElements.forEach(item => {
-        item.videoEl.pause();
-        if (item.clip.url) URL.revokeObjectURL(item.clip.url);
-      });
-      if (audioEl) audioEl.pause();
-      audioCtx.close();
+      if (loadedVideoElements && loadedVideoElements.length > 0) {
+        loadedVideoElements.forEach(item => {
+          if (item && item.videoEl) {
+            try { item.videoEl.pause(); } catch (e) {}
+          }
+        });
+      }
+      if (audioEl) {
+        try { audioEl.pause(); } catch (e) {}
+      }
+      if (audioCtx) {
+        try { audioCtx.close(); } catch (e) {}
+      }
     };
 
     mediaRecorder.onstop = () => {
@@ -544,10 +556,14 @@ export const processVideoCanvas = async ({
 
     mediaRecorder.start(100);
 
-    // Phát clip đầu tiên
-    const firstItem = loadedVideoElements[0];
-    firstItem.videoEl.currentTime = firstItem.clipStart;
-    firstItem.videoEl.play().catch(reject);
+    // Phát clip đầu tiên (chỉ đối với chế độ video_studio)
+    if (mode !== 'image_music' && loadedVideoElements.length > 0) {
+      const firstItem = loadedVideoElements[0];
+      if (firstItem && firstItem.videoEl) {
+        firstItem.videoEl.currentTime = firstItem.clipStart;
+        firstItem.videoEl.play().catch(reject);
+      }
+    }
 
     const renderLoop = (timestamp) => {
       if (!lastTimestamp) lastTimestamp = timestamp;
@@ -655,8 +671,8 @@ export const processVideoCanvas = async ({
         vizList.forEach((vType) => {
           if (vType === 'sinewave') {
             ctx.save();
-            const vY = (canvasH * (visualizerPosY !== undefined ? visualizerPosY : 50)) / 100;
-            const vX = (canvasW * (visualizerPosX !== undefined ? visualizerPosX : 50)) / 100;
+            const vY = (canvasH * (sinePosY !== undefined ? sinePosY : 50)) / 100;
+            const vX = (canvasW * (sinePosX !== undefined ? sinePosX : 50)) / 100;
             const shiftX = vX - (canvasW / 2);
             const scaleF = canvasH / 720;
             const amp = Math.sin(projectTime * 6) * (45 * scaleF) + (15 * scaleF);
@@ -704,8 +720,8 @@ export const processVideoCanvas = async ({
             ctx.restore();
           } else if (vType === 'vinyl') {
             ctx.save();
-            const centerX = (canvasW * (visualizerPosX !== undefined ? visualizerPosX : 50)) / 100;
-            const centerY = (canvasH * (visualizerPosY !== undefined ? visualizerPosY : 50)) / 100;
+            const centerX = (canvasW * (vinylPosX !== undefined ? vinylPosX : 50)) / 100;
+            const centerY = (canvasH * (vinylPosY !== undefined ? vinylPosY : 50)) / 100;
             const radius = Math.min(canvasW, canvasH) * 0.22;
             const scaleF = canvasH / 720;
 
@@ -756,9 +772,9 @@ export const processVideoCanvas = async ({
             ctx.save();
             const barCount = 24;
             const barWidth = (canvasW * 0.65) / barCount;
-            const centerX = (canvasW * (visualizerPosX !== undefined ? visualizerPosX : 50)) / 100;
+            const centerX = (canvasW * (barsPosX !== undefined ? barsPosX : 50)) / 100;
             const startX = centerX - (barCount * barWidth) / 2;
-            const vY = (canvasH * (visualizerPosY !== undefined ? visualizerPosY : 50)) / 100;
+            const vY = (canvasH * (barsPosY !== undefined ? barsPosY : 75)) / 100;
             const scaleF = canvasH / 720;
 
             for (let b = 0; b < barCount; b++) {
@@ -783,8 +799,8 @@ export const processVideoCanvas = async ({
             ctx.restore();
           } else if (vType === 'ring') {
             ctx.save();
-            const centerX = (canvasW * (visualizerPosX !== undefined ? visualizerPosX : 50)) / 100;
-            const centerY = (canvasH * (visualizerPosY !== undefined ? visualizerPosY : 50)) / 100;
+            const centerX = (canvasW * (ringPosX !== undefined ? ringPosX : 50)) / 100;
+            const centerY = (canvasH * (ringPosY !== undefined ? ringPosY : 50)) / 100;
             const scaleF = canvasH / 720;
             const baseRadius = Math.min(canvasW, canvasH) * 0.22;
             const pulseRadius = baseRadius + Math.abs(Math.sin(projectTime * 6)) * (baseRadius * 0.18);
