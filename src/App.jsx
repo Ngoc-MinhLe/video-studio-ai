@@ -1562,6 +1562,29 @@ export default function App() {
               </div>
             </div>
 
+            {/* Tùy Chỉnh Tốc Độ Chạy Hiệu Ứng / Chạy Chữ LED */}
+            <div className="flex flex-col gap-1 p-2.5 bg-[#1a1e2b] rounded-xl border border-[#2b3042]/80 mt-1">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-[#94a3b8] font-medium flex items-center gap-1">
+                  ⚡ Tốc độ chạy chữ / hiệu ứng:
+                </span>
+                <span className="font-mono text-amber-300 font-bold bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/30">
+                  {subAnimSpeed}x
+                </span>
+              </div>
+              <input 
+                type="range" min="0.5" max="2.5" step="0.1"
+                value={subAnimSpeed}
+                onChange={(e) => setSubAnimSpeed(Number(e.target.value))}
+                className="w-full accent-amber-500 cursor-pointer"
+              />
+              <div className="flex justify-between text-[10px] text-[#64748b] px-0.5">
+                <span>0.5x (Chậm)</span>
+                <span>1.0x (Chuẩn)</span>
+                <span>2.5x (Nhanh)</span>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between pt-2 border-t border-[#2b3042]/50">
               <span className="text-xs text-[#64748b] font-medium">Cỡ chữ lớn nhỏ (px)</span>
               <div className="flex items-center gap-2">
