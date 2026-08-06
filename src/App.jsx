@@ -551,9 +551,9 @@ export default function App() {
     }
   };
 
-  // Phụ đề hiển thị live preview
-  const currentSub = subtitles.find(
-    s => currentTime >= Number(s.startTime) && currentTime <= Number(s.endTime)
+  // Danh sách các phụ đề hiển thị live preview song song cùng lúc
+  const activeSubs = subtitles.filter(
+    s => s.text && s.text.trim() !== '' && currentTime >= Number(s.startTime) && currentTime <= Number(s.endTime)
   );
 
   return (
@@ -975,13 +975,14 @@ export default function App() {
                     }}
                   />
                   
-                  {/* Lớp Phụ Đề Live Preview chuẩn kích thước - Hỗ trợ Kéo Thả Trực Tiếp ✋ */}
-                  {currentSub && (
+                  {/* Lớp Phụ Đề Live Preview chuẩn kích thước - Hỗ trợ Kéo Thả & Chạy Song Song ✋ */}
+                  {activeSubs.length > 0 && activeSubs.map((sub, subIdx) => (
                     <div 
+                      key={sub.id}
                       className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing select-none group z-20 transition-all flex justify-center"
                       style={{ 
                         left: `${subX}%`, 
-                        top: `${subY}%`,
+                        top: `${Math.max(10, Math.min(90, subY - (subIdx * 8)))}%`,
                         width: subStyle === 'led' || subAnimation === 'marquee' ? `${subBoxWidth}%` : 'auto',
                         transform: `translate(-50%, -50%) rotate(${subRotation}deg)`
                       }}
@@ -1023,7 +1024,7 @@ export default function App() {
                             }}
                             className="animate-marquee inline-block font-mono text-amber-200 tracking-wider shadow-amber-400"
                           >
-                            📟 {currentSub.text}
+                            📟 {sub.text}
                           </span>
                         </div>
                       ) : (
@@ -1049,11 +1050,11 @@ export default function App() {
                           }`}
                         >
                           {(() => {
-                            let raw = currentSub.text;
+                            let raw = sub.text;
                             if (subAnimation === 'typewriter') {
                               const words = raw.split(' ');
-                              const subDur = (Number(currentSub.endTime) - Number(currentSub.startTime)) || 3;
-                              const elapsed = Math.max(0, currentTime - Number(currentSub.startTime));
+                              const subDur = (Number(sub.endTime) - Number(sub.startTime)) || 3;
+                              const elapsed = Math.max(0, currentTime - Number(sub.startTime));
                               const revealProg = Math.min(1, Math.max(0, (elapsed * subAnimSpeed) / subDur));
                               const visibleCount = Math.max(1, Math.ceil(revealProg * words.length));
                               raw = words.slice(0, visibleCount).join(' ');
@@ -1063,7 +1064,7 @@ export default function App() {
                         </span>
                       )}
                     </div>
-                  )}
+                  ))}
                 </>
               ) : (
                 <div className="flex flex-col items-center gap-3 text-[#64748b] p-8">

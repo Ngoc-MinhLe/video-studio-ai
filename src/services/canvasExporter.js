@@ -156,83 +156,81 @@ export const processVideoCanvas = async ({
 
   const drawSubtitles = (projectTime) => {
     const validSubs = subtitles || [];
-    const currentSub = validSubs.find(
+    const activeSubs = validSubs.filter(
       s => s.text && s.text.trim() !== '' && projectTime >= Number(s.startTime) && projectTime <= Number(s.endTime)
     );
 
-    if (!currentSub) return;
+    if (!activeSubs || activeSubs.length === 0) return;
 
-    const text = currentSub.text.trim();
-    const scaleFactor = canvasH / 720;
-    const baseFontSize = Math.max(16, Math.round((subOptions.fontSize || 24) * scaleFactor));
-    const style = subOptions.subStyle || 'tiktok';
-    const anim = subOptions.subAnimation || 'bounce';
-    const rotationDeg = subOptions.subRotation || 0; // Độ nghiêng xoay chữ (-45 deg -> 45 deg)
-    const customColor = subOptions.subColor || '#ffffff';
-    const customBgColor = subOptions.subBgColor || '#000000';
+    activeSubs.forEach((sub, subIdx) => {
+      const text = sub.text.trim();
+      const scaleFactor = canvasH / 720;
+      const baseFontSize = Math.max(16, Math.round((subOptions.fontSize || 24) * scaleFactor));
+      const style = subOptions.subStyle || 'tiktok';
+      const anim = subOptions.subAnimation || 'bounce';
+      const rotationDeg = subOptions.subRotation || 0;
+      const customColor = subOptions.subColor || '#ffffff';
+      const customBgColor = subOptions.subBgColor || '#000000';
+      const animSpeed = subOptions.subAnimSpeed || 1.0;
 
-    const animSpeed = subOptions.subAnimSpeed || 1.0;
+      // Tính toán tiến trình hiệu ứng animation
+      const elapsed = projectTime - Number(sub.startTime);
+      let animScale = 1.0;
+      let animAlpha = 1.0;
+      let animOffsetY = 0;
+      let animShakeX = 0;
+      let animShakeY = 0;
+      let displayText = text;
 
-    // Tính toán tiến trình hiệu ứng animation
-    const elapsed = projectTime - Number(currentSub.startTime);
-    let animScale = 1.0;
-    let animAlpha = 1.0;
-    let animOffsetY = 0;
-    let animShakeX = 0;
-    let animShakeY = 0;
-    let displayText = text;
-
-    if (anim === 'typewriter') {
-      // Hiệu ứng Hiện Từng Chữ (Typewriter / Karaoke Word-by-Word)
-      const words = text.split(' ');
-      const subDuration = (Number(currentSub.endTime) - Number(currentSub.startTime)) || 3;
-      const revealProgress = Math.min(1, Math.max(0, (elapsed * animSpeed) / subDuration));
-      const visibleWordCount = Math.max(1, Math.ceil(revealProgress * words.length));
-      displayText = words.slice(0, visibleWordCount).join(' ');
-    } else if (anim === 'marquee') {
-      // Hiệu ứng Chạy lướt từ Phải sang Trái (Right-to-Left Crawl chuẩn)
-      const subDuration = (Number(currentSub.endTime) - Number(currentSub.startTime)) || 3;
-      const progress = Math.min(1, Math.max(0, (elapsed * animSpeed) / subDuration));
-      // Tùy biến từ phải (+canvasW) về trái (-canvasW)
-      animShakeX = (0.5 - progress) * (canvasW * 1.4);
-    } else if (anim === 'bounce') {
-      const dur = 0.35 / animSpeed;
-      if (elapsed < dur) {
-        const progress = elapsed / dur;
-        animScale = 0.5 + Math.sin(progress * Math.PI) * 0.75;
+      if (anim === 'typewriter') {
+        const words = text.split(' ');
+        const subDuration = (Number(sub.endTime) - Number(sub.startTime)) || 3;
+        const revealProgress = Math.min(1, Math.max(0, (elapsed * animSpeed) / subDuration));
+        const visibleWordCount = Math.max(1, Math.ceil(revealProgress * words.length));
+        displayText = words.slice(0, visibleWordCount).join(' ');
+      } else if (anim === 'marquee') {
+        const subDuration = (Number(sub.endTime) - Number(sub.startTime)) || 3;
+        const progress = Math.min(1, Math.max(0, (elapsed * animSpeed) / subDuration));
+        animShakeX = (0.5 - progress) * (canvasW * 1.4);
+      } else if (anim === 'bounce') {
+        const dur = 0.35 / animSpeed;
+        if (elapsed < dur) {
+          const progress = elapsed / dur;
+          animScale = 0.5 + Math.sin(progress * Math.PI) * 0.75;
+        }
+      } else if (anim === 'fade') {
+        const dur = 0.3 / animSpeed;
+        if (elapsed < dur) {
+          const progress = elapsed / dur;
+          animAlpha = Math.min(1, Math.max(0, progress));
+          animOffsetY = (1 - progress) * (20 * scaleFactor);
+        }
+      } else if (anim === 'pulse') {
+        animScale = 1.0 + Math.sin(elapsed * 4 * animSpeed) * 0.05;
+      } else if (anim === 'shake') {
+        animShakeX = (Math.random() - 0.5) * (6 * scaleFactor * animSpeed);
+        animShakeY = (Math.random() - 0.5) * (6 * scaleFactor * animSpeed);
+        animScale = 1.0 + Math.sin(elapsed * 8 * animSpeed) * 0.03;
       }
-    } else if (anim === 'fade') {
-      const dur = 0.3 / animSpeed;
-      if (elapsed < dur) {
-        const progress = elapsed / dur;
-        animAlpha = Math.min(1, Math.max(0, progress));
-        animOffsetY = (1 - progress) * (20 * scaleFactor);
+
+      const fontSize = Math.round(baseFontSize * animScale);
+      ctx.save();
+      ctx.globalAlpha = animAlpha;
+
+      // Xếp chồng song song các phụ đề nếu có nhiều phụ đề xuất hiện cùng lúc
+      const parallelOffsetY = subIdx * (fontSize * 1.5);
+      let x = canvasW * ((subOptions.subX !== undefined ? subOptions.subX : 50) / 100) + animShakeX;
+      let y = canvasH * ((subOptions.subY !== undefined ? subOptions.subY : 85) / 100) - animOffsetY + animShakeY - parallelOffsetY;
+
+      if (subOptions.subY === undefined) {
+        if (subOptions.position === 'top') {
+          y = (80 * scaleFactor) - animOffsetY + parallelOffsetY;
+        } else if (subOptions.position === 'center') {
+          y = (canvasH / 2) - animOffsetY + parallelOffsetY;
+        } else if (subOptions.position === 'bottom') {
+          y = canvasH - (80 * scaleFactor) - animOffsetY - parallelOffsetY;
+        }
       }
-    } else if (anim === 'pulse') {
-      animScale = 1.0 + Math.sin(elapsed * 4 * animSpeed) * 0.05;
-    } else if (anim === 'shake') {
-      // Hiệu ứng Lắc Lư Sấm Sét Thunder Shake
-      animShakeX = (Math.random() - 0.5) * (6 * scaleFactor * animSpeed);
-      animShakeY = (Math.random() - 0.5) * (6 * scaleFactor * animSpeed);
-      animScale = 1.0 + Math.sin(elapsed * 8 * animSpeed) * 0.03;
-    }
-
-    const fontSize = Math.round(baseFontSize * animScale);
-    ctx.save();
-    ctx.globalAlpha = animAlpha;
-
-    let x = canvasW * ((subOptions.subX !== undefined ? subOptions.subX : 50) / 100) + animShakeX;
-    let y = canvasH * ((subOptions.subY !== undefined ? subOptions.subY : 85) / 100) - animOffsetY + animShakeY;
-
-    if (subOptions.subY === undefined) {
-      if (subOptions.position === 'top') {
-        y = (80 * scaleFactor) - animOffsetY;
-      } else if (subOptions.position === 'center') {
-        y = (canvasH / 2) - animOffsetY;
-      } else if (subOptions.position === 'bottom') {
-        y = canvasH - (80 * scaleFactor) - animOffsetY;
-      }
-    }
 
     // Áp dụng Xoay Nghiêng Chữ
     ctx.translate(x, y);
@@ -440,6 +438,7 @@ export const processVideoCanvas = async ({
     }
 
     ctx.restore();
+    });
   };
 
   // 6. MediaRecorder Stream
