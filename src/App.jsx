@@ -443,8 +443,8 @@ export default function App() {
       { id: newId, startTime: start, endTime: start + 3, text: 'Phụ đề mới...' }
     ]);
   };
-    const updateSubtitle = (id, field, value) => {
-    setSubtitles(subtitles.map(s => {
+  const updateSubtitle = (id, field, value) => {
+    setSubtitles(prev => prev.map(s => {
       if (s.id !== id) return s;
       const updated = { ...s, [field]: value };
       if (field === 'startTime' && Number(updated.startTime) >= Number(updated.endTime)) {
@@ -986,7 +986,7 @@ export default function App() {
                     return (
                       <div 
                         key={sub.id}
-                        className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing select-none group z-20 transition-all flex justify-center ${
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing select-none group z-20 flex justify-center ${
                           isSelected ? 'ring-2 ring-pink-500 rounded-lg p-0.5 shadow-[0_0_15px_rgba(236,72,153,0.8)]' : ''
                         }`}
                         style={{ 
@@ -997,13 +997,20 @@ export default function App() {
                         }}
                         onPointerDown={(e) => {
                           e.preventDefault();
+                          e.stopPropagation();
                           setSelectedSubId(sub.id);
-                          const container = e.currentTarget.parentElement;
+                          const targetEl = e.currentTarget;
+                          const container = targetEl.parentElement;
                           if (!container) return;
                           setIsDraggingSub(true);
 
+                          try {
+                            targetEl.setPointerCapture(e.pointerId);
+                          } catch (err) {}
+
                           const handlePointerMove = (moveEv) => {
                             const rect = container.getBoundingClientRect();
+                            if (rect.width === 0 || rect.height === 0) return;
                             const relX = moveEv.clientX - rect.left;
                             const relY = moveEv.clientY - rect.top;
 
@@ -1014,8 +1021,11 @@ export default function App() {
                             updateSubtitle(sub.id, 'y', Math.round(pctY));
                           };
 
-                          const handlePointerUp = () => {
+                          const handlePointerUp = (upEv) => {
                             setIsDraggingSub(false);
+                            try {
+                              targetEl.releasePointerCapture(upEv.pointerId);
+                            } catch (err) {}
                             window.removeEventListener('pointermove', handlePointerMove);
                             window.removeEventListener('pointerup', handlePointerUp);
                           };
