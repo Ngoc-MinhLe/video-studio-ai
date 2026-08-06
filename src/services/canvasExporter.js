@@ -270,7 +270,7 @@ export const processVideoCanvas = async ({
       ctx.rotate((rotationDeg * Math.PI) / 180);
     }
 
-    ctx.font = `extrabold ${fontSize}px "Plus Jakarta Sans", "Segoe UI", Roboto, Arial, sans-serif`;
+    ctx.font = `800 ${fontSize}px "Plus Jakarta Sans", "Segoe UI", Roboto, Arial, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
@@ -668,8 +668,9 @@ export const processVideoCanvas = async ({
           const shiftX = (canvasW * (bgOffsetX || 0)) / 100;
           const shiftY = (canvasH * (bgOffsetY || 0)) / 100;
 
-          const drawX = ((canvasW - drawW) / 2) + shiftX;
-          const drawY = ((canvasH - drawH) / 2) + shiftY;
+          // Nhân dịch chuyển với (2 - totalScale) để trùng khớp 100% với CSS transform-origin và scale của Live Preview
+          const drawX = ((canvasW - drawW) / 2) + shiftX * (2 - totalScale);
+          const drawY = ((canvasH - drawH) / 2) + shiftY * (2 - totalScale);
 
           ctx.drawImage(bgImgEl, drawX, drawY, drawW, drawH);
         } else {
