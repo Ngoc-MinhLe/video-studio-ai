@@ -81,8 +81,11 @@ export default function App() {
   const [subPosition, setSubPosition] = useState('bottom');
   const [subX, setSubX] = useState(50);
   const [subY, setSubY] = useState(85);
-  const [subStyle, setSubStyle] = useState('tiktok'); // 'tiktok' | 'neon' | 'cinema' | 'comic' | 'classic'
-  const [subAnimation, setSubAnimation] = useState('bounce'); // 'bounce' | 'fade' | 'pulse' | 'none'
+  const [subColor, setSubColor] = useState('#ffffff');
+  const [subBgColor, setSubBgColor] = useState('#000000');
+  const [subRotation, setSubRotation] = useState(0);
+  const [subStyle, setSubStyle] = useState('tiktok'); // 'tiktok' | 'victory' | 'boom' | 'sponge' | 'social' | 'neon' | 'cinema' | 'custom'
+  const [subAnimation, setSubAnimation] = useState('bounce'); // 'shake' | 'bounce' | 'fade' | 'pulse' | 'none'
   const [isDraggingSub, setIsDraggingSub] = useState(false);
   const [aspectRatio, setAspectRatio] = useState('16:9');
 
@@ -503,7 +506,7 @@ export default function App() {
         audioStartOffset,
         audioVideoOffset,
         subtitles,
-        subOptions: { fontSize: subFontSize, position: subPosition, subX, subY, subStyle, subAnimation },
+        subOptions: { fontSize: subFontSize, position: subPosition, subX, subY, subStyle, subAnimation, subColor, subBgColor, subRotation },
         aspectRatio,
         onProgress: (prog) => setProgress(prog),
         onStatus: (stat) => setStatusText(stat)
@@ -1342,45 +1345,97 @@ export default function App() {
               <span>✋ Mẹo: Kéo thả trực tiếp chữ Phụ đề trên Video xem trước để di chuyển tự do!</span>
             </div>
 
-            {/* Bộ Mẫu Template Phụ Đề Hot Trend */}
+            {/* Bộ Mẫu Template Phụ Đề Hot Trend (CapCut / VideoShow Style) */}
             <div className="flex flex-col gap-1.5 pt-2 border-t border-[#2b3042]/50">
               <label className="text-xs text-[#94a3b8] font-medium flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-pink-400" /> Mẫu Phong Cách Phụ Đề
+                <Sparkles className="w-3.5 h-3.5 text-pink-400" /> Mẫu Phong Cách Phụ Đề Hot Trend
               </label>
               <div className="grid grid-cols-2 gap-1.5 text-xs">
                 <button
                   onClick={() => setSubStyle('tiktok')}
-                  className={`p-2 rounded-lg font-bold transition-all text-left text-[11px] flex items-center gap-1.5 cursor-pointer ${
+                  className={`p-1.5 rounded-lg font-bold transition-all text-left text-[11px] cursor-pointer ${
                     subStyle === 'tiktok' ? 'bg-yellow-400 text-slate-950 shadow-md ring-2 ring-yellow-300' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
                   🟨 TikTok Viral
                 </button>
                 <button
-                  onClick={() => setSubStyle('neon')}
-                  className={`p-2 rounded-lg font-bold transition-all text-left text-[11px] flex items-center gap-1.5 cursor-pointer ${
-                    subStyle === 'neon' ? 'bg-pink-600 text-white shadow-md ring-2 ring-pink-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  onClick={() => setSubStyle('victory')}
+                  className={`p-1.5 rounded-lg font-bold transition-all text-left text-[11px] cursor-pointer ${
+                    subStyle === 'victory' ? 'bg-purple-600 text-white shadow-md ring-2 ring-purple-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
-                  🟣 Neon Cyber
+                  ⚡ VICTORY Neon
                 </button>
                 <button
-                  onClick={() => setSubStyle('comic')}
-                  className={`p-2 rounded-lg font-bold transition-all text-left text-[11px] flex items-center gap-1.5 cursor-pointer ${
-                    subStyle === 'comic' ? 'bg-amber-500 text-black shadow-md ring-2 ring-amber-300' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  onClick={() => setSubStyle('boom')}
+                  className={`p-1.5 rounded-lg font-bold transition-all text-left text-[11px] cursor-pointer ${
+                    subStyle === 'boom' ? 'bg-red-600 text-white shadow-md ring-2 ring-red-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
-                  💥 Comic Stroke
+                  💥 BOOM 3D
                 </button>
                 <button
-                  onClick={() => setSubStyle('cinema')}
-                  className={`p-2 rounded-lg font-bold transition-all text-left text-[11px] flex items-center gap-1.5 cursor-pointer ${
-                    subStyle === 'cinema' ? 'bg-slate-800 text-white border border-white/30 shadow-md ring-2 ring-slate-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  onClick={() => setSubStyle('sponge')}
+                  className={`p-1.5 rounded-lg font-bold transition-all text-left text-[11px] cursor-pointer ${
+                    subStyle === 'sponge' ? 'bg-green-700 text-white shadow-md ring-2 ring-green-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
-                  🎬 Điện Ảnh
+                  🟩 SPONGE 3D
+                </button>
+                <button
+                  onClick={() => setSubStyle('social')}
+                  className={`p-1.5 rounded-lg font-bold transition-all text-left text-[11px] cursor-pointer ${
+                    subStyle === 'social' ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  }`}
+                >
+                  📢 LIKE & SHARE
+                </button>
+                <button
+                  onClick={() => setSubStyle('custom')}
+                  className={`p-1.5 rounded-lg font-bold transition-all text-left text-[11px] cursor-pointer ${
+                    subStyle === 'custom' ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-md ring-2 ring-pink-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  }`}
+                >
+                  🎨 Tự Chọn Màu
                 </button>
               </div>
+            </div>
+
+            {/* Bảng Chọn Màu Tự Chọn (Khi chọn Style Custom) */}
+            {subStyle === 'custom' && (
+              <div className="grid grid-cols-2 gap-2 p-2 bg-[#1a1e2b] rounded-lg border border-[#2b3042] text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[#94a3b8]">Màu chữ:</span>
+                  <input 
+                    type="color" value={subColor} 
+                    onChange={(e) => setSubColor(e.target.value)}
+                    className="w-7 h-7 rounded border-0 cursor-pointer bg-transparent"
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[#94a3b8]">Màu nền:</span>
+                  <input 
+                    type="color" value={subBgColor} 
+                    onChange={(e) => setSubBgColor(e.target.value)}
+                    className="w-7 h-7 rounded border-0 cursor-pointer bg-transparent"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Tùy Chỉnh Xoay Nghiêng Chữ (Rotation Angle) */}
+            <div className="flex flex-col gap-1 pt-2 border-t border-[#2b3042]/50">
+              <div className="flex justify-between text-xs text-[#94a3b8]">
+                <span>Xoay nghiêng chữ:</span>
+                <span className="font-mono text-purple-300 font-bold">{subRotation}°</span>
+              </div>
+              <input 
+                type="range" min="-45" max="45" step="1"
+                value={subRotation}
+                onChange={(e) => setSubRotation(Number(e.target.value))}
+                className="w-full accent-purple-500 cursor-pointer"
+              />
             </div>
 
             {/* Bộ Hiệu Ứng Nhảy Múa Chữ (Kinetic Animation) */}
@@ -1389,6 +1444,14 @@ export default function App() {
                 <Zap className="w-3.5 h-3.5 text-amber-400" /> Hiệu Ứng Chữ Nhảy Múa
               </label>
               <div className="grid grid-cols-2 gap-1.5 text-xs">
+                <button
+                  onClick={() => setSubAnimation('shake')}
+                  className={`p-1.5 rounded-lg font-medium transition-all text-center text-[11px] cursor-pointer ${
+                    subAnimation === 'shake' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  }`}
+                >
+                  ⚡ Lắc Lư Sấm Sét
+                </button>
                 <button
                   onClick={() => setSubAnimation('bounce')}
                   className={`p-1.5 rounded-lg font-medium transition-all text-center text-[11px] cursor-pointer ${
@@ -1413,24 +1476,20 @@ export default function App() {
                 >
                   🌊 Pulse Wave
                 </button>
-                <button
-                  onClick={() => setSubAnimation('none')}
-                  className={`p-1.5 rounded-lg font-medium transition-all text-center text-[11px] cursor-pointer ${
-                    subAnimation === 'none' ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
-                  }`}
-                >
-                  🛑 Đứng Tĩnh
-                </button>
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-1 border-t border-[#2b3042]/50">
-              <span className="text-xs text-[#64748b] font-medium">Cỡ chữ (px)</span>
-              <input 
-                type="number" value={subFontSize} min="14" max="48"
-                onChange={(e) => setSubFontSize(Number(e.target.value))}
-                className="w-20 input-field py-0.5 px-2 text-center text-xs font-mono"
-              />
+            <div className="flex items-center justify-between pt-2 border-t border-[#2b3042]/50">
+              <span className="text-xs text-[#64748b] font-medium">Cỡ chữ lớn nhỏ (px)</span>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="range" min="14" max="64" step="1"
+                  value={subFontSize}
+                  onChange={(e) => setSubFontSize(Number(e.target.value))}
+                  className="w-24 accent-purple-500 cursor-pointer"
+                />
+                <span className="text-xs font-mono text-purple-300 font-bold">{subFontSize}px</span>
+              </div>
             </div>
           </div>
 
