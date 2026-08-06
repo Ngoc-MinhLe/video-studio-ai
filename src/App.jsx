@@ -9,6 +9,7 @@ import {
   Plus, 
   Trash2, 
   Sparkles, 
+  Zap,
   CheckCircle2, 
   Loader2,
   FileVideo,
