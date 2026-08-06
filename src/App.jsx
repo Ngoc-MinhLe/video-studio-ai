@@ -74,7 +74,7 @@ export default function App() {
   ]);
   const [subFontSize, setSubFontSize] = useState(24);
   const [subPosition, setSubPosition] = useState('bottom');
-  const [aspectRatio, setAspectRatio] = useState('9:16');
+  const [aspectRatio, setAspectRatio] = useState('16:9');
 
   // --- Export States ---
   const [isProcessing, setIsProcessing] = useState(false);
@@ -558,17 +558,6 @@ export default function App() {
             {/* Bộ chọn Tỷ lệ Khung hình Live Preview */}
             <div className="flex items-center gap-1 bg-[#12151e] p-1 rounded-xl border border-[#2b3042] text-xs">
               <button
-                onClick={() => setAspectRatio('9:16')}
-                className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                  aspectRatio === '9:16'
-                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
-                    : 'text-[#94a3b8] hover:text-white'
-                }`}
-                title="Tỷ lệ 9:16 Dọc (TikTok, Facebook Reels, Shorts)"
-              >
-                📱 9:16 (TikTok)
-              </button>
-              <button
                 onClick={() => setAspectRatio('16:9')}
                 className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
                   aspectRatio === '16:9'
@@ -578,6 +567,17 @@ export default function App() {
                 title="Tỷ lệ 16:9 Ngang (YouTube, Tivi)"
               >
                 🎬 16:9 (YouTube)
+              </button>
+              <button
+                onClick={() => setAspectRatio('9:16')}
+                className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  aspectRatio === '9:16'
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
+                    : 'text-[#94a3b8] hover:text-white'
+                }`}
+                title="Tỷ lệ 9:16 Dọc (TikTok, Facebook Reels, Shorts)"
+              >
+                📱 9:16 (TikTok)
               </button>
               <button
                 onClick={() => setAspectRatio('1:1')}
@@ -667,20 +667,120 @@ export default function App() {
           {/* Controls Phát Video & Export Dialog */}
           <div className="w-full flex flex-col gap-3">
             {videoUrl && (
-              <div className="flex items-center gap-3 bg-[#12151e] p-3 rounded-xl border border-[#2b3042]">
-                <button 
-                  onClick={togglePlay}
-                  className="w-10 h-10 rounded-lg bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center transition-all shadow-md shadow-purple-600/30 shrink-0"
-                >
-                  {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
-                </button>
+              <div className="flex flex-col gap-3 bg-[#12151e] p-3.5 rounded-xl border border-[#2b3042]">
+                {/* Nút Play/Pause & Sliderseek cơ bản */}
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={togglePlay}
+                    className="w-9 h-9 rounded-lg bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center transition-all shadow-md shadow-purple-600/30 shrink-0 cursor-pointer"
+                  >
+                    {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                  </button>
 
-                <input 
-                  type="range" min="0" max={duration || 100} step="0.1"
-                  value={currentTime}
-                  onChange={handleSeek}
-                  className="flex-1 accent-purple-500 cursor-pointer"
-                />
+                  <div className="flex-1 flex items-center gap-2">
+                    <input 
+                      type="range" min="0" max={duration || 100} step="0.1"
+                      value={currentTime}
+                      onChange={handleSeek}
+                      className="flex-1 accent-purple-500 cursor-pointer"
+                    />
+                    <span className="text-xs font-mono text-[#94a3b8] shrink-0 min-w-[70px] text-right">
+                      {Math.floor(currentTime)}s / {Math.floor(duration || 0)}s
+                    </span>
+                  </div>
+                </div>
+
+                {/* --- TRỤC TRUYỀN HÌNH CHUYÊN NGHIỆP: VISUAL MULTI-TRACK TIMELINE --- */}
+                <div className="flex flex-col gap-2 pt-2 border-t border-[#2b3042]/60">
+                  <div className="flex items-center justify-between text-xs font-medium text-[#94a3b8]">
+                    <span className="flex items-center gap-1.5 text-purple-300 font-semibold">
+                      <Sliders className="w-3.5 h-3.5 text-purple-400" /> Trục Thời Gian (Timeline Multi-Track)
+                    </span>
+                    <span className="text-[10px] text-[#64748b]">Bấm vào dải màu để nhảy tới phụ đề</span>
+                  </div>
+
+                  {/* Khung Trục Thời Gian Đa Luồng */}
+                  <div 
+                    className="relative w-full bg-[#090b10] rounded-lg p-2 border border-[#2b3042] flex flex-col gap-1.5 cursor-pointer select-none overflow-hidden"
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const clickX = e.clientX - rect.left;
+                      const ratio = clickX / rect.width;
+                      const newTime = ratio * (duration || 1);
+                      if (videoRef.current) {
+                        videoRef.current.currentTime = newTime;
+                        setCurrentTime(newTime);
+                      }
+                    }}
+                  >
+                    {/* Kim Thời Gian (Playhead Red Line) */}
+                    {duration > 0 && (
+                      <div 
+                        className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-20 shadow-[0_0_8px_rgba(239,68,68,0.8)] pointer-events-none"
+                        style={{ left: `${Math.min(100, Math.max(0, (currentTime / duration) * 100))}%` }}
+                      >
+                        <div className="w-2.5 h-2.5 bg-red-500 rotate-45 -translate-x-[3px] -mt-1 rounded-sm shadow-md" />
+                      </div>
+                    )}
+
+                    {/* Track 1: Luồng Video */}
+                    <div className="w-full h-4 bg-[#1a1e2b] rounded flex items-center relative overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-purple-700/80 to-purple-500/80 rounded transition-all duration-100"
+                        style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                      />
+                      <span className="absolute left-2 text-[10px] text-purple-200 font-bold pointer-events-none drop-shadow">
+                        🎬 Video Gốc ({Math.floor(duration || 0)}s)
+                      </span>
+                    </div>
+
+                    {/* Track 2: Luồng Nhạc Nền Mới */}
+                    {audioFile && (
+                      <div className="w-full h-4 bg-[#1a1e2b] rounded flex items-center relative overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-pink-600/80 to-rose-500/80 rounded transition-all duration-100"
+                          style={{ width: `${duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0}%` }}
+                        />
+                        <span className="absolute left-2 text-[10px] text-pink-200 font-bold pointer-events-none drop-shadow">
+                          🎵 Nhạc Nền ({audioName || 'File Nhạc'})
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Track 3: Dải Băng Các Câu Phụ Đề */}
+                    <div className="w-full h-6 bg-[#12151e] rounded relative flex items-center overflow-hidden border border-[#2b3042]/50">
+                      {subtitles.map((sub) => {
+                        const totalDur = duration || 1;
+                        const startPct = Math.min(100, Math.max(0, (sub.startTime / totalDur) * 100));
+                        const endPct = Math.min(100, Math.max(0, (sub.endTime / totalDur) * 100));
+                        const widthPct = Math.max(2, endPct - startPct);
+                        const isActive = currentTime >= sub.startTime && currentTime <= sub.endTime;
+
+                        return (
+                          <div
+                            key={sub.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (videoRef.current) {
+                                videoRef.current.currentTime = sub.startTime;
+                                setCurrentTime(sub.startTime);
+                              }
+                            }}
+                            className={`absolute h-4 rounded text-[9px] font-bold px-1 flex items-center truncate transition-all ${
+                              isActive 
+                                ? 'bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 ring-2 ring-amber-300 shadow-md shadow-amber-400/30 z-10 scale-105' 
+                                : 'bg-purple-600/60 hover:bg-purple-500/80 text-white border border-purple-400/30'
+                            }`}
+                            style={{ left: `${startPct}%`, width: `${widthPct}%` }}
+                            title={`Phụ đề: "${sub.text}" (${sub.startTime}s - ${sub.endTime}s)`}
+                          >
+                            {sub.text}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
