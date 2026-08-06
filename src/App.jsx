@@ -237,7 +237,7 @@ export default function App() {
       clipTimelineStart: accum - lastDur,
       clipTimelineEnd: accum,
       clipDur: lastDur,
-      localTime: lastClip.clipEnd || lastClip.duration || 10
+      localTime: lastClip.clipStart || 0
     };
   };
 
@@ -1049,13 +1049,10 @@ export default function App() {
                     onClick={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
                       const clickX = e.clientX - rect.left;
-                      const ratio = clickX / rect.width;
+                      const ratio = Math.max(0, Math.min(1, clickX / rect.width));
                       const totalDur = totalProjectDuration || duration || 1;
-                      const newTime = ratio * totalDur;
-                      if (videoRef.current) {
-                        videoRef.current.currentTime = newTime;
-                        setCurrentTime(newTime);
-                      }
+                      const targetProjectTime = ratio * totalDur;
+                      handleSeek(targetProjectTime);
                     }}
                   >
                     {/* Kim Thời Gian (Playhead Red Line) */}
@@ -1083,6 +1080,7 @@ export default function App() {
                             const startPct = (accumTime / totalDur) * 100;
                             const widthPct = Math.max(3, (clipDur / totalDur) * 100);
                             const isSelected = selectedClipId === clip.id;
+                            const clipStartOnTimeline = accumTime;
 
                             accumTime += clipDur;
 
@@ -1091,13 +1089,7 @@ export default function App() {
                                 key={clip.id}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setSelectedClipId(clip.id);
-                                  setVideoFile(clip.file);
-                                  setVideoUrl(clip.url);
-                                  if (videoRef.current) {
-                                    videoRef.current.currentTime = clip.clipStart;
-                                    setCurrentTime(clip.clipStart);
-                                  }
+                                  handleSeek(clipStartOnTimeline);
                                 }}
                                 className={`absolute h-6 rounded text-[10px] font-bold px-2 flex items-center justify-between truncate transition-all ${
                                   isSelected
