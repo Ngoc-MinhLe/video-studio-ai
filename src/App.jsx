@@ -84,9 +84,10 @@ export default function App() {
   const [subColor, setSubColor] = useState('#ffffff');
   const [subBgColor, setSubBgColor] = useState('#000000');
   const [subRotation, setSubRotation] = useState(0);
-  const [subStyle, setSubStyle] = useState('tiktok'); // 'tiktok' | 'victory' | 'boom' | 'sponge' | 'social' | 'neon' | 'cinema' | 'custom'
-  const [subAnimation, setSubAnimation] = useState('typewriter'); // 'typewriter' | 'marquee' | 'shake' | 'bounce' | 'fade' | 'pulse' | 'none'
-  const [subAnimSpeed, setSubAnimSpeed] = useState(1.0); // Tốc độ chạy hiệu ứng (0.5x -> 2.0x)
+  const [subStyle, setSubStyle] = useState('tiktok'); // 'tiktok' | 'led' | 'victory' | 'boom' | 'sponge' | 'social' | 'neon' | 'cinema' | 'custom'
+  const [subAnimation, setSubAnimation] = useState('bounce'); // 'typewriter' | 'marquee' | 'shake' | 'bounce' | 'fade' | 'pulse' | 'none'
+  const [subAnimSpeed, setSubAnimSpeed] = useState(1.0); // Tốc độ chạy hiệu ứng (0.5x -> 2.5x)
+  const [subBoxWidth, setSubBoxWidth] = useState(80); // Độ rộng khung LED/Banner (30% -> 100%)
   const [isDraggingSub, setIsDraggingSub] = useState(false);
   const [aspectRatio, setAspectRatio] = useState('16:9');
 
@@ -507,7 +508,7 @@ export default function App() {
         audioStartOffset,
         audioVideoOffset,
         subtitles,
-        subOptions: { fontSize: subFontSize, position: subPosition, subX, subY, subStyle, subAnimation, subAnimSpeed, subColor, subBgColor, subRotation },
+        subOptions: { fontSize: subFontSize, position: subPosition, subX, subY, subStyle, subAnimation, subAnimSpeed, subBoxWidth, subColor, subBgColor, subRotation },
         aspectRatio,
         onProgress: (prog) => setProgress(prog),
         onStatus: (stat) => setStatusText(stat)
@@ -970,10 +971,11 @@ export default function App() {
                   {/* Lớp Phụ Đề Live Preview chuẩn kích thước - Hỗ trợ Kéo Thả Trực Tiếp ✋ */}
                   {currentSub && (
                     <div 
-                      className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing select-none group z-20 transition-transform"
+                      className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing select-none group z-20 transition-all flex justify-center"
                       style={{ 
-                        left: subAnimation === 'marquee' ? '50%' : `${subX}%`, 
+                        left: `${subX}%`, 
                         top: `${subY}%`,
+                        width: subStyle === 'led' || subAnimation === 'marquee' ? `${subBoxWidth}%` : 'auto',
                         transform: `translate(-50%, -50%) rotate(${subRotation}deg)`
                       }}
                       onPointerDown={(e) => {
@@ -1004,41 +1006,55 @@ export default function App() {
                         window.addEventListener('pointerup', handlePointerUp);
                       }}
                     >
-                      <span 
-                        style={{
-                          fontSize: `${subFontSize}px`,
-                          color: subStyle === 'custom' ? subColor : undefined,
-                          backgroundColor: subStyle === 'custom' ? subBgColor : undefined
-                        }}
-                        className={`inline-block font-extrabold px-3.5 py-1.5 rounded-lg shadow-2xl tracking-wide whitespace-nowrap transition-all ${
-                          subAnimation === 'bounce' ? 'animate-bounce' : 
-                          subAnimation === 'pulse' ? 'animate-pulse' : 
-                          subAnimation === 'shake' ? 'animate-ping' : 
-                          subAnimation === 'marquee' ? 'animate-marquee' : ''
-                        } ${
-                          subStyle === 'tiktok' ? 'bg-yellow-400 text-slate-950 border-2 border-black font-black shadow-yellow-500/20' :
-                          subStyle === 'victory' ? 'bg-[#0f0720]/90 text-purple-200 border-2 border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.8)] font-black' :
-                          subStyle === 'boom' ? 'bg-red-600 text-white border-2 border-yellow-300 font-black shadow-lg' :
-                          subStyle === 'sponge' ? 'bg-green-700 text-white border-2 border-green-400 font-black shadow-green-500/30' :
-                          subStyle === 'social' ? 'bg-blue-600 text-white border-2 border-white font-bold shadow-md' :
-                          subStyle === 'neon' ? 'bg-[#18092b]/90 text-pink-400 border-2 border-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.6)] font-bold' :
-                          subStyle === 'cinema' ? 'bg-black/75 text-white border border-white/20 shadow-2xl font-semibold backdrop-blur-sm' :
-                          'bg-black/85 text-white border border-white/20 shadow-xl'
-                        }`}
-                      >
-                        {(() => {
-                          let raw = currentSub.text;
-                          if (subAnimation === 'typewriter') {
-                            const words = raw.split(' ');
-                            const subDur = (Number(currentSub.endTime) - Number(currentSub.startTime)) || 3;
-                            const elapsed = Math.max(0, currentTime - Number(currentSub.startTime));
-                            const revealProg = Math.min(1, Math.max(0, (elapsed * subAnimSpeed) / subDur));
-                            const visibleCount = Math.max(1, Math.ceil(revealProg * words.length));
-                            raw = words.slice(0, visibleCount).join(' ');
-                          }
-                          return subStyle === 'victory' ? `⚡ ${raw} ⚡` : subStyle === 'boom' ? `💥 ${raw}` : subStyle === 'social' ? `📢 ${raw}` : raw;
-                        })()}
-                      </span>
+                      {subStyle === 'led' || subAnimation === 'marquee' ? (
+                        /* Khung Bảng Đèn LED Chạy Chữ Quảng Cáo (LED Marquee Window) */
+                        <div className="w-full overflow-hidden border-2 border-amber-500 bg-[#06080d]/95 p-2 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.7)] text-amber-200 font-mono font-extrabold whitespace-nowrap flex items-center">
+                          <span 
+                            style={{
+                              fontSize: `${subFontSize}px`,
+                              animationDuration: `${3.5 / subAnimSpeed}s`
+                            }}
+                            className="animate-marquee inline-block font-mono text-amber-200 tracking-wider shadow-amber-400"
+                          >
+                            📟 {currentSub.text}
+                          </span>
+                        </div>
+                      ) : (
+                        <span 
+                          style={{
+                            fontSize: `${subFontSize}px`,
+                            color: subStyle === 'custom' ? subColor : undefined,
+                            backgroundColor: subStyle === 'custom' ? subBgColor : undefined
+                          }}
+                          className={`inline-block font-extrabold px-3.5 py-1.5 rounded-lg shadow-2xl tracking-wide whitespace-nowrap transition-all ${
+                            subAnimation === 'bounce' ? 'animate-bounce' : 
+                            subAnimation === 'pulse' ? 'animate-pulse' : 
+                            subAnimation === 'shake' ? 'animate-ping' : ''
+                          } ${
+                            subStyle === 'tiktok' ? 'bg-yellow-400 text-slate-950 border-2 border-black font-black shadow-yellow-500/20' :
+                            subStyle === 'victory' ? 'bg-[#0f0720]/90 text-purple-200 border-2 border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.8)] font-black' :
+                            subStyle === 'boom' ? 'bg-red-600 text-white border-2 border-yellow-300 font-black shadow-lg' :
+                            subStyle === 'sponge' ? 'bg-green-700 text-white border-2 border-green-400 font-black shadow-green-500/30' :
+                            subStyle === 'social' ? 'bg-blue-600 text-white border-2 border-white font-bold shadow-md' :
+                            subStyle === 'neon' ? 'bg-[#18092b]/90 text-pink-400 border-2 border-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.6)] font-bold' :
+                            subStyle === 'cinema' ? 'bg-black/75 text-white border border-white/20 shadow-2xl font-semibold backdrop-blur-sm' :
+                            'bg-black/85 text-white border border-white/20 shadow-xl'
+                          }`}
+                        >
+                          {(() => {
+                            let raw = currentSub.text;
+                            if (subAnimation === 'typewriter') {
+                              const words = raw.split(' ');
+                              const subDur = (Number(currentSub.endTime) - Number(currentSub.startTime)) || 3;
+                              const elapsed = Math.max(0, currentTime - Number(currentSub.startTime));
+                              const revealProg = Math.min(1, Math.max(0, (elapsed * subAnimSpeed) / subDur));
+                              const visibleCount = Math.max(1, Math.ceil(revealProg * words.length));
+                              raw = words.slice(0, visibleCount).join(' ');
+                            }
+                            return subStyle === 'victory' ? `⚡ ${raw} ⚡` : subStyle === 'boom' ? `💥 ${raw}` : subStyle === 'social' ? `📢 ${raw}` : raw;
+                          })()}
+                        </span>
+                      )}
                     </div>
                   )}
                 </>
@@ -1387,6 +1403,14 @@ export default function App() {
                   🟨 TikTok Viral
                 </button>
                 <button
+                  onClick={() => setSubStyle('led')}
+                  className={`p-1.5 rounded-lg font-bold transition-all text-left text-[11px] cursor-pointer ${
+                    subStyle === 'led' ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-300' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  }`}
+                >
+                  📟 BẢNG ĐÈN LED
+                </button>
+                <button
                   onClick={() => setSubStyle('victory')}
                   className={`p-1.5 rounded-lg font-bold transition-all text-left text-[11px] cursor-pointer ${
                     subStyle === 'victory' ? 'bg-purple-600 text-white shadow-md ring-2 ring-purple-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
@@ -1448,6 +1472,22 @@ export default function App() {
                     className="w-7 h-7 rounded border-0 cursor-pointer bg-transparent"
                   />
                 </div>
+              </div>
+            )}
+
+            {/* Tùy chỉnh Độ rộng khung Bảng Đèn LED (Box Width Slider) */}
+            {(subStyle === 'led' || subAnimation === 'marquee') && (
+              <div className="flex flex-col gap-1 p-2 bg-[#1a1e2b] rounded-lg border border-[#2b3042]">
+                <div className="flex justify-between text-[11px] text-[#94a3b8]">
+                  <span>📟 Độ rộng khung Đèn LED (kéo dài ngắn):</span>
+                  <span className="font-mono text-amber-300 font-bold">{subBoxWidth}%</span>
+                </div>
+                <input 
+                  type="range" min="30" max="100" step="5"
+                  value={subBoxWidth}
+                  onChange={(e) => setSubBoxWidth(Number(e.target.value))}
+                  className="w-full accent-amber-500 cursor-pointer"
+                />
               </div>
             )}
 

@@ -248,15 +248,50 @@ export const processVideoCanvas = async ({
     const textWidth = metrics.width;
     const textHeight = fontSize * 1.35;
 
-    const paddingX = fontSize * 0.5;
-    const paddingY = fontSize * 0.3;
-    const boxWidth = textWidth + (paddingX * 2);
-    const boxHeight = textHeight + (paddingY * 2);
+    const isMarqueeMode = anim === 'marquee' || style === 'led';
+    const boxWidth = isMarqueeMode
+      ? (canvasW * ((subOptions.subBoxWidth || 80) / 100))
+      : (textWidth + (fontSize * 1.0));
+    const boxHeight = textHeight + (fontSize * 0.6);
     const boxX = - (boxWidth / 2);
     const boxY = - (boxHeight / 2);
 
     // Render Theo Mẫu Style Đã Chọn
-    if (style === 'tiktok') {
+    if (style === 'led' || isMarqueeMode) {
+      // Style Bảng Đèn LED Chạy Chữ Tin Tức (LED Ticker Banner)
+      ctx.fillStyle = '#06080d';
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 10 * scaleFactor);
+        ctx.fill();
+      } else {
+        ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+      }
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 3 * scaleFactor;
+      ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+
+      // Cắt Vùng Khung Đèn LED (Clipping Window)
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(boxX + 2, boxY + 2, boxWidth - 4, boxHeight - 4);
+      ctx.clip();
+
+      if (isMarqueeMode) {
+        const scrollSpeed = 160 * scaleFactor * animSpeed;
+        const totalDist = textWidth + boxWidth;
+        const currentOffset = (elapsed * scrollSpeed) % totalDist;
+        const textX = (boxWidth / 2) - currentOffset + (textWidth / 2);
+        ctx.fillStyle = '#fef08a';
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 12 * scaleFactor;
+        ctx.fillText(text, textX, 0);
+      } else {
+        ctx.fillStyle = '#fef08a';
+        ctx.fillText(text, 0, 0);
+      }
+      ctx.restore();
+    } else if (style === 'tiktok') {
       // Style 1: TikTok Vàng Rực Rỡ Chữ Đen
       ctx.fillStyle = '#facc15';
       if (ctx.roundRect) {
