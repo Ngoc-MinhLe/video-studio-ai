@@ -164,26 +164,54 @@ export const processVideoCanvas = async ({
 
     const text = currentSub.text.trim();
     const scaleFactor = canvasH / 720;
-    const fontSize = Math.max(16, Math.round((subOptions.fontSize || 24) * scaleFactor));
+    const baseFontSize = Math.max(16, Math.round((subOptions.fontSize || 24) * scaleFactor));
+    const style = subOptions.subStyle || 'tiktok'; // 'tiktok', 'neon', 'cinema', 'comic', 'classic'
+    const anim = subOptions.subAnimation || 'bounce'; // 'bounce', 'fade', 'pulse', 'none'
 
-    ctx.font = `bold ${fontSize}px "Segoe UI", Roboto, Arial, sans-serif`;
+    // Tính toán tiến trình hiệu ứng animation (t từ 0 -> 1 trong 0.3s đầu)
+    const elapsed = projectTime - Number(currentSub.startTime);
+    let animScale = 1.0;
+    let animAlpha = 1.0;
+    let animOffsetY = 0;
+
+    if (anim === 'bounce') {
+      if (elapsed < 0.35) {
+        const progress = elapsed / 0.35;
+        // Ease out bounce elasticity: 0 -> 1.25 -> 1.0
+        animScale = 0.5 + Math.sin(progress * Math.PI) * 0.75;
+      }
+    } else if (anim === 'fade') {
+      if (elapsed < 0.3) {
+        const progress = elapsed / 0.3;
+        animAlpha = Math.min(1, Math.max(0, progress));
+        animOffsetY = (1 - progress) * (20 * scaleFactor);
+      }
+    } else if (anim === 'pulse') {
+      animScale = 1.0 + Math.sin(elapsed * 4) * 0.05;
+    }
+
+    const fontSize = Math.round(baseFontSize * animScale);
+    ctx.save();
+    ctx.globalAlpha = animAlpha;
+
+    ctx.font = `bold ${fontSize}px "Plus Jakarta Sans", "Segoe UI", Roboto, Arial, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
     const metrics = ctx.measureText(text);
     const textWidth = metrics.width;
-    const textHeight = fontSize * 1.3;
+    const textHeight = fontSize * 1.35;
 
     let x = canvasW * ((subOptions.subX !== undefined ? subOptions.subX : 50) / 100);
-    let y = canvasH * ((subOptions.subY !== undefined ? subOptions.subY : 85) / 100);
+    let y = canvasH * ((subOptions.subY !== undefined ? subOptions.subY : 85) / 100) - animOffsetY;
 
     if (subOptions.subY === undefined) {
       if (subOptions.position === 'top') {
-        y = textHeight + (60 * scaleFactor);
+        y = textHeight + (60 * scaleFactor) - animOffsetY;
       } else if (subOptions.position === 'center') {
-        y = canvasH / 2;
+        y = (canvasH / 2) - animOffsetY;
       } else if (subOptions.position === 'bottom') {
-        y = canvasH - textHeight - (60 * scaleFactor);
+        y = canvasH - textHeight - (60 * scaleFactor) - animOffsetY;
       }
     }
 
@@ -194,21 +222,81 @@ export const processVideoCanvas = async ({
     const boxX = x - (boxWidth / 2);
     const boxY = y - (boxHeight / 2);
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
-    if (ctx.roundRect) {
-      ctx.beginPath();
-      ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 8 * scaleFactor);
-      ctx.fill();
+    // Render Theo Mẫu Style Đã Chọn
+    if (style === 'tiktok') {
+      // Style 1: TikTok Vàng Rực Rỡ Chữ Đen
+      ctx.fillStyle = '#facc15'; // Yellow 400
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 10 * scaleFactor);
+        ctx.fill();
+      } else {
+        ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+      }
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 3 * scaleFactor;
+      ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+
+      ctx.fillStyle = '#090b10';
+      ctx.fillText(text, x, y);
+    } else if (style === 'neon') {
+      // Style 2: Cyber Neon Tím Hồng Phát Sáng
+      ctx.shadowColor = '#ec4899';
+      ctx.shadowBlur = 20 * scaleFactor;
+      ctx.fillStyle = 'rgba(24, 9, 43, 0.85)';
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 12 * scaleFactor);
+        ctx.fill();
+      } else {
+        ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+      }
+      ctx.strokeStyle = '#f472b6';
+      ctx.lineWidth = 2 * scaleFactor;
+      ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+
+      ctx.fillStyle = '#f472b6';
+      ctx.fillText(text, x, y);
+    } else if (style === 'comic') {
+      // Style 3: Truyện Tranh Anime Viền Đen Đậm
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 6 * scaleFactor;
+      ctx.strokeText(text, x, y);
+      ctx.fillText(text, x, y);
+    } else if (style === 'cinema') {
+      // Style 4: Điện Ảnh Sang Trọng
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 6 * scaleFactor);
+        ctx.fill();
+      } else {
+        ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+      }
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = 10 * scaleFactor;
+      ctx.fillText(text, x, y);
     } else {
-      ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+      // Style 5: Classic Mặc Định
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 8 * scaleFactor);
+        ctx.fill();
+      } else {
+        ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+      }
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.lineWidth = 1.5 * scaleFactor;
+      ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(text, x, y);
     }
 
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-    ctx.lineWidth = 1.5 * scaleFactor;
-    ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(text, x, y);
+    ctx.restore();
   };
 
   // 6. MediaRecorder Stream

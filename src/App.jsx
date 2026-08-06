@@ -80,6 +80,8 @@ export default function App() {
   const [subPosition, setSubPosition] = useState('bottom');
   const [subX, setSubX] = useState(50);
   const [subY, setSubY] = useState(85);
+  const [subStyle, setSubStyle] = useState('tiktok'); // 'tiktok' | 'neon' | 'cinema' | 'comic' | 'classic'
+  const [subAnimation, setSubAnimation] = useState('bounce'); // 'bounce' | 'fade' | 'pulse' | 'none'
   const [isDraggingSub, setIsDraggingSub] = useState(false);
   const [aspectRatio, setAspectRatio] = useState('16:9');
 
@@ -493,7 +495,7 @@ export default function App() {
         audioStartOffset,
         audioVideoOffset,
         subtitles,
-        subOptions: { fontSize: subFontSize, position: subPosition, subX, subY },
+        subOptions: { fontSize: subFontSize, position: subPosition, subX, subY, subStyle, subAnimation },
         aspectRatio,
         onProgress: (prog) => setProgress(prog),
         onStatus: (stat) => setStatusText(stat)
@@ -976,7 +978,15 @@ export default function App() {
                       }}
                     >
                       <span 
-                        className="inline-block bg-black/85 text-white font-bold px-3.5 py-1.5 rounded-lg shadow-2xl border border-purple-500/50 tracking-wide text-xs sm:text-sm ring-1 ring-purple-500/40 group-hover:ring-pink-500 transition-all"
+                        className={`inline-block font-extrabold px-3.5 py-1.5 rounded-lg shadow-2xl tracking-wide text-xs sm:text-sm transition-all ${
+                          subAnimation === 'bounce' ? 'animate-bounce' : subAnimation === 'pulse' ? 'animate-pulse' : ''
+                        } ${
+                          subStyle === 'tiktok' ? 'bg-yellow-400 text-slate-950 border-2 border-black font-black shadow-yellow-500/20' :
+                          subStyle === 'neon' ? 'bg-[#18092b]/90 text-pink-400 border-2 border-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.6)] font-bold' :
+                          subStyle === 'comic' ? 'bg-amber-500 text-black border-2 border-black font-black shadow-md' :
+                          subStyle === 'cinema' ? 'bg-black/75 text-white border border-white/20 shadow-2xl font-semibold backdrop-blur-sm' :
+                          'bg-black/85 text-white border border-white/20 shadow-xl'
+                        }`}
                       >
                         {currentSub.text}
                       </span>
@@ -1311,6 +1321,88 @@ export default function App() {
             {/* Mẹo Kéo Thả Trực Tiếp */}
             <div className="flex items-center gap-1.5 text-[10px] text-pink-300 bg-pink-950/30 p-1.5 rounded-lg border border-pink-500/20 font-medium">
               <span>✋ Mẹo: Kéo thả trực tiếp chữ Phụ đề trên Video xem trước để di chuyển tự do!</span>
+            </div>
+
+            {/* Bộ Mẫu Template Phụ Đề Hot Trend */}
+            <div className="flex flex-col gap-1.5 pt-2 border-t border-[#2b3042]/50">
+              <label className="text-xs text-[#94a3b8] font-medium flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-pink-400" /> Mẫu Phong Cách Phụ Đề
+              </label>
+              <div className="grid grid-cols-2 gap-1.5 text-xs">
+                <button
+                  onClick={() => setSubStyle('tiktok')}
+                  className={`p-2 rounded-lg font-bold transition-all text-left text-[11px] flex items-center gap-1.5 cursor-pointer ${
+                    subStyle === 'tiktok' ? 'bg-yellow-400 text-slate-950 shadow-md ring-2 ring-yellow-300' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  }`}
+                >
+                  🟨 TikTok Viral
+                </button>
+                <button
+                  onClick={() => setSubStyle('neon')}
+                  className={`p-2 rounded-lg font-bold transition-all text-left text-[11px] flex items-center gap-1.5 cursor-pointer ${
+                    subStyle === 'neon' ? 'bg-pink-600 text-white shadow-md ring-2 ring-pink-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  }`}
+                >
+                  🟣 Neon Cyber
+                </button>
+                <button
+                  onClick={() => setSubStyle('comic')}
+                  className={`p-2 rounded-lg font-bold transition-all text-left text-[11px] flex items-center gap-1.5 cursor-pointer ${
+                    subStyle === 'comic' ? 'bg-amber-500 text-black shadow-md ring-2 ring-amber-300' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  }`}
+                >
+                  💥 Comic Stroke
+                </button>
+                <button
+                  onClick={() => setSubStyle('cinema')}
+                  className={`p-2 rounded-lg font-bold transition-all text-left text-[11px] flex items-center gap-1.5 cursor-pointer ${
+                    subStyle === 'cinema' ? 'bg-slate-800 text-white border border-white/30 shadow-md ring-2 ring-slate-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  }`}
+                >
+                  🎬 Điện Ảnh
+                </button>
+              </div>
+            </div>
+
+            {/* Bộ Hiệu Ứng Nhảy Múa Chữ (Kinetic Animation) */}
+            <div className="flex flex-col gap-1.5 pt-2 border-t border-[#2b3042]/50">
+              <label className="text-xs text-[#94a3b8] font-medium flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-amber-400" /> Hiệu Ứng Chữ Nhảy Múa
+              </label>
+              <div className="grid grid-cols-2 gap-1.5 text-xs">
+                <button
+                  onClick={() => setSubAnimation('bounce')}
+                  className={`p-1.5 rounded-lg font-medium transition-all text-center text-[11px] cursor-pointer ${
+                    subAnimation === 'bounce' ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  }`}
+                >
+                  💥 Bounce (Nảy Chữ)
+                </button>
+                <button
+                  onClick={() => setSubAnimation('fade')}
+                  className={`p-1.5 rounded-lg font-medium transition-all text-center text-[11px] cursor-pointer ${
+                    subAnimation === 'fade' ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  }`}
+                >
+                  ✨ Trượt Hiện
+                </button>
+                <button
+                  onClick={() => setSubAnimation('pulse')}
+                  className={`p-1.5 rounded-lg font-medium transition-all text-center text-[11px] cursor-pointer ${
+                    subAnimation === 'pulse' ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  }`}
+                >
+                  🌊 Pulse Wave
+                </button>
+                <button
+                  onClick={() => setSubAnimation('none')}
+                  className={`p-1.5 rounded-lg font-medium transition-all text-center text-[11px] cursor-pointer ${
+                    subAnimation === 'none' ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  }`}
+                >
+                  🛑 Đứng Tĩnh
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center justify-between pt-1 border-t border-[#2b3042]/50">
