@@ -28,7 +28,8 @@ import {
   deductForVideoExport, 
   isUserAdmin, 
   logOutUser,
-  checkRedirectResult
+  checkRedirectResult,
+  updateUserCoinsInDb
 } from './services/authService';
 import { loadFFmpeg, processVideo } from './services/ffmpegService';
 import { processVideoCanvas } from './services/canvasExporter';
