@@ -976,13 +976,10 @@ export default function App() {
                       }}
                     >
                       <span 
-                        className="inline-block bg-black/85 text-white font-bold px-3.5 py-1.5 rounded-lg shadow-2xl border border-purple-500/50 tracking-wide text-xs sm:text-sm ring-2 ring-purple-500/40 group-hover:ring-pink-500 transition-all"
+                        className="inline-block bg-black/85 text-white font-bold px-3.5 py-1.5 rounded-lg shadow-2xl border border-purple-500/50 tracking-wide text-xs sm:text-sm ring-1 ring-purple-500/40 group-hover:ring-pink-500 transition-all"
                       >
                         {currentSub.text}
                       </span>
-                      <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[9px] bg-purple-600 text-white font-extrabold px-2 py-0.5 rounded shadow-lg opacity-90 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                        ✋ Kéo để di chuyển
-                      </div>
                     </div>
                   )}
                 </>
