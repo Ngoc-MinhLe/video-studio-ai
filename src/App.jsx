@@ -63,9 +63,11 @@ export default function App() {
   const [audioUrl, setAudioUrl] = useState(null);
   const [audioName, setAudioName] = useState('');
 
-  // --- States Âm lượng ---
+  // --- States Âm lượng & Cắt ghép Nhạc ---
   const [videoVolume, setVideoVolume] = useState(1);
   const [audioVolume, setAudioVolume] = useState(1);
+  const [audioStartOffset, setAudioStartOffset] = useState(0);
+  const [audioVideoOffset, setAudioVideoOffset] = useState(0);
 
   // --- States Phụ đề ---
   const [subtitles, setSubtitles] = useState([
@@ -298,6 +300,8 @@ export default function App() {
         audioFile,
         videoVolume,
         audioVolume,
+        audioStartOffset,
+        audioVideoOffset,
         subtitles,
         subOptions: { fontSize: subFontSize, position: subPosition },
         aspectRatio,
@@ -546,6 +550,63 @@ export default function App() {
               className="w-full accent-pink-500 cursor-pointer"
             />
           </div>
+
+          {/* Cấu Hình Cắt Ghép Nhạc Nền */}
+          {audioFile && (
+            <div className="flex flex-col gap-3 bg-[#12151e] p-3.5 rounded-xl border border-pink-500/30">
+              <div className="flex items-center justify-between text-xs font-semibold text-pink-300 border-b border-[#2b3042] pb-2">
+                <span className="flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5 text-pink-400" /> Cắt & Khớp Thời Gian Nhạc
+                </span>
+              </div>
+
+              {/* 1. Bắt đầu phát từ giây bao nhiêu của file MP3 */}
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between text-[11px] text-[#94a3b8]">
+                  <span>Cắt nhạc từ giây thứ của MP3:</span>
+                  <span className="font-mono text-pink-300 font-bold">{audioStartOffset}s</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="range" min="0" max="120" step="1"
+                    value={audioStartOffset}
+                    onChange={(e) => setAudioStartOffset(Number(e.target.value))}
+                    className="flex-1 accent-pink-500 cursor-pointer"
+                  />
+                  <button 
+                    onClick={() => setAudioStartOffset(Math.floor(currentTime))}
+                    className="text-[10px] px-2 py-0.5 rounded bg-pink-600/30 text-pink-300 border border-pink-500/40 hover:bg-pink-600 transition-colors shrink-0 cursor-pointer"
+                    title="Đặt giây bắt đầu nhạc = Giây hiện tại đang xem"
+                  >
+                    Lấy {Math.floor(currentTime)}s
+                  </button>
+                </div>
+              </div>
+
+              {/* 2. Lồng vào Video từ giây thứ bao nhiêu của Video */}
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between text-[11px] text-[#94a3b8]">
+                  <span>Lồng vào Video từ giây thứ của Video:</span>
+                  <span className="font-mono text-purple-300 font-bold">{audioVideoOffset}s</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="range" min="0" max={Math.floor(duration || 100)} step="1"
+                    value={audioVideoOffset}
+                    onChange={(e) => setAudioVideoOffset(Number(e.target.value))}
+                    className="flex-1 accent-purple-500 cursor-pointer"
+                  />
+                  <button 
+                    onClick={() => setAudioVideoOffset(Math.floor(currentTime))}
+                    className="text-[10px] px-2 py-0.5 rounded bg-purple-600/30 text-purple-300 border border-purple-500/40 hover:bg-purple-600 transition-colors shrink-0 cursor-pointer"
+                    title="Đặt vị trí lồng nhạc = Giây hiện tại đang xem"
+                  >
+                    Lấy {Math.floor(currentTime)}s
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* --- CỘT 2: VIDEO PREVIEW & TIMELINE --- */}
@@ -696,7 +757,7 @@ export default function App() {
                     <span className="flex items-center gap-1.5 text-purple-300 font-semibold">
                       <Sliders className="w-3.5 h-3.5 text-purple-400" /> Trục Thời Gian (Timeline Multi-Track)
                     </span>
-                    <span className="text-[10px] text-[#64748b]">Bấm vào dải màu để nhảy tới phụ đề</span>
+                    <span className="text-[10px] text-[#64748b]">Bấm dải màu để tua nhanh tới phụ đề</span>
                   </div>
 
                   {/* Khung Trục Thời Gian Đa Luồng */}
@@ -742,7 +803,7 @@ export default function App() {
                           style={{ width: `${duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0}%` }}
                         />
                         <span className="absolute left-2 text-[10px] text-pink-200 font-bold pointer-events-none drop-shadow">
-                          🎵 Nhạc Nền ({audioName || 'File Nhạc'})
+                          🎵 Nhạc Nền ({audioName || 'File Nhạc'}) (Từ {audioVideoOffset}s)
                         </span>
                       </div>
                     )}
@@ -844,8 +905,19 @@ export default function App() {
             <h2 className="font-semibold text-lg flex items-center gap-2">
               <Type className="w-5 h-5 text-pink-400" /> Biên Tập Phụ Đề
             </h2>
-            <button onClick={addSubtitle} className="btn-secondary text-xs">
-              <Plus className="w-3.5 h-3.5 text-emerald-400" /> Thêm Câu
+            <button 
+              onClick={() => {
+                const now = Math.floor(currentTime * 10) / 10;
+                const newId = subtitles.length > 0 ? Math.max(...subtitles.map(s => s.id)) + 1 : 1;
+                setSubtitles([
+                  ...subtitles,
+                  { id: newId, startTime: now, endTime: Math.min(Math.floor((duration || now + 3) * 10) / 10, now + 3), text: 'Phụ đề mới...' }
+                ]);
+              }} 
+              className="btn-secondary text-xs cursor-pointer"
+              title="Thêm phụ đề mới ngay tại mốc thời gian đang xem"
+            >
+              <Plus className="w-3.5 h-3.5 text-emerald-400" /> Thêm Tại {Math.floor(currentTime)}s
             </button>
           </div>
 
@@ -866,63 +938,89 @@ export default function App() {
                 onChange={(e) => setSubPosition(e.target.value)}
                 className="input-field py-1 text-xs bg-[#12151e]"
               >
-                <option value="bottom">Dưới cùng (TikTok)</option>
+                <option value="bottom">Dưới cùng (TikTok/Reels)</option>
                 <option value="center">Chính giữa</option>
                 <option value="top">Trên cùng</option>
               </select>
             </div>
           </div>
 
-          {/* Danh sách danh sách phụ đề */}
+          {/* Danh sách thẻ phụ đề với công cụ tinh chỉnh nhanh */}
           <div className="flex-1 overflow-y-auto max-h-[480px] flex flex-col gap-3 pr-1">
             {subtitles.length === 0 ? (
               <p className="text-xs text-[#64748b] text-center py-6">
-                Chưa có phụ đề nào. Nhấn "+ Thêm Câu" để bắt đầu.
+                Chưa có phụ đề nào. Nhấn "+ Thêm Tại ..." để bắt đầu.
               </p>
             ) : (
-              subtitles.map((sub) => (
-                <div 
-                  key={sub.id} 
-                  className={`p-3 rounded-xl border transition-all flex flex-col gap-2 ${
-                    currentTime >= sub.startTime && currentTime <= sub.endTime
-                      ? 'bg-purple-950/40 border-purple-500/50 shadow-md'
-                      : 'bg-[#12151e] border-[#2b3042]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 text-xs text-[#94a3b8] font-mono">
-                      <input 
-                        type="number" step="0.5" min="0" value={sub.startTime}
-                        onChange={(e) => updateSubtitle(sub.id, 'startTime', parseFloat(e.target.value) || 0)}
-                        className="w-14 input-field py-0.5 px-1 text-center font-mono text-xs"
-                      />
-                      <span>s ➔</span>
-                      <input 
-                        type="number" step="0.5" min="0" value={sub.endTime}
-                        onChange={(e) => updateSubtitle(sub.id, 'endTime', parseFloat(e.target.value) || 0)}
-                        className="w-14 input-field py-0.5 px-1 text-center font-mono text-xs"
-                      />
-                      <span>s</span>
+              subtitles.map((sub) => {
+                const isActive = currentTime >= sub.startTime && currentTime <= sub.endTime;
+                const nowSec = Math.floor(currentTime * 10) / 10;
+
+                return (
+                  <div 
+                    key={sub.id} 
+                    className={`p-3 rounded-xl border transition-all flex flex-col gap-2.5 ${
+                      isActive
+                        ? 'bg-purple-950/50 border-purple-500/70 shadow-lg ring-1 ring-purple-500/40'
+                        : 'bg-[#12151e] border-[#2b3042]'
+                    }`}
+                  >
+                    {/* Nhập mốc thời gian & Nút gán thời gian nhanh */}
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="flex items-center gap-1 text-xs text-[#94a3b8] font-mono">
+                          <input 
+                            type="number" step="0.1" min="0" value={sub.startTime}
+                            onChange={(e) => updateSubtitle(sub.id, 'startTime', parseFloat(e.target.value) || 0)}
+                            className="w-14 input-field py-0.5 px-1 text-center font-mono text-xs"
+                          />
+                          <span>s ➔</span>
+                          <input 
+                            type="number" step="0.1" min="0" value={sub.endTime}
+                            onChange={(e) => updateSubtitle(sub.id, 'endTime', parseFloat(e.target.value) || 0)}
+                            className="w-14 input-field py-0.5 px-1 text-center font-mono text-xs"
+                          />
+                          <span>s</span>
+                        </div>
+
+                        <button 
+                          onClick={() => deleteSubtitle(sub.id)}
+                          className="text-red-400 hover:text-red-300 p-1 rounded transition-colors cursor-pointer"
+                          title="Xóa phụ đề này"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Công cụ gán mốc thời gian xem video trực tiếp */}
+                      <div className="flex items-center gap-1.5 text-[10px]">
+                        <button
+                          onClick={() => updateSubtitle(sub.id, 'startTime', nowSec)}
+                          className="px-2 py-0.5 rounded bg-purple-600/30 hover:bg-purple-600 text-purple-300 border border-purple-500/40 font-medium transition-colors cursor-pointer"
+                          title="Đặt mốc Bắt Đầu đúng giây video đang xem"
+                        >
+                          ⏱️ Bắt đầu: {nowSec}s
+                        </button>
+                        <button
+                          onClick={() => updateSubtitle(sub.id, 'endTime', nowSec)}
+                          className="px-2 py-0.5 rounded bg-pink-600/30 hover:bg-pink-600 text-pink-300 border border-pink-500/40 font-medium transition-colors cursor-pointer"
+                          title="Đặt mốc Kết Thúc đúng giây video đang xem"
+                        >
+                          ⏱️ Kết thúc: {nowSec}s
+                        </button>
+                      </div>
                     </div>
 
-                    <button 
-                      onClick={() => deleteSubtitle(sub.id)}
-                      className="text-red-400 hover:text-red-300 p-1 rounded transition-colors"
-                      title="Xóa phụ đề này"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <input 
+                      type="text" 
+                      value={sub.text}
+                      onChange={(e) => updateSubtitle(sub.id, 'text', e.target.value)}
+                      placeholder="Nhập nội dung phụ đề..."
+                      className="input-field text-xs py-1.5"
+                    />
                   </div>
-
-                  <input 
-                    type="text" 
-                    value={sub.text}
-                    onChange={(e) => updateSubtitle(sub.id, 'text', e.target.value)}
-                    placeholder="Nhập nội dung phụ đề..."
-                    className="input-field text-xs py-1.5"
-                  />
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </section>

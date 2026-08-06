@@ -2,6 +2,7 @@
  * Canvas Exporter Service
  * Xuất Video trực tiếp bằng HTML5 Canvas + Web Audio API + MediaRecorder.
  * Hỗ trợ Tùy chỉnh Tỷ lệ Khung hình (9:16 TikTok, 16:9 YouTube, 1:1 Insta, 4:5 FB).
+ * Hỗ trợ Cắt ghép Nhạc Nền theo thời gian tùy chỉnh (Audio Offset & Sync).
  * Chạy 100% mượt mà trên tất cả trình duyệt (Cốc Cốc, Chrome, Edge, Safari, Mobile).
  */
 
@@ -10,9 +11,11 @@ export const processVideoCanvas = async ({
   audioFile,
   videoVolume = 1,
   audioVolume = 1,
+  audioStartOffset = 0, // Đoạn nhạc bắt đầu phát từ giây thứ bao nhiêu của file mp3
+  audioVideoOffset = 0, // Đoạn nhạc lồng vào video từ giây thứ bao nhiêu của video
   subtitles = [],
   subOptions = { fontSize: 24, fontColor: 'white', position: 'bottom' },
-  aspectRatio = 'original', // 'original', '9:16', '16:9', '1:1', '4:5'
+  aspectRatio = '16:9', // '16:9', '9:16', '1:1', '4:5', 'original'
   onProgress,
   onStatus
 }) => {
@@ -63,12 +66,10 @@ export const processVideoCanvas = async ({
   let drawY = 0;
 
   if (srcRatio > targetRatio) {
-    // Video rộng hơn khung target
     drawW = canvasW;
     drawH = canvasW / srcRatio;
     drawY = (canvasH - drawH) / 2;
   } else {
-    // Video cao hơn khung target
     drawH = canvasH;
     drawW = canvasH * srcRatio;
     drawX = (canvasW - drawW) / 2;
@@ -82,7 +83,7 @@ export const processVideoCanvas = async ({
     audioEl.crossOrigin = 'anonymous';
     await new Promise((resolve) => {
       audioEl.onloadedmetadata = resolve;
-      audioEl.onerror = resolve; // Bỏ qua nếu lỗi audio nhẹ
+      audioEl.onerror = resolve;
     });
   }
 
@@ -132,7 +133,6 @@ export const processVideoCanvas = async ({
     if (!currentSub) return;
 
     const text = currentSub.text.trim();
-    // Tỷ lệ cỡ chữ tương ứng với độ phân giải canvas
     const scaleFactor = canvasH / 720;
     const fontSize = Math.max(16, Math.round((subOptions.fontSize || 24) * scaleFactor));
 
@@ -153,7 +153,7 @@ export const processVideoCanvas = async ({
       y = canvasH / 2;
     }
 
-    // Vẽ Khung Đen Làm Nổi Phụ Đề (Background Box)
+    // Vẽ Khung Đen Làm Nổi Phụ Đề
     const paddingX = fontSize * 0.5;
     const paddingY = fontSize * 0.3;
     const boxWidth = textWidth + (paddingX * 2);
@@ -161,7 +161,7 @@ export const processVideoCanvas = async ({
     const boxX = x - (boxWidth / 2);
     const boxY = y - (boxHeight / 2);
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
     if (ctx.roundRect) {
       ctx.beginPath();
       ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 8 * scaleFactor);
@@ -170,8 +170,8 @@ export const processVideoCanvas = async ({
       ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
     }
 
-    // Viền sáng nhẹ xung quanh khung
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    // Viền sáng nhẹ
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
     ctx.lineWidth = 1.5 * scaleFactor;
     ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
@@ -181,7 +181,7 @@ export const processVideoCanvas = async ({
   };
 
   // 5. Chuẩn bị Stream & MediaRecorder
-  const canvasStream = canvas.captureStream(30); // 30 FPS
+  const canvasStream = canvas.captureStream(30);
   const audioTracks = dest.stream.getAudioTracks();
 
   const combinedStream = new MediaStream([
@@ -189,7 +189,6 @@ export const processVideoCanvas = async ({
     ...audioTracks
   ]);
 
-  // Kiểm tra định dạng hỗ trợ của Trình duyệt
   let mimeType = 'video/webm';
   if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1,mp4a.40.2')) {
     mimeType = 'video/mp4;codecs=avc1,mp4a.40.2';
@@ -201,11 +200,9 @@ export const processVideoCanvas = async ({
     mimeType = 'video/webm;codecs=vp8,opus';
   }
 
-  console.log('[Canvas Exporter]: AspectRatio:', aspectRatio, 'Using MimeType:', mimeType);
-
   const mediaRecorder = new MediaRecorder(combinedStream, {
     mimeType,
-    videoBitsPerSecond: 6000000 // 6 Mbps chất lượng cao
+    videoBitsPerSecond: 6000000
   });
 
   const chunks = [];
@@ -216,13 +213,13 @@ export const processVideoCanvas = async ({
   };
 
   // 6. Bắt đầu Quá Trình Render
-  if (onStatus) onStatus(`Đang render video tỷ lệ ${aspectRatio} & phụ đề...`);
+  if (onStatus) onStatus(`Đang render video (${aspectRatio}) & cắt ghép nhạc...`);
 
   videoEl.currentTime = 0;
-  if (audioEl) audioEl.currentTime = 0;
 
   return new Promise((resolve, reject) => {
     let animId = null;
+    let audioStarted = false;
 
     const cleanup = () => {
       if (animId) cancelAnimationFrame(animId);
@@ -248,11 +245,8 @@ export const processVideoCanvas = async ({
       reject(err);
     };
 
-    // Bắt đầu ghi
     mediaRecorder.start(100);
-
     videoEl.play().catch(reject);
-    if (audioEl) audioEl.play().catch(() => {});
 
     const renderLoop = () => {
       if (videoEl.ended || videoEl.paused) {
@@ -262,11 +256,20 @@ export const processVideoCanvas = async ({
         return;
       }
 
-      // Xóa canvas & Tô nền tối sang trọng
+      // Xử lý thời điểm phát nhạc nền khớp với videoOffset & startOffset
+      if (audioEl) {
+        if (videoEl.currentTime >= audioVideoOffset && !audioStarted) {
+          audioStarted = true;
+          audioEl.currentTime = audioStartOffset || 0;
+          audioEl.play().catch(() => {});
+        }
+      }
+
+      // Xóa canvas & tô nền tối
       ctx.fillStyle = '#090b10';
       ctx.fillRect(0, 0, canvasW, canvasH);
 
-      // Vẽ khung hình video được căn giữa đẹp mắt
+      // Vẽ khung hình video căn giữa
       ctx.drawImage(videoEl, drawX, drawY, drawW, drawH);
 
       // Vẽ phụ đề
