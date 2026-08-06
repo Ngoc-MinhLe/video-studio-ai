@@ -1,46 +1,93 @@
 /**
- * Canvas Exporter Service
+ * Canvas Exporter Service - Multi-Clip Non-Linear Video Editor Engine
  * Xuất Video trực tiếp bằng HTML5 Canvas + Web Audio API + MediaRecorder.
- * Hỗ trợ Tùy chỉnh Tỷ lệ Khung hình (9:16 TikTok, 16:9 YouTube, 1:1 Insta, 4:5 FB).
- * Hỗ trợ Cắt ghép Nhạc Nền theo thời gian tùy chỉnh (Audio Offset & Sync).
+ * Hỗ trợ Dựng nhiều Video Clips (Nối clip, Cắt xẻ clip ✂️, Xóa đoạn thừa 🗑️).
+ * Hỗ trợ Tùy chỉnh Tỷ lệ Khung hình (16:9 YouTube, 9:16 TikTok, 1:1 Insta, 4:5 FB).
  * Chạy 100% mượt mà trên tất cả trình duyệt (Cốc Cốc, Chrome, Edge, Safari, Mobile).
  */
 
 export const processVideoCanvas = async ({
   videoFile,
+  videoClips = [],
   audioFile,
+  audioClips = [],
   videoVolume = 1,
   audioVolume = 1,
-  audioStartOffset = 0, // Đoạn nhạc bắt đầu phát từ giây thứ bao nhiêu của file mp3
-  audioVideoOffset = 0, // Đoạn nhạc lồng vào video từ giây thứ bao nhiêu của video
+  audioStartOffset = 0,
+  audioVideoOffset = 0,
   subtitles = [],
   subOptions = { fontSize: 24, fontColor: 'white', position: 'bottom' },
-  aspectRatio = '16:9', // '16:9', '9:16', '1:1', '4:5', 'original'
+  aspectRatio = '16:9',
   onProgress,
   onStatus
 }) => {
-  if (onStatus) onStatus('Đang chuẩn bị môi trường Render Canvas...');
+  if (onStatus) onStatus('Đang khởi tạo Trình Render Đa Luồng Canvas...');
   if (onProgress) onProgress(5);
 
-  // 1. Tạo Element Video Ẩn
-  const videoEl = document.createElement('video');
-  videoEl.src = URL.createObjectURL(videoFile);
-  videoEl.muted = false; // Cần bật âm thanh để Web Audio API lấy được stream
-  videoEl.playsInline = true;
-  videoEl.crossOrigin = 'anonymous';
+  // 1. Chuẩn hóa danh sách Video Clips
+  let clipsToProcess = [];
+  if (videoClips && videoClips.length > 0) {
+    clipsToProcess = videoClips;
+  } else if (videoFile) {
+    clipsToProcess = [{
+      id: 1,
+      file: videoFile,
+      name: videoFile.name,
+      clipStart: 0,
+      clipEnd: 0, // Sẽ tính sau metadata
+      duration: 0
+    }];
+  }
 
-  await new Promise((resolve, reject) => {
-    videoEl.onloadedmetadata = resolve;
-    videoEl.onerror = () => reject(new Error('Không thể đọc file Video gốc.'));
-  });
+  if (clipsToProcess.length === 0) {
+    throw new Error('Chưa có Video Clip nào được nạp!');
+  }
 
-  const origW = videoEl.videoWidth || 1280;
-  const origH = videoEl.videoHeight || 720;
-  const duration = videoEl.duration;
+  // Khởi tạo các Element Video cho từng Clip
+  const loadedVideoElements = [];
+  let totalProjectDuration = 0;
+  let firstVideoW = 1280;
+  let firstVideoH = 720;
 
-  // Tính toán kích thước Canvas theo Tỷ Lệ Khung Hình được chọn
-  let canvasW = origW;
-  let canvasH = origH;
+  for (let i = 0; i < clipsToProcess.length; i++) {
+    const clip = clipsToProcess[i];
+    const videoEl = document.createElement('video');
+    videoEl.src = clip.url || URL.createObjectURL(clip.file);
+    videoEl.muted = false;
+    videoEl.playsInline = true;
+    videoEl.crossOrigin = 'anonymous';
+
+    await new Promise((resolve, reject) => {
+      videoEl.onloadedmetadata = resolve;
+      videoEl.onerror = () => reject(new Error(`Không thể nạp clip video: ${clip.name}`));
+    });
+
+    const fileDur = videoEl.duration || 10;
+    const clipStart = clip.clipStart || 0;
+    const clipEnd = (clip.clipEnd && clip.clipEnd > clipStart) ? clip.clipEnd : fileDur;
+    const effectiveDur = clipEnd - clipStart;
+
+    if (i === 0) {
+      firstVideoW = videoEl.videoWidth || 1280;
+      firstVideoH = videoEl.videoHeight || 720;
+    }
+
+    loadedVideoElements.push({
+      clip,
+      videoEl,
+      clipStart,
+      clipEnd,
+      effectiveDur,
+      timelineStart: totalProjectDuration,
+      timelineEnd: totalProjectDuration + effectiveDur
+    });
+
+    totalProjectDuration += effectiveDur;
+  }
+
+  // 2. Kích thước Canvas theo Tỷ lệ Khung hình
+  let canvasW = firstVideoW;
+  let canvasH = firstVideoH;
 
   if (aspectRatio === '9:16') {
     canvasW = 1080;
@@ -56,30 +103,12 @@ export const processVideoCanvas = async ({
     canvasH = 1350;
   }
 
-  // Tính toán căn giữa Video trong Canvas (Aspect Contain)
-  const srcRatio = origW / origH;
-  const targetRatio = canvasW / canvasH;
-
-  let drawW = canvasW;
-  let drawH = canvasH;
-  let drawX = 0;
-  let drawY = 0;
-
-  if (srcRatio > targetRatio) {
-    drawW = canvasW;
-    drawH = canvasW / srcRatio;
-    drawY = (canvasH - drawH) / 2;
-  } else {
-    drawH = canvasH;
-    drawW = canvasH * srcRatio;
-    drawX = (canvasW - drawW) / 2;
-  }
-
-  // 2. Tạo Element Audio Ẩn (nếu có nhạc mới)
+  // 3. Chuẩn bị Audio Elements
   let audioEl = null;
-  if (audioFile) {
+  const targetAudioFile = (audioClips && audioClips.length > 0) ? audioClips[0].file : audioFile;
+  if (targetAudioFile) {
     audioEl = document.createElement('audio');
-    audioEl.src = URL.createObjectURL(audioFile);
+    audioEl.src = URL.createObjectURL(targetAudioFile);
     audioEl.crossOrigin = 'anonymous';
     await new Promise((resolve) => {
       audioEl.onloadedmetadata = resolve;
@@ -87,47 +116,48 @@ export const processVideoCanvas = async ({
     });
   }
 
-  // 3. Khởi tạo Web Audio API để Trộn Âm Thanh
+  // 4. Khởi tạo Web Audio API để Trộn Âm Thanh
   const AudioContext = window.AudioContext || window.webkitAudioContext;
   const audioCtx = new AudioContext();
   await audioCtx.resume();
   const dest = audioCtx.createMediaStreamDestination();
 
-  // Nguồn âm thanh từ Video gốc
-  try {
-    const videoSource = audioCtx.createMediaElementSource(videoEl);
-    const videoGain = audioCtx.createGain();
-    videoGain.gain.value = videoVolume;
-    videoSource.connect(videoGain);
-    videoGain.connect(dest);
-  } catch (e) {
-    console.warn('Lỗi khởi tạo AudioSource từ video (có thể video không có âm thanh):', e);
+  // Nối âm thanh các Video Clips vào Audio Context
+  for (const item of loadedVideoElements) {
+    try {
+      const source = audioCtx.createMediaElementSource(item.videoEl);
+      const gain = audioCtx.createGain();
+      gain.gain.value = videoVolume;
+      source.connect(gain);
+      gain.connect(dest);
+    } catch (e) {
+      console.warn('Lỗi kết nối audio từ clip:', item.clip.name, e);
+    }
   }
 
-  // Nguồn âm thanh từ Nhạc Mới
+  // Nguồn âm thanh từ Nhạc Nền Mới
   if (audioEl) {
     try {
       const audioSource = audioCtx.createMediaElementSource(audioEl);
       const audioGain = audioCtx.createGain();
       audioGain.gain.value = audioVolume;
       audioSource.connect(audioGain);
-      audioGain.connect(dest);
+      audioSource.connect(dest);
     } catch (e) {
-      console.warn('Lỗi kết nối nhạc nền mới:', e);
+      console.warn('Lỗi kết nối nhạc nền:', e);
     }
   }
 
-  // 4. Tạo Canvas Vẽ Khung Hình & Phụ Đề
+  // 5. Khởi tạo Canvas & Hàm Vẽ
   const canvas = document.createElement('canvas');
   canvas.width = canvasW;
   canvas.height = canvasH;
   const ctx = canvas.getContext('2d');
 
-  // Hàm vẽ phụ đề chuẩn TikTok/Reels/YouTube lên Canvas
-  const drawSubtitles = (currentTime) => {
+  const drawSubtitles = (projectTime) => {
     const validSubs = subtitles || [];
     const currentSub = validSubs.find(
-      s => s.text && s.text.trim() !== '' && currentTime >= Number(s.startTime) && currentTime <= Number(s.endTime)
+      s => s.text && s.text.trim() !== '' && projectTime >= Number(s.startTime) && projectTime <= Number(s.endTime)
     );
 
     if (!currentSub) return;
@@ -153,7 +183,6 @@ export const processVideoCanvas = async ({
       y = canvasH / 2;
     }
 
-    // Vẽ Khung Đen Làm Nổi Phụ Đề
     const paddingX = fontSize * 0.5;
     const paddingY = fontSize * 0.3;
     const boxWidth = textWidth + (paddingX * 2);
@@ -170,17 +199,15 @@ export const processVideoCanvas = async ({
       ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
     }
 
-    // Viền sáng nhẹ
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
     ctx.lineWidth = 1.5 * scaleFactor;
     ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
-    // Chữ màu trắng nổi bật
     ctx.fillStyle = '#ffffff';
     ctx.fillText(text, x, y);
   };
 
-  // 5. Chuẩn bị Stream & MediaRecorder
+  // 6. MediaRecorder Stream
   const canvasStream = canvas.captureStream(30);
   const audioTracks = dest.stream.getAudioTracks();
 
@@ -212,21 +239,22 @@ export const processVideoCanvas = async ({
     }
   };
 
-  // 6. Bắt đầu Quá Trình Render
-  if (onStatus) onStatus(`Đang render video (${aspectRatio}) & cắt ghép nhạc...`);
-
-  videoEl.currentTime = 0;
+  if (onStatus) onStatus(`Đang render nối ${loadedVideoElements.length} clip video (${aspectRatio})...`);
 
   return new Promise((resolve, reject) => {
     let animId = null;
+    let currentClipIdx = 0;
+    let projectTime = 0;
+    let lastTimestamp = null;
     let audioStarted = false;
 
     const cleanup = () => {
       if (animId) cancelAnimationFrame(animId);
-      videoEl.pause();
+      loadedVideoElements.forEach(item => {
+        item.videoEl.pause();
+        if (item.clip.url) URL.revokeObjectURL(item.clip.url);
+      });
       if (audioEl) audioEl.pause();
-      URL.revokeObjectURL(videoEl.src);
-      if (audioEl) URL.revokeObjectURL(audioEl.src);
       audioCtx.close();
     };
 
@@ -246,44 +274,93 @@ export const processVideoCanvas = async ({
     };
 
     mediaRecorder.start(100);
-    videoEl.play().catch(reject);
 
-    const renderLoop = () => {
-      if (videoEl.ended || videoEl.paused) {
+    // Phát clip đầu tiên
+    const firstItem = loadedVideoElements[0];
+    firstItem.videoEl.currentTime = firstItem.clipStart;
+    firstItem.videoEl.play().catch(reject);
+
+    const renderLoop = (timestamp) => {
+      if (!lastTimestamp) lastTimestamp = timestamp;
+      const delta = (timestamp - lastTimestamp) / 1000;
+      lastTimestamp = timestamp;
+
+      projectTime += delta;
+
+      if (projectTime >= totalProjectDuration) {
         if (mediaRecorder.state === 'recording') {
           mediaRecorder.stop();
         }
         return;
       }
 
-      // Xử lý thời điểm phát nhạc nền khớp với videoOffset & startOffset
+      // Xử lý phát nhạc nền
       if (audioEl) {
-        if (videoEl.currentTime >= audioVideoOffset && !audioStarted) {
+        if (projectTime >= audioVideoOffset && !audioStarted) {
           audioStarted = true;
           audioEl.currentTime = audioStartOffset || 0;
           audioEl.play().catch(() => {});
         }
       }
 
-      // Xóa canvas & tô nền tối
+      // Tìm clip tương ứng với projectTime hiện tại
+      let activeItemIndex = loadedVideoElements.findIndex(
+        item => projectTime >= item.timelineStart && projectTime < item.timelineEnd
+      );
+
+      if (activeItemIndex === -1) activeItemIndex = loadedVideoElements.length - 1;
+
+      if (activeItemIndex !== currentClipIdx) {
+        // Dừng clip cũ, bật clip mới
+        loadedVideoElements[currentClipIdx].videoEl.pause();
+        currentClipIdx = activeItemIndex;
+        const newItem = loadedVideoElements[currentClipIdx];
+        const offsetInClip = projectTime - newItem.timelineStart;
+        newItem.videoEl.currentTime = newItem.clipStart + offsetInClip;
+        newItem.videoEl.play().catch(() => {});
+      }
+
+      const activeItem = loadedVideoElements[currentClipIdx];
+      const activeVideoEl = activeItem.videoEl;
+
+      // Xóa Canvas & Vẽ Nền tối
       ctx.fillStyle = '#090b10';
       ctx.fillRect(0, 0, canvasW, canvasH);
 
-      // Vẽ khung hình video căn giữa
-      ctx.drawImage(videoEl, drawX, drawY, drawW, drawH);
+      // Căn giữa Frame Video trên Canvas
+      const vW = activeVideoEl.videoWidth || 1280;
+      const vH = activeVideoEl.videoHeight || 720;
+      const srcR = vW / vH;
+      const targetR = canvasW / canvasH;
+
+      let dW = canvasW;
+      let dH = canvasH;
+      let dX = 0;
+      let dY = 0;
+
+      if (srcR > targetR) {
+        dW = canvasW;
+        dH = canvasW / srcR;
+        dY = (canvasH - dH) / 2;
+      } else {
+        dH = canvasH;
+        dW = canvasH * srcR;
+        dX = (canvasW - dW) / 2;
+      }
+
+      ctx.drawImage(activeVideoEl, dX, dY, dW, dH);
 
       // Vẽ phụ đề
-      drawSubtitles(videoEl.currentTime);
+      drawSubtitles(projectTime);
 
-      // Cập nhật tiến trình %
-      if (onProgress && duration > 0) {
-        const percent = Math.min(99, Math.round((videoEl.currentTime / duration) * 100));
+      if (onProgress && totalProjectDuration > 0) {
+        const percent = Math.min(99, Math.round((projectTime / totalProjectDuration) * 100));
         onProgress(percent);
       }
 
       animId = requestAnimationFrame(renderLoop);
     };
 
-    renderLoop();
+    requestAnimationFrame(renderLoop);
   });
 };

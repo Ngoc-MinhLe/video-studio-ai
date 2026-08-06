@@ -56,7 +56,9 @@ export default function App() {
   const [authModalType, setAuthModalType] = useState('login'); // 'login' | 'insufficient_coins'
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
 
-  // --- States Quản lý Files ---
+  // --- States Quản lý Multi-Clip Video & Audio ---
+  const [videoClips, setVideoClips] = useState([]);
+  const [selectedClipId, setSelectedClipId] = useState(null);
   const [videoFile, setVideoFile] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
   const [audioFile, setAudioFile] = useState(null);
@@ -206,15 +208,84 @@ export default function App() {
     }
   };
 
-  // Xử lý upload Video
+  // Xử lý upload Thêm Video Clip (Cho phép nạp nhiều video nối đuôi)
   const handleVideoUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setVideoFile(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const newClips = files.map((file, idx) => {
       const url = URL.createObjectURL(file);
-      setVideoUrl(url);
-      setExportUrl(null);
-      setIsPlaying(false);
+      const id = Date.now() + idx;
+      return {
+        id,
+        file,
+        url,
+        name: file.name,
+        clipStart: 0,
+        clipEnd: 0
+      };
+    });
+
+    setVideoClips(prev => {
+      const updated = [...prev, ...newClips];
+      if (!videoUrl && updated.length > 0) {
+        setVideoFile(updated[0].file);
+        setVideoUrl(updated[0].url);
+        setSelectedClipId(updated[0].id);
+      }
+      return updated;
+    });
+    setExportUrl(null);
+    setIsPlaying(false);
+  };
+
+  // Hàm Tách Video Clip tại vị trí Kim thời gian hiện tại (Split Clip ✂️)
+  const splitCurrentClip = () => {
+    if (!selectedClipId || videoClips.length === 0) return;
+    const clipIdx = videoClips.findIndex(c => c.id === selectedClipId);
+    if (clipIdx === -1) return;
+
+    const targetClip = videoClips[clipIdx];
+    const nowSec = Math.floor(currentTime * 10) / 10;
+
+    // Giới hạn tách clip hợp lệ
+    if (nowSec <= targetClip.clipStart + 0.5) {
+      alert('Vị trí kim thời gian quá gần đầu clip, không thể tách!');
+      return;
+    }
+
+    const firstPart = {
+      ...targetClip,
+      clipEnd: nowSec
+    };
+
+    const secondPart = {
+      ...targetClip,
+      id: Date.now(),
+      name: `${targetClip.name} (Phần 2)`,
+      clipStart: nowSec
+    };
+
+    const nextClips = [...videoClips];
+    nextClips.splice(clipIdx, 1, firstPart, secondPart);
+
+    setVideoClips(nextClips);
+    setSelectedClipId(secondPart.id);
+    console.log(`[Split Clip Success]: Tách clip ${targetClip.name} tại mốc ${nowSec}s`);
+  };
+
+  // Hàm Xóa Video Clip được chọn (Delete Clip 🗑️)
+  const removeClip = (clipId) => {
+    const nextClips = videoClips.filter(c => c.id !== clipId);
+    setVideoClips(nextClips);
+    if (nextClips.length > 0) {
+      setVideoFile(nextClips[0].file);
+      setVideoUrl(nextClips[0].url);
+      setSelectedClipId(nextClips[0].id);
+    } else {
+      setVideoFile(null);
+      setVideoUrl(null);
+      setSelectedClipId(null);
     }
   };
 
@@ -297,6 +368,7 @@ export default function App() {
       // Render siêu tốc bằng Native GPU Canvas Engine
       const result = await processVideoCanvas({
         videoFile,
+        videoClips,
         audioFile,
         videoVolume,
         audioVolume,
@@ -489,19 +561,58 @@ export default function App() {
             <h2 className="font-semibold text-lg">Mặt Bằng Âm Thanh</h2>
           </div>
 
-          {/* Upload Video Gốc */}
+          {/* Upload Video Gốc (Cho phép chọn nhiều Video nối đuôi) */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between text-sm font-medium text-[#94a3b8]">
-              <span>1. Video Gốc (.mp4, .webm, .mov, .avi,...)</span>
-              {videoFile && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+              <span>1. Nạp Video Clips (Có thể chọn nhiều Video)</span>
+              {videoClips.length > 0 && (
+                <span className="text-xs text-purple-400 font-bold bg-purple-950/60 px-2 py-0.5 rounded border border-purple-500/30">
+                  {videoClips.length} Clip
+                </span>
+              )}
             </div>
             <label className="border-2 border-dashed border-[#2b3042] hover:border-purple-500/50 rounded-xl p-4 flex flex-col items-center gap-2 cursor-pointer transition-colors bg-[#12151e]">
               <FileVideo className="w-8 h-8 text-purple-400" />
               <span className="text-xs text-[#94a3b8] text-center font-medium">
-                {videoFile ? videoFile.name : 'Nhấn để chọn Video (MP4, WEBM, MOV,...)'}
+                {videoClips.length > 0 ? `Đã nạp ${videoClips.length} video (Nhấn để nạp thêm)` : 'Nhấn để chọn 1 hoặc nhiều Video (.MP4, .WEBM, .MOV)'}
               </span>
-              <input type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
+              <input type="file" accept="video/*" multiple onChange={handleVideoUpload} className="hidden" />
             </label>
+
+            {/* Danh sách các Clip Video đã nạp */}
+            {videoClips.length > 0 && (
+              <div className="flex flex-col gap-1.5 mt-1 max-h-36 overflow-y-auto pr-1">
+                {videoClips.map((clip, i) => (
+                  <div 
+                    key={clip.id}
+                    onClick={() => {
+                      setSelectedClipId(clip.id);
+                      setVideoFile(clip.file);
+                      setVideoUrl(clip.url);
+                    }}
+                    className={`flex items-center justify-between p-2 rounded-lg text-xs transition-all cursor-pointer ${
+                      selectedClipId === clip.id 
+                        ? 'bg-purple-950/70 border border-purple-500/70 text-purple-200 shadow-md ring-1 ring-purple-500/30' 
+                        : 'bg-[#12151e] border border-[#2b3042] text-[#94a3b8] hover:bg-[#1a1e2b]'
+                    }`}
+                  >
+                    <span className="truncate max-w-[170px] font-medium">
+                      {i + 1}. {clip.name}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeClip(clip.id);
+                      }}
+                      className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-500/20 transition-colors"
+                      title="Xóa clip này"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Upload Nhạc Nền Mới */}
@@ -751,13 +862,35 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* --- TRỤC TRUYỀN HÌNH CHUYÊN NGHIỆP: VISUAL MULTI-TRACK TIMELINE --- */}
+                {/* --- TRỤC TRUYỀN HÌNH CHUYÊN NGHIỆP: VISUAL MULTI-TRACK TIMELINE & CẮT XẺ --- */}
                 <div className="flex flex-col gap-2 pt-2 border-t border-[#2b3042]/60">
                   <div className="flex items-center justify-between text-xs font-medium text-[#94a3b8]">
                     <span className="flex items-center gap-1.5 text-purple-300 font-semibold">
-                      <Sliders className="w-3.5 h-3.5 text-purple-400" /> Trục Thời Gian (Timeline Multi-Track)
+                      <Sliders className="w-3.5 h-3.5 text-purple-400" /> Trục Thời Gian (Timeline Non-Linear)
                     </span>
-                    <span className="text-[10px] text-[#64748b]">Bấm dải màu để tua nhanh tới phụ đề</span>
+                    
+                    {/* BỘ NÚT TÁCH VIDEO ✂️ VÀ XÓA 🗑️ CHUYÊN NGHIỆP */}
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={splitCurrentClip}
+                        disabled={!selectedClipId || videoClips.length === 0}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded bg-purple-600/30 hover:bg-purple-600 text-purple-200 border border-purple-500/40 text-[11px] font-bold transition-all cursor-pointer disabled:opacity-40"
+                        title="Tách Video Clip làm 2 đoạn ngay tại Kim Thời Gian đỏ (Split Clip)"
+                      >
+                        <span>✂️ Tách Clip Tại {Math.floor(currentTime)}s</span>
+                      </button>
+
+                      {selectedClipId && (
+                        <button
+                          onClick={() => removeClip(selectedClipId)}
+                          className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-600/30 hover:bg-red-600 text-red-200 border border-red-500/40 text-[11px] font-bold transition-all cursor-pointer"
+                          title="Xóa đoạn clip đang được chọn"
+                        >
+                          <Trash2 className="w-3 h-3 text-red-300" />
+                          <span>Xóa Đoạn Đang Chọn</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Khung Trục Thời Gian Đa Luồng */}
