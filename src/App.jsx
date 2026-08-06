@@ -34,10 +34,10 @@ import {
 } from './services/authService';
 import { loadFFmpeg, processVideo } from './services/ffmpegService';
 import { processVideoCanvas } from './services/canvasExporter';
-import AdminModal from './components/AdminModal';
-import AuthModal from './components/AuthModal';
-import PaymentModal from './components/PaymentModal';
-import FreeCoinsModal from './components/FreeCoinsModal';
+const AdminModal = React.lazy(() => import('./components/AdminModal'));
+const AuthModal = React.lazy(() => import('./components/AuthModal'));
+const PaymentModal = React.lazy(() => import('./components/PaymentModal'));
+const FreeCoinsModal = React.lazy(() => import('./components/FreeCoinsModal'));
 import confetti from 'canvas-confetti';
 
 // Icon YouTube SVG sắc nét chuẩn thương hiệu
@@ -892,40 +892,47 @@ export default function App() {
         </p>
       </footer>
 
-      {/* --- MODAL QUẢN TRỊ ADMIN --- */}
-      <AdminModal 
-        isOpen={isAdminModalOpen}
-        onClose={() => setIsAdminModalOpen(false)}
-        currentUser={currentUser}
-      />
+      {/* --- MODALS (LAZY LOADED) --- */}
+      <React.Suspense fallback={null}>
+        {isAdminModalOpen && (
+          <AdminModal 
+            isOpen={isAdminModalOpen}
+            onClose={() => setIsAdminModalOpen(false)}
+            currentUser={currentUser}
+          />
+        )}
 
-      {/* --- MODAL ĐĂNG NHẬP / XÁC NHẬN XU --- */}
-      <AuthModal 
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        modalType={authModalType}
-        onLoginSuccess={(user) => {
-          console.log("Đăng nhập thành công:", user);
-        }}
-        onOpenPayment={() => setIsPaymentModalOpen(true)}
-        onOpenFreeCoins={() => setIsFreeCoinsModalOpen(true)}
-      />
+        {isAuthModalOpen && (
+          <AuthModal 
+            isOpen={isAuthModalOpen}
+            onClose={() => setIsAuthModalOpen(false)}
+            modalType={authModalType}
+            onLoginSuccess={(user) => {
+              console.log("Đăng nhập thành công:", user);
+            }}
+            onOpenPayment={() => setIsPaymentModalOpen(true)}
+            onOpenFreeCoins={() => setIsFreeCoinsModalOpen(true)}
+          />
+        )}
 
-      {/* --- MODAL NẠP XU NGÂN HÀNG VIETQR --- */}
-      <PaymentModal 
-        isOpen={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
-        currentUser={currentUser}
-        userData={userData}
-      />
+        {isPaymentModalOpen && (
+          <PaymentModal 
+            isOpen={isPaymentModalOpen}
+            onClose={() => setIsPaymentModalOpen(false)}
+            currentUser={currentUser}
+            userData={userData}
+          />
+        )}
 
-      {/* --- MODAL KIẾM XU FREE QUA YOUTUBE --- */}
-      <FreeCoinsModal 
-        isOpen={isFreeCoinsModalOpen}
-        onClose={() => setIsFreeCoinsModalOpen(false)}
-        currentUser={currentUser}
-        userData={userData}
-      />
+        {isFreeCoinsModalOpen && (
+          <FreeCoinsModal 
+            isOpen={isFreeCoinsModalOpen}
+            onClose={() => setIsFreeCoinsModalOpen(false)}
+            currentUser={currentUser}
+            userData={userData}
+          />
+        )}
+      </React.Suspense>
     </div>
   );
 }
