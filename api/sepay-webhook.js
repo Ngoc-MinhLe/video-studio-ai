@@ -1,5 +1,7 @@
 import fs from 'fs';
 
+const PROJECT_ID = "lengocminh-74a9e";
+
 const getCoinsForAmount = (amount) => {
   const num = Number(amount || 0);
   if (num >= 100000) return 400;
@@ -39,7 +41,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, message: 'Ignored outbound transaction' });
     }
 
-    // Tách mã 6 chữ số từ chuỗi bất kỳ (VD: MBVCB.15443858530.6218BFTVGL256UBX.VS 498036)
+    // Tách mã 6 chữ số từ chuỗi bất kỳ (VD: MBVCB.15444160238.6218BFTVGL256UBX.VS 655879)
     let matchedDigits = null;
     const vsMatch = content.match(/VS\s*[-_]?\s*(\d{6})/i);
     if (vsMatch) {
@@ -51,7 +53,33 @@ export default async function handler(req, res) {
 
     const coins = getCoinsForAmount(transferAmount);
 
-    // Lưu giao dịch hoàn tất vào bộ nhớ cache /tmp của Vercel Serverless
+    // 1. Cập nhật trực tiếp đơn hàng orders/{orderCode} trên Cloud Firestore bằng REST API (Nhờ Quy tắc orders đã xuất bản)
+    if (matchedDigits) {
+      const candidateCodes = [`VS ${matchedDigits}`, `VS${matchedDigits}`];
+      for (const code of candidateCodes) {
+        try {
+          const patchOrderUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/orders/${encodeURIComponent(code)}`;
+          await fetch(patchOrderUrl, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fields: {
+                orderCode: { stringValue: code },
+                status: { stringValue: 'completed' },
+                coins: { integerValue: String(coins) },
+                paidAmount: { integerValue: String(transferAmount) },
+                updatedAt: { stringValue: new Date().toISOString() }
+              }
+            })
+          });
+          console.log(`[Firestore Order Update Success]: Marked ${code} as completed`);
+        } catch (err) {
+          console.warn(`[Firestore Order Update Error]:`, err);
+        }
+      }
+    }
+
+    // 2. Đồng thời ghi vào bộ nhớ /tmp làm Cầu nối phụ (Backup)
     let store = {};
     const tmpPath = '/tmp/sepay_completed.json';
     try {
@@ -79,13 +107,11 @@ export default async function handler(req, res) {
 
     try {
       fs.writeFileSync(tmpPath, JSON.stringify(store));
-    } catch (e) {
-      console.warn("Lỗi ghi file /tmp:", e);
-    }
+    } catch (e) {}
 
     return res.status(200).json({
       success: true,
-      message: 'Recorded transaction into SePay bridge cache!',
+      message: 'Recorded transaction into Firestore order & SePay bridge cache!',
       digits: matchedDigits,
       coinsAdded: coins
     });
