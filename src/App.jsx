@@ -74,6 +74,7 @@ export default function App() {
   ]);
   const [subFontSize, setSubFontSize] = useState(24);
   const [subPosition, setSubPosition] = useState('bottom');
+  const [aspectRatio, setAspectRatio] = useState('9:16');
 
   // --- Export States ---
   const [isProcessing, setIsProcessing] = useState(false);
@@ -299,6 +300,7 @@ export default function App() {
         audioVolume,
         subtitles,
         subOptions: { fontSize: subFontSize, position: subPosition },
+        aspectRatio,
         onProgress: (prog) => setProgress(prog),
         onStatus: (stat) => setStatusText(stat)
       });
@@ -548,58 +550,118 @@ export default function App() {
 
         {/* --- CỘT 2: VIDEO PREVIEW & TIMELINE --- */}
         <section className="glass-panel p-5 flex flex-col items-center justify-between gap-4">
-          <div className="w-full flex items-center justify-between border-b border-[#2b3042] pb-3">
+          <div className="w-full flex flex-wrap items-center justify-between gap-2 border-b border-[#2b3042] pb-3">
             <h2 className="font-semibold text-lg flex items-center gap-2">
               <Video className="w-5 h-5 text-purple-400" /> Trình Xem Trực Tiếp
             </h2>
-            {duration > 0 && (
-              <span className="text-xs font-mono text-[#64748b]">
-                {Math.floor(currentTime)}s / {Math.floor(duration)}s
-              </span>
-            )}
+            
+            {/* Bộ chọn Tỷ lệ Khung hình Live Preview */}
+            <div className="flex items-center gap-1 bg-[#12151e] p-1 rounded-xl border border-[#2b3042] text-xs">
+              <button
+                onClick={() => setAspectRatio('9:16')}
+                className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  aspectRatio === '9:16'
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
+                    : 'text-[#94a3b8] hover:text-white'
+                }`}
+                title="Tỷ lệ 9:16 Dọc (TikTok, Facebook Reels, Shorts)"
+              >
+                📱 9:16 (TikTok)
+              </button>
+              <button
+                onClick={() => setAspectRatio('16:9')}
+                className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  aspectRatio === '16:9'
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
+                    : 'text-[#94a3b8] hover:text-white'
+                }`}
+                title="Tỷ lệ 16:9 Ngang (YouTube, Tivi)"
+              >
+                🎬 16:9 (YouTube)
+              </button>
+              <button
+                onClick={() => setAspectRatio('1:1')}
+                className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  aspectRatio === '1:1'
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
+                    : 'text-[#94a3b8] hover:text-white'
+                }`}
+                title="Tỷ lệ 1:1 Vuông (Instagram Feed)"
+              >
+                🔳 1:1
+              </button>
+              <button
+                onClick={() => setAspectRatio('4:5')}
+                className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  aspectRatio === '4:5'
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
+                    : 'text-[#94a3b8] hover:text-white'
+                }`}
+                title="Tỷ lệ 4:5 Dọc vừa (Facebook Post)"
+              >
+                🎞️ 4:5
+              </button>
+              <button
+                onClick={() => setAspectRatio('original')}
+                className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  aspectRatio === 'original'
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
+                    : 'text-[#94a3b8] hover:text-white'
+                }`}
+                title="Giữ nguyên Tỷ lệ Gốc của Video"
+              >
+                📺 Gốc
+              </button>
+            </div>
           </div>
 
-          {/* Khung chứa Video */}
-          <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center border border-[#2b3042] shadow-2xl">
-            {videoUrl ? (
-              <>
-                <video
-                  ref={videoRef}
-                  src={videoUrl}
-                  playsInline
-                  className="w-full h-full object-contain"
-                  onTimeUpdate={() => {
-                    if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
-                  }}
-                  onLoadedMetadata={() => {
-                    if (videoRef.current) setDuration(videoRef.current.duration);
-                  }}
-                  onEnded={() => {
-                    setIsPlaying(false);
-                    if (audioRef.current) audioRef.current.pause();
-                  }}
-                />
-                
-                {/* Lớp Phụ Đề Live Preview */}
-                {currentSub && (
-                  <div className={`absolute left-0 right-0 px-6 text-center pointer-events-none transition-all ${
-                    subPosition === 'top' ? 'top-6' : subPosition === 'center' ? 'top-1/2 -translate-y-1/2' : 'bottom-8'
-                  }`}>
-                    <span 
-                      className="inline-block bg-black/80 text-white font-bold px-4 py-2 rounded-lg shadow-2xl border border-white/20 tracking-wide"
-                      style={{ fontSize: `${subFontSize * 0.75}px` }}
-                    >
-                      {currentSub.text}
-                    </span>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="flex flex-col items-center gap-3 text-[#64748b] p-8">
-                <FileVideo className="w-12 h-12 stroke-[1.5]" />
-                <p className="text-sm font-medium text-center">Vui lòng chọn một Video từ cột bên trái để bắt đầu</p>
-              </div>
-            )}
+          {/* Khung chứa Video xem trước theo đúng Tỷ Lệ được chọn */}
+          <div className="w-full flex justify-center items-center py-2 bg-[#090b10] rounded-xl border border-[#2b3042]">
+            <div className={`relative bg-black rounded-xl overflow-hidden flex items-center justify-center border border-purple-500/30 shadow-2xl transition-all duration-300 ${
+              aspectRatio === '9:16' ? 'w-[280px] h-[497px]' :
+              aspectRatio === '1:1' ? 'w-[360px] h-[360px]' :
+              aspectRatio === '4:5' ? 'w-[320px] h-[400px]' :
+              'w-full aspect-video max-h-[500px]'
+            }`}>
+              {videoUrl ? (
+                <>
+                  <video
+                    ref={videoRef}
+                    src={videoUrl}
+                    playsInline
+                    className="w-full h-full object-contain"
+                    onTimeUpdate={() => {
+                      if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
+                    }}
+                    onLoadedMetadata={() => {
+                      if (videoRef.current) setDuration(videoRef.current.duration);
+                    }}
+                    onEnded={() => {
+                      setIsPlaying(false);
+                      if (audioRef.current) audioRef.current.pause();
+                    }}
+                  />
+                  
+                  {/* Lớp Phụ Đề Live Preview chuẩn kích thước */}
+                  {currentSub && (
+                    <div className={`absolute left-0 right-0 px-4 text-center pointer-events-none transition-all ${
+                      subPosition === 'top' ? 'top-6' : subPosition === 'center' ? 'top-1/2 -translate-y-1/2' : 'bottom-8'
+                    }`}>
+                      <span 
+                        className="inline-block bg-black/85 text-white font-bold px-3.5 py-1.5 rounded-lg shadow-2xl border border-white/20 tracking-wide text-xs sm:text-sm"
+                      >
+                        {currentSub.text}
+                      </span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex flex-col items-center gap-3 text-[#64748b] p-8">
+                  <FileVideo className="w-12 h-12 stroke-[1.5]" />
+                  <p className="text-sm font-medium text-center">Vui lòng chọn một Video từ cột bên trái để bắt đầu</p>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Controls Phát Video & Export Dialog */}

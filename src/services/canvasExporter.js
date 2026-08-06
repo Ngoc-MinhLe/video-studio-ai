@@ -1,7 +1,8 @@
 /**
  * Canvas Exporter Service
  * Xuất Video trực tiếp bằng HTML5 Canvas + Web Audio API + MediaRecorder.
- * Không cần nạp FFmpeg WebAssembly (0MB download), chạy 100% mượt mà trên tất cả trình duyệt (Cốc Cốc, Chrome, Edge, Safari, Mobile).
+ * Hỗ trợ Tùy chỉnh Tỷ lệ Khung hình (9:16 TikTok, 16:9 YouTube, 1:1 Insta, 4:5 FB).
+ * Chạy 100% mượt mà trên tất cả trình duyệt (Cốc Cốc, Chrome, Edge, Safari, Mobile).
  */
 
 export const processVideoCanvas = async ({
@@ -11,6 +12,7 @@ export const processVideoCanvas = async ({
   audioVolume = 1,
   subtitles = [],
   subOptions = { fontSize: 24, fontColor: 'white', position: 'bottom' },
+  aspectRatio = 'original', // 'original', '9:16', '16:9', '1:1', '4:5'
   onProgress,
   onStatus
 }) => {
@@ -29,9 +31,48 @@ export const processVideoCanvas = async ({
     videoEl.onerror = () => reject(new Error('Không thể đọc file Video gốc.'));
   });
 
-  const width = videoEl.videoWidth || 1280;
-  const height = videoEl.videoHeight || 720;
+  const origW = videoEl.videoWidth || 1280;
+  const origH = videoEl.videoHeight || 720;
   const duration = videoEl.duration;
+
+  // Tính toán kích thước Canvas theo Tỷ Lệ Khung Hình được chọn
+  let canvasW = origW;
+  let canvasH = origH;
+
+  if (aspectRatio === '9:16') {
+    canvasW = 1080;
+    canvasH = 1920;
+  } else if (aspectRatio === '16:9') {
+    canvasW = 1920;
+    canvasH = 1080;
+  } else if (aspectRatio === '1:1') {
+    canvasW = 1080;
+    canvasH = 1080;
+  } else if (aspectRatio === '4:5') {
+    canvasW = 1080;
+    canvasH = 1350;
+  }
+
+  // Tính toán căn giữa Video trong Canvas (Aspect Contain)
+  const srcRatio = origW / origH;
+  const targetRatio = canvasW / canvasH;
+
+  let drawW = canvasW;
+  let drawH = canvasH;
+  let drawX = 0;
+  let drawY = 0;
+
+  if (srcRatio > targetRatio) {
+    // Video rộng hơn khung target
+    drawW = canvasW;
+    drawH = canvasW / srcRatio;
+    drawY = (canvasH - drawH) / 2;
+  } else {
+    // Video cao hơn khung target
+    drawH = canvasH;
+    drawW = canvasH * srcRatio;
+    drawX = (canvasW - drawW) / 2;
+  }
 
   // 2. Tạo Element Audio Ẩn (nếu có nhạc mới)
   let audioEl = null;
@@ -77,11 +118,11 @@ export const processVideoCanvas = async ({
 
   // 4. Tạo Canvas Vẽ Khung Hình & Phụ Đề
   const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = canvasW;
+  canvas.height = canvasH;
   const ctx = canvas.getContext('2d');
 
-  // Hàm vẽ phụ đề chuẩn TikTok/Reels lên Canvas
+  // Hàm vẽ phụ đề chuẩn TikTok/Reels/YouTube lên Canvas
   const drawSubtitles = (currentTime) => {
     const validSubs = subtitles || [];
     const currentSub = validSubs.find(
@@ -91,9 +132,9 @@ export const processVideoCanvas = async ({
     if (!currentSub) return;
 
     const text = currentSub.text.trim();
-    // Tỷ lệ cỡ chữ tương ứng với độ phân giải video
-    const scaleFactor = height / 720;
-    const fontSize = Math.max(14, Math.round((subOptions.fontSize || 24) * scaleFactor));
+    // Tỷ lệ cỡ chữ tương ứng với độ phân giải canvas
+    const scaleFactor = canvasH / 720;
+    const fontSize = Math.max(16, Math.round((subOptions.fontSize || 24) * scaleFactor));
 
     ctx.font = `bold ${fontSize}px "Segoe UI", Roboto, Arial, sans-serif`;
     ctx.textAlign = 'center';
@@ -103,13 +144,13 @@ export const processVideoCanvas = async ({
     const textWidth = metrics.width;
     const textHeight = fontSize * 1.3;
 
-    let x = width / 2;
-    let y = height - textHeight - (40 * scaleFactor);
+    let x = canvasW / 2;
+    let y = canvasH - textHeight - (60 * scaleFactor);
 
     if (subOptions.position === 'top') {
-      y = textHeight + (40 * scaleFactor);
+      y = textHeight + (60 * scaleFactor);
     } else if (subOptions.position === 'center') {
-      y = height / 2;
+      y = canvasH / 2;
     }
 
     // Vẽ Khung Đen Làm Nổi Phụ Đề (Background Box)
@@ -120,7 +161,7 @@ export const processVideoCanvas = async ({
     const boxX = x - (boxWidth / 2);
     const boxY = y - (boxHeight / 2);
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
     if (ctx.roundRect) {
       ctx.beginPath();
       ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 8 * scaleFactor);
@@ -129,8 +170,8 @@ export const processVideoCanvas = async ({
       ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
     }
 
-    // Viền trắng nhẹ xung quanh khung
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    // Viền sáng nhẹ xung quanh khung
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
     ctx.lineWidth = 1.5 * scaleFactor;
     ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
@@ -160,11 +201,11 @@ export const processVideoCanvas = async ({
     mimeType = 'video/webm;codecs=vp8,opus';
   }
 
-  console.log('[Canvas Exporter]: Using MimeType:', mimeType);
+  console.log('[Canvas Exporter]: AspectRatio:', aspectRatio, 'Using MimeType:', mimeType);
 
   const mediaRecorder = new MediaRecorder(combinedStream, {
     mimeType,
-    videoBitsPerSecond: 5000000 // 5 Mbps chất lượng cao
+    videoBitsPerSecond: 6000000 // 6 Mbps chất lượng cao
   });
 
   const chunks = [];
@@ -175,7 +216,7 @@ export const processVideoCanvas = async ({
   };
 
   // 6. Bắt đầu Quá Trình Render
-  if (onStatus) onStatus('Đang render video & phụ đề trực tiếp...');
+  if (onStatus) onStatus(`Đang render video tỷ lệ ${aspectRatio} & phụ đề...`);
 
   videoEl.currentTime = 0;
   if (audioEl) audioEl.currentTime = 0;
@@ -221,8 +262,12 @@ export const processVideoCanvas = async ({
         return;
       }
 
-      // Vẽ khung hình video
-      ctx.drawImage(videoEl, 0, 0, width, height);
+      // Xóa canvas & Tô nền tối sang trọng
+      ctx.fillStyle = '#090b10';
+      ctx.fillRect(0, 0, canvasW, canvasH);
+
+      // Vẽ khung hình video được căn giữa đẹp mắt
+      ctx.drawImage(videoEl, drawX, drawY, drawW, drawH);
 
       // Vẽ phụ đề
       drawSubtitles(videoEl.currentTime);
@@ -237,12 +282,5 @@ export const processVideoCanvas = async ({
     };
 
     renderLoop();
-
-    videoEl.onended = () => {
-      if (audioEl) audioEl.pause();
-      if (mediaRecorder.state === 'recording') {
-        mediaRecorder.stop();
-      }
-    };
   });
 };
