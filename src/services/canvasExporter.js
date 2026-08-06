@@ -15,7 +15,8 @@ export const processVideoCanvas = async ({
   bgOffsetX = 0,
   bgOffsetY = 0,
   bgMirrorBlur = true,
-  visualizerType = 'vinyl',
+  visualizerType = 'sinewave',
+  visualizerPosY = 50,
   videoFile,
   videoClips = [],
   audioFile,
@@ -642,7 +643,38 @@ export const processVideoCanvas = async ({
         }
 
         // 2. Vẽ Hiệu Ứng Sóng Âm / Đĩa Nhạc Quay Vinyl
-        if (visualizerType === 'vinyl') {
+        if (visualizerType === 'sinewave') {
+          ctx.save();
+          const vY = (canvasH * (visualizerPosY !== undefined ? visualizerPosY : 50)) / 100;
+          const scaleF = canvasH / 720;
+          const amp = Math.sin(projectTime * 5) * (40 * scaleF) + (15 * scaleF);
+
+          ctx.shadowColor = '#ec4899';
+          ctx.shadowBlur = 22 * scaleF;
+
+          const grad = ctx.createLinearGradient(0, 0, canvasW, 0);
+          grad.addColorStop(0, '#ec4899');
+          grad.addColorStop(0.5, '#c084fc');
+          grad.addColorStop(1, '#38bdf8');
+
+          // Upper Sine Wave
+          ctx.beginPath();
+          ctx.moveTo(0, vY);
+          ctx.bezierCurveTo(canvasW * 0.25, vY - amp, canvasW * 0.75, vY + amp, canvasW, vY);
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = 6 * scaleF;
+          ctx.stroke();
+
+          // Lower Symmetric Sine Wave
+          ctx.beginPath();
+          ctx.moveTo(0, vY);
+          ctx.bezierCurveTo(canvasW * 0.25, vY + amp, canvasW * 0.75, vY - amp, canvasW, vY);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 3.5 * scaleF;
+          ctx.stroke();
+
+          ctx.restore();
+        } else if (visualizerType === 'vinyl') {
           ctx.save();
           const centerX = canvasW / 2;
           const centerY = canvasH / 2;

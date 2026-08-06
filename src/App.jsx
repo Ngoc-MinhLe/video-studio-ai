@@ -64,7 +64,8 @@ export default function App() {
   // --- States Module 2: Image Music Visualizer ---
   const [bgImage, setBgImage] = useState(null); // { file, url }
   const [bgEffect, setBgEffect] = useState('zoom'); // 'zoom' | 'pulse' | 'none'
-  const [visualizerType, setVisualizerType] = useState('vinyl'); // 'vinyl' | 'bars' | 'ring' | 'none'
+  const [visualizerType, setVisualizerType] = useState('sinewave'); // 'sinewave' | 'vinyl' | 'bars' | 'ring' | 'none'
+  const [visualizerPosY, setVisualizerPosY] = useState(50); // 0% to 100% (Vị trí sóng âm Y)
   const [bgFit, setBgFit] = useState('cover'); // 'cover' | 'contain'
   const [bgZoom, setBgZoom] = useState(100); // 50 to 200
   const [bgOffsetX, setBgOffsetX] = useState(0); // -50 to 50%
@@ -202,6 +203,35 @@ export default function App() {
       audioRef.current.volume = audioVolume;
     }
   }, [audioVolume]);
+
+  // Đồng bộ thời gian phát nhạc & Phụ đề trong Chế độ 2 (Image Music Visualizer)
+  useEffect(() => {
+    const audioEl = audioRef.current;
+    if (!audioEl) return;
+
+    const handleAudioTimeUpdate = () => {
+      if (activeTab === 'image_music') {
+        const t = audioEl.currentTime;
+        setCurrentTime(t);
+        if (audioEl.duration && !isNaN(audioEl.duration)) {
+          setDuration(audioEl.duration);
+        }
+      }
+    };
+
+    const handleAudioEnded = () => {
+      if (activeTab === 'image_music') {
+        setIsPlaying(false);
+      }
+    };
+
+    audioEl.addEventListener('timeupdate', handleAudioTimeUpdate);
+    audioEl.addEventListener('ended', handleAudioEnded);
+    return () => {
+      audioEl.removeEventListener('timeupdate', handleAudioTimeUpdate);
+      audioEl.removeEventListener('ended', handleAudioEnded);
+    };
+  }, [activeTab, audioUrl]);
 
   // Đồng bộ phát / dừng giữa Video và Audio mới
   const togglePlay = () => {
@@ -466,6 +496,13 @@ export default function App() {
       setAudioUrl(url);
       setExportUrl(null);
 
+      const tempAudio = new Audio(url);
+      tempAudio.onloadedmetadata = () => {
+        if (tempAudio.duration && !isNaN(tempAudio.duration)) {
+          setDuration(tempAudio.duration);
+        }
+      };
+
       if (isPlaying && videoRef.current) {
         setTimeout(() => {
           if (audioRef.current) {
@@ -558,6 +595,7 @@ export default function App() {
         bgOffsetY,
         bgMirrorBlur,
         visualizerType,
+        visualizerPosY,
         videoFile,
         videoClips: videoFiles,
         audioFile,
@@ -792,6 +830,8 @@ export default function App() {
             setBgMirrorBlur={setBgMirrorBlur}
             visualizerType={visualizerType}
             setVisualizerType={setVisualizerType}
+            visualizerPosY={visualizerPosY}
+            setVisualizerPosY={setVisualizerPosY}
             audioFile={audioFile}
             handleAudioUpload={handleAudioUpload}
             removeAudioTrack={removeAudioTrack}
@@ -1071,6 +1111,37 @@ export default function App() {
                       transform: `translate(${bgOffsetX}%, ${bgOffsetY}%) scale(${bgZoom / 100})`
                     }}
                   />
+                  {visualizerType === 'sinewave' && (
+                    <div 
+                      className="absolute left-0 right-0 z-20 pointer-events-none flex items-center justify-center w-full px-2"
+                      style={{ top: `${visualizerPosY}%`, transform: 'translateY(-50%)' }}
+                    >
+                      <svg className="w-full h-24 overflow-visible" viewBox="0 0 500 100" preserveAspectRatio="none">
+                        <defs>
+                          <linearGradient id="neonSineGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#ec4899" />
+                            <stop offset="50%" stopColor="#c084fc" />
+                            <stop offset="100%" stopColor="#38bdf8" />
+                          </linearGradient>
+                        </defs>
+                        <path 
+                          d={`M 0 50 Q 125 ${50 + (isPlaying ? Math.sin(currentTime * 5) * 35 : 10)} 250 50 T 500 50`} 
+                          fill="none" 
+                          stroke="url(#neonSineGlow)" 
+                          strokeWidth="5" 
+                          className="filter drop-shadow-[0_0_12px_rgba(236,72,153,0.9)]"
+                        />
+                        <path 
+                          d={`M 0 50 Q 125 ${50 - (isPlaying ? Math.sin(currentTime * 5) * 35 : 10)} 250 50 T 500 50`} 
+                          fill="none" 
+                          stroke="#38bdf8" 
+                          strokeWidth="3" 
+                          className="filter drop-shadow-[0_0_10px_rgba(56,189,248,0.9)] opacity-85"
+                        />
+                      </svg>
+                    </div>
+                  )}
+
                   {visualizerType === 'vinyl' && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <div className={`w-36 h-36 rounded-full border-4 border-[#2b3042] bg-[#111319] shadow-2xl flex items-center justify-center relative ${isPlaying ? 'animate-spin' : ''}`} style={{ animationDuration: '4s' }}>
