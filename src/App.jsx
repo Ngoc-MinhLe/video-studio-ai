@@ -85,7 +85,8 @@ export default function App() {
   const [subBgColor, setSubBgColor] = useState('#000000');
   const [subRotation, setSubRotation] = useState(0);
   const [subStyle, setSubStyle] = useState('tiktok'); // 'tiktok' | 'victory' | 'boom' | 'sponge' | 'social' | 'neon' | 'cinema' | 'custom'
-  const [subAnimation, setSubAnimation] = useState('bounce'); // 'shake' | 'bounce' | 'fade' | 'pulse' | 'none'
+  const [subAnimation, setSubAnimation] = useState('typewriter'); // 'typewriter' | 'marquee' | 'shake' | 'bounce' | 'fade' | 'pulse' | 'none'
+  const [subAnimSpeed, setSubAnimSpeed] = useState(1.0); // Tốc độ chạy hiệu ứng (0.5x -> 2.0x)
   const [isDraggingSub, setIsDraggingSub] = useState(false);
   const [aspectRatio, setAspectRatio] = useState('16:9');
 
@@ -506,7 +507,7 @@ export default function App() {
         audioStartOffset,
         audioVideoOffset,
         subtitles,
-        subOptions: { fontSize: subFontSize, position: subPosition, subX, subY, subStyle, subAnimation, subColor, subBgColor, subRotation },
+        subOptions: { fontSize: subFontSize, position: subPosition, subX, subY, subStyle, subAnimation, subAnimSpeed, subColor, subBgColor, subRotation },
         aspectRatio,
         onProgress: (prog) => setProgress(prog),
         onStatus: (stat) => setStatusText(stat)
@@ -1025,7 +1026,18 @@ export default function App() {
                           'bg-black/85 text-white border border-white/20 shadow-xl'
                         }`}
                       >
-                        {subStyle === 'victory' ? `⚡ ${currentSub.text} ⚡` : subStyle === 'boom' ? `💥 ${currentSub.text}` : subStyle === 'social' ? `📢 ${currentSub.text}` : currentSub.text}
+                        {(() => {
+                          let raw = currentSub.text;
+                          if (subAnimation === 'typewriter') {
+                            const words = raw.split(' ');
+                            const subDur = (Number(currentSub.endTime) - Number(currentSub.startTime)) || 3;
+                            const elapsed = Math.max(0, currentTime - Number(currentSub.startTime));
+                            const revealProg = Math.min(1, Math.max(0, (elapsed * subAnimSpeed) / subDur));
+                            const visibleCount = Math.max(1, Math.ceil(revealProg * words.length));
+                            raw = words.slice(0, visibleCount).join(' ');
+                          }
+                          return subStyle === 'victory' ? `⚡ ${raw} ⚡` : subStyle === 'boom' ? `💥 ${raw}` : subStyle === 'social' ? `📢 ${raw}` : raw;
+                        })()}
                       </span>
                     </div>
                   )}
@@ -1454,18 +1466,26 @@ export default function App() {
             </div>
 
             {/* Bộ Hiệu Ứng Nhảy Múa Chữ (Kinetic Animation) */}
-            <div className="flex flex-col gap-1.5 pt-2 border-t border-[#2b3042]/50">
+            <div className="flex flex-col gap-2 pt-2 border-t border-[#2b3042]/50">
               <label className="text-xs text-[#94a3b8] font-medium flex items-center gap-1.5">
                 <Zap className="w-3.5 h-3.5 text-amber-400" /> Hiệu Ứng Chữ Nhảy Múa
               </label>
               <div className="grid grid-cols-2 gap-1.5 text-xs">
                 <button
-                  onClick={() => setSubAnimation('marquee')}
-                  className={`p-1.5 rounded-lg font-medium transition-all text-center text-[11px] cursor-pointer ${
-                    subAnimation === 'marquee' ? 'bg-indigo-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  onClick={() => setSubAnimation('typewriter')}
+                  className={`p-1.5 rounded-lg font-bold transition-all text-center text-[11px] cursor-pointer ${
+                    subAnimation === 'typewriter' ? 'bg-emerald-600 text-white shadow ring-2 ring-emerald-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
-                  ➡️ Trái Sang Phải
+                  ⌨️ Hiện Từng Chữ
+                </button>
+                <button
+                  onClick={() => setSubAnimation('marquee')}
+                  className={`p-1.5 rounded-lg font-bold transition-all text-center text-[11px] cursor-pointer ${
+                    subAnimation === 'marquee' ? 'bg-indigo-600 text-white shadow ring-2 ring-indigo-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  }`}
+                >
+                  ◀️ Phải Sang Trái
                 </button>
                 <button
                   onClick={() => setSubAnimation('shake')}

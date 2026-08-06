@@ -171,6 +171,8 @@ export const processVideoCanvas = async ({
     const customColor = subOptions.subColor || '#ffffff';
     const customBgColor = subOptions.subBgColor || '#000000';
 
+    const animSpeed = subOptions.subAnimSpeed || 1.0;
+
     // Tính toán tiến trình hiệu ứng animation
     const elapsed = projectTime - Number(currentSub.startTime);
     let animScale = 1.0;
@@ -178,30 +180,41 @@ export const processVideoCanvas = async ({
     let animOffsetY = 0;
     let animShakeX = 0;
     let animShakeY = 0;
+    let displayText = text;
 
-    if (anim === 'bounce') {
-      if (elapsed < 0.35) {
-        const progress = elapsed / 0.35;
+    if (anim === 'typewriter') {
+      // Hiệu ứng Hiện Từng Chữ (Typewriter / Karaoke Word-by-Word)
+      const words = text.split(' ');
+      const subDuration = (Number(currentSub.endTime) - Number(currentSub.startTime)) || 3;
+      const revealProgress = Math.min(1, Math.max(0, (elapsed * animSpeed) / subDuration));
+      const visibleWordCount = Math.max(1, Math.ceil(revealProgress * words.length));
+      displayText = words.slice(0, visibleWordCount).join(' ');
+    } else if (anim === 'marquee') {
+      // Hiệu ứng Chạy lướt từ Phải sang Trái (Right-to-Left Crawl chuẩn)
+      const subDuration = (Number(currentSub.endTime) - Number(currentSub.startTime)) || 3;
+      const progress = Math.min(1, Math.max(0, (elapsed * animSpeed) / subDuration));
+      // Tùy biến từ phải (+canvasW) về trái (-canvasW)
+      animShakeX = (0.5 - progress) * (canvasW * 1.4);
+    } else if (anim === 'bounce') {
+      const dur = 0.35 / animSpeed;
+      if (elapsed < dur) {
+        const progress = elapsed / dur;
         animScale = 0.5 + Math.sin(progress * Math.PI) * 0.75;
       }
     } else if (anim === 'fade') {
-      if (elapsed < 0.3) {
-        const progress = elapsed / 0.3;
+      const dur = 0.3 / animSpeed;
+      if (elapsed < dur) {
+        const progress = elapsed / dur;
         animAlpha = Math.min(1, Math.max(0, progress));
         animOffsetY = (1 - progress) * (20 * scaleFactor);
       }
     } else if (anim === 'pulse') {
-      animScale = 1.0 + Math.sin(elapsed * 4) * 0.05;
+      animScale = 1.0 + Math.sin(elapsed * 4 * animSpeed) * 0.05;
     } else if (anim === 'shake') {
       // Hiệu ứng Lắc Lư Sấm Sét Thunder Shake
-      animShakeX = (Math.random() - 0.5) * (6 * scaleFactor);
-      animShakeY = (Math.random() - 0.5) * (6 * scaleFactor);
-      animScale = 1.0 + Math.sin(elapsed * 8) * 0.03;
-    } else if (anim === 'marquee') {
-      // Hiệu ứng Chạy từ Trái sang Phải (Left-to-Right Crawl)
-      const subDuration = (Number(currentSub.endTime) - Number(currentSub.startTime)) || 3;
-      const progress = Math.min(1, Math.max(0, elapsed / subDuration));
-      animShakeX = (progress - 0.5) * (canvasW * 1.2);
+      animShakeX = (Math.random() - 0.5) * (6 * scaleFactor * animSpeed);
+      animShakeY = (Math.random() - 0.5) * (6 * scaleFactor * animSpeed);
+      animScale = 1.0 + Math.sin(elapsed * 8 * animSpeed) * 0.03;
     }
 
     const fontSize = Math.round(baseFontSize * animScale);
@@ -258,7 +271,7 @@ export const processVideoCanvas = async ({
       ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
       ctx.fillStyle = '#090b10';
-      ctx.fillText(text, 0, 0);
+      ctx.fillText(displayText, 0, 0);
     } else if (style === 'victory') {
       // Style 2: ⚡ VICTORY Sấm Sét Neon Aura (CapCut Trending)
       ctx.shadowColor = '#a855f7';
@@ -312,7 +325,7 @@ export const processVideoCanvas = async ({
       ctx.fillStyle = '#ffffff';
       ctx.shadowColor = '#4ade80';
       ctx.shadowBlur = 15 * scaleFactor;
-      ctx.fillText(text, 0, 0);
+      ctx.fillText(displayText, 0, 0);
     } else if (style === 'social') {
       // Style 5: 📢 LIKE & SHARE BADGE
       ctx.fillStyle = '#2563eb';
@@ -340,7 +353,7 @@ export const processVideoCanvas = async ({
         ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
       }
       ctx.fillStyle = customColor;
-      ctx.fillText(text, 0, 0);
+      ctx.fillText(displayText, 0, 0);
     } else if (style === 'neon') {
       // Style 7: Cyber Neon Tím Hồng
       ctx.shadowColor = '#ec4899';
