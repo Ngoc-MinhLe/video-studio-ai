@@ -430,6 +430,13 @@ export default function App() {
     }
   };
 
+  const removeAudioTrack = () => {
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioFile(null);
+    setAudioUrl(null);
+    setAudioName('');
+  };
+
   // Xử lý upload Audio
   const handleAudioUpload = (e) => {
     const file = e.target.files[0];
