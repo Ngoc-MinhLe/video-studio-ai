@@ -433,30 +433,9 @@ export default function App() {
               <span className="hidden sm:inline">Đăng Ký Kênh</span>
             </a>
 
-            {/* Bộ chọn Engine Render */}
-            <div className="flex items-center gap-1 bg-[#1a1e2b] p-1 rounded-xl border border-[#2b3042] text-xs">
-              <button
-                onClick={() => setEngineType('canvas')}
-                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                  engineType === 'canvas'
-                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
-                    : 'text-[#94a3b8] hover:text-white'
-                }`}
-                title="Canvas Engine: Chạy 100% trên Cốc Cốc, Chrome, Safari không cần nạp 32MB WASM"
-              >
-                🚀 Canvas Engine
-              </button>
-              <button
-                onClick={() => setEngineType('ffmpeg')}
-                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                  engineType === 'ffmpeg'
-                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
-                    : 'text-[#94a3b8] hover:text-white'
-                }`}
-                title="FFmpeg WASM Engine: Render bằng WebAssembly"
-              >
-                ⚡ FFmpeg
-              </button>
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-purple-600/20 text-purple-300 border border-purple-500/40 text-xs font-bold shadow-sm">
+              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+              <span>Động Cơ GPU Canvas (Siêu Tốc 60 FPS)</span>
             </div>
 
             {/* Trạng Thái Người Dùng & Số Dư Xu */}
