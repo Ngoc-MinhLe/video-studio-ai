@@ -22,7 +22,8 @@ import {
   Gift
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from './services/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { auth, db } from './services/firebase';
 import { 
   subscribeUserData, 
   deductForVideoExport, 
@@ -102,26 +103,49 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Lắng hệ thống SePay toàn cục 1 giây 1 lần để tự động cộng xu ngay khi tiền về
+  // Lắng nghe realtime các đơn nạp tiền của currentUser đã hoàn thành để tự động nhảy số Xu màu vàng
   useEffect(() => {
     if (!currentUser || !userData) return;
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch('/api/check-order?amount=10000');
-        const data = await res.json();
-        if (data.completed && data.coins > 0) {
-          const key = `credited_sepay_trans_${data.digits || data.amount}`;
-          if (!localStorage.getItem(key)) {
-            localStorage.setItem(key, 'true');
-            const currentCoins = Number(userData.coins || 0);
-            const newTotal = currentCoins + data.coins;
-            await updateUserCoinsInDb(currentUser.uid, newTotal);
-            console.log(`[Global SePay Auto-Credit Success]: +${data.coins} xu credited to user!`);
+
+    try {
+      const q = query(
+        collection(db, "orders"),
+        where("uid", "==", currentUser.uid),
+        where("status", "==", "completed")
+      );
+
+      const unsub = onSnapshot(q, (snapshot) => {
+        snapshot.docChanges().forEach(async (change) => {
+          if (change.type === "added" || change.type === "modified") {
+            const orderData = change.doc.data();
+            const orderId = change.doc.id;
+            const key = `processed_realtime_order_${orderId}`;
+
+            if (!localStorage.getItem(key)) {
+              localStorage.setItem(key, "true");
+              const coinsToAdd = Number(orderData.coins || 25);
+              const currentCoins = Number(userData.coins || 0);
+              const newTotal = currentCoins + coinsToAdd;
+              try {
+                await updateUserCoinsInDb(currentUser.uid, newTotal);
+                console.log(`[Realtime Order Credit Success]: +${coinsToAdd} coins credited for order ${orderId}`);
+                confetti({
+                  particleCount: 150,
+                  spread: 90,
+                  origin: { y: 0.5 }
+                });
+              } catch (e) {
+                console.warn("Lỗi cộng xu realtime từ đơn nạp:", e);
+              }
+            }
           }
-        }
-      } catch (e) {}
-    }, 1000);
-    return () => clearInterval(interval);
+        });
+      });
+
+      return () => unsub();
+    } catch (err) {
+      console.warn("Lỗi tạo query orders:", err);
+    }
   }, [currentUser, userData?.coins]);
 
   // --- Video & Audio Player Controls ---
