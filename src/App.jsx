@@ -32,7 +32,6 @@ import {
   checkRedirectResult,
   updateUserCoinsInDb
 } from './services/authService';
-import { loadFFmpeg, processVideo } from './services/ffmpegService';
 import { processVideoCanvas } from './services/canvasExporter';
 const AdminModal = React.lazy(() => import('./components/AdminModal'));
 const AuthModal = React.lazy(() => import('./components/AuthModal'));
@@ -157,25 +156,25 @@ export default function App() {
   const audioRef = useRef(null);
 
   // Hàm kích hoạt nạp FFmpeg Engine (Nếu người dùng chuyển sang FFmpeg WASM)
-  const initEngine = () => {
+  const initEngine = async () => {
     setIsEngineReady(false);
     setEngineError(null);
     setStatusText('Đang khởi tạo FFmpeg Engine...');
 
-    loadFFmpeg(
-      (prog) => setProgress(prog),
-      (log) => setStatusText(log)
-    )
-      .then(() => {
-        setIsEngineReady(true);
-        setEngineError(null);
-        setStatusText('FFmpeg WASM sẵn sàng!');
-      })
-      .catch((err) => {
-        console.error('FFmpeg Init Error:', err);
-        setEngineError(err.message || 'Lỗi nạp WebAssembly.');
-        setStatusText('Khởi tạo chưa thành công.');
-      });
+    try {
+      const { loadFFmpeg } = await import('./services/ffmpegService');
+      await loadFFmpeg(
+        (prog) => setProgress(prog),
+        (log) => setStatusText(log)
+      );
+      setIsEngineReady(true);
+      setEngineError(null);
+      setStatusText('FFmpeg WASM sẵn sàng!');
+    } catch (err) {
+      console.error('FFmpeg Init Error:', err);
+      setEngineError(err.message || 'Lỗi nạp WebAssembly.');
+      setStatusText('Khởi tạo chưa thành công.');
+    }
   };
 
   useEffect(() => {
@@ -347,6 +346,7 @@ export default function App() {
         generatedExt = result.extension || 'mp4';
       } else {
         // Render bằng FFmpeg WASM Engine
+        const { processVideo } = await import('./services/ffmpegService');
         const outputBlobUrl = await processVideo({
           videoFile,
           audioFile,
