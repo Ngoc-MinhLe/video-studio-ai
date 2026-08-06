@@ -78,6 +78,9 @@ export default function App() {
   ]);
   const [subFontSize, setSubFontSize] = useState(24);
   const [subPosition, setSubPosition] = useState('bottom');
+  const [subX, setSubX] = useState(50);
+  const [subY, setSubY] = useState(85);
+  const [isDraggingSub, setIsDraggingSub] = useState(false);
   const [aspectRatio, setAspectRatio] = useState('16:9');
 
   // --- Export States ---
@@ -490,7 +493,7 @@ export default function App() {
         audioStartOffset,
         audioVideoOffset,
         subtitles,
-        subOptions: { fontSize: subFontSize, position: subPosition },
+        subOptions: { fontSize: subFontSize, position: subPosition, subX, subY },
         aspectRatio,
         onProgress: (prog) => setProgress(prog),
         onStatus: (stat) => setStatusText(stat)
@@ -939,16 +942,47 @@ export default function App() {
                     }}
                   />
                   
-                  {/* Lớp Phụ Đề Live Preview chuẩn kích thước */}
+                  {/* Lớp Phụ Đề Live Preview chuẩn kích thước - Hỗ trợ Kéo Thả Trực Tiếp ✋ */}
                   {currentSub && (
-                    <div className={`absolute left-0 right-0 px-4 text-center pointer-events-none transition-all ${
-                      subPosition === 'top' ? 'top-6' : subPosition === 'center' ? 'top-1/2 -translate-y-1/2' : 'bottom-8'
-                    }`}>
+                    <div 
+                      className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing select-none group z-20"
+                      style={{ left: `${subX}%`, top: `${subY}%` }}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        const container = e.currentTarget.parentElement;
+                        if (!container) return;
+                        setIsDraggingSub(true);
+
+                        const handlePointerMove = (moveEv) => {
+                          const rect = container.getBoundingClientRect();
+                          const relX = moveEv.clientX - rect.left;
+                          const relY = moveEv.clientY - rect.top;
+
+                          const pctX = Math.max(5, Math.min(95, (relX / rect.width) * 100));
+                          const pctY = Math.max(5, Math.min(95, (relY / rect.height) * 100));
+
+                          setSubX(Math.round(pctX));
+                          setSubY(Math.round(pctY));
+                        };
+
+                        const handlePointerUp = () => {
+                          setIsDraggingSub(false);
+                          window.removeEventListener('pointermove', handlePointerMove);
+                          window.removeEventListener('pointerup', handlePointerUp);
+                        };
+
+                        window.addEventListener('pointermove', handlePointerMove);
+                        window.addEventListener('pointerup', handlePointerUp);
+                      }}
+                    >
                       <span 
-                        className="inline-block bg-black/85 text-white font-bold px-3.5 py-1.5 rounded-lg shadow-2xl border border-white/20 tracking-wide text-xs sm:text-sm"
+                        className="inline-block bg-black/85 text-white font-bold px-3.5 py-1.5 rounded-lg shadow-2xl border border-purple-500/50 tracking-wide text-xs sm:text-sm ring-2 ring-purple-500/40 group-hover:ring-pink-500 transition-all"
                       >
                         {currentSub.text}
                       </span>
+                      <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[9px] bg-purple-600 text-white font-extrabold px-2 py-0.5 rounded shadow-lg opacity-90 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                        ✋ Kéo để di chuyển
+                      </div>
                     </div>
                   )}
                 </>
@@ -1238,27 +1272,57 @@ export default function App() {
             </button>
           </div>
 
-          {/* Tùy chỉnh Kiểu Chữ Subtitle */}
-          <div className="grid grid-cols-2 gap-3 bg-[#12151e] p-3 rounded-xl border border-[#2b3042]">
-            <div>
-              <label className="text-xs text-[#64748b] block mb-1 font-medium">Cỡ chữ (px)</label>
+          {/* Tùy chỉnh Kiểu Chữ & Vị Trí Kéo Thả Subtitle */}
+          <div className="flex flex-col gap-2.5 bg-[#12151e] p-3 rounded-xl border border-[#2b3042]">
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-[#94a3b8] font-medium flex items-center gap-1.5">
+                <Sliders className="w-3.5 h-3.5 text-purple-400" /> Vị Trí Phụ Đề
+              </label>
+              <span className="text-[10px] font-mono text-purple-300 font-bold bg-purple-950/60 px-2 py-0.5 rounded border border-purple-500/30">
+                X: {subX}% | Y: {subY}%
+              </span>
+            </div>
+
+            {/* Bộ Nút Định Vị Nhanh */}
+            <div className="flex items-center gap-1.5 text-xs">
+              <button
+                onClick={() => { setSubX(50); setSubY(15); setSubPosition('top'); }}
+                className={`flex-1 py-1 px-2 rounded-lg font-medium transition-all cursor-pointer text-center text-[11px] ${
+                  subY === 15 ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                }`}
+              >
+                📍 Trên Cùng
+              </button>
+              <button
+                onClick={() => { setSubX(50); setSubY(50); setSubPosition('center'); }}
+                className={`flex-1 py-1 px-2 rounded-lg font-medium transition-all cursor-pointer text-center text-[11px] ${
+                  subY === 50 ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                }`}
+              >
+                📍 Chính Giữa
+              </button>
+              <button
+                onClick={() => { setSubX(50); setSubY(85); setSubPosition('bottom'); }}
+                className={`flex-1 py-1 px-2 rounded-lg font-medium transition-all cursor-pointer text-center text-[11px] ${
+                  subY === 85 ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                }`}
+              >
+                📍 Dưới Cùng
+              </button>
+            </div>
+
+            {/* Mẹo Kéo Thả Trực Tiếp */}
+            <div className="flex items-center gap-1.5 text-[10px] text-pink-300 bg-pink-950/30 p-1.5 rounded-lg border border-pink-500/20 font-medium">
+              <span>✋ Mẹo: Kéo thả trực tiếp chữ Phụ đề trên Video xem trước để di chuyển tự do!</span>
+            </div>
+
+            <div className="flex items-center justify-between pt-1 border-t border-[#2b3042]/50">
+              <span className="text-xs text-[#64748b] font-medium">Cỡ chữ (px)</span>
               <input 
                 type="number" value={subFontSize} min="14" max="48"
                 onChange={(e) => setSubFontSize(Number(e.target.value))}
-                className="input-field py-1 text-xs"
+                className="w-20 input-field py-0.5 px-2 text-center text-xs font-mono"
               />
-            </div>
-            <div>
-              <label className="text-xs text-[#64748b] block mb-1 font-medium">Vị trí hiển thị</label>
-              <select 
-                value={subPosition}
-                onChange={(e) => setSubPosition(e.target.value)}
-                className="input-field py-1 text-xs bg-[#12151e]"
-              >
-                <option value="bottom">Dưới cùng (TikTok/Reels)</option>
-                <option value="center">Chính giữa</option>
-                <option value="top">Trên cùng</option>
-              </select>
             </div>
           </div>
 

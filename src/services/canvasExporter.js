@@ -174,13 +174,17 @@ export const processVideoCanvas = async ({
     const textWidth = metrics.width;
     const textHeight = fontSize * 1.3;
 
-    let x = canvasW / 2;
-    let y = canvasH - textHeight - (60 * scaleFactor);
+    let x = canvasW * ((subOptions.subX !== undefined ? subOptions.subX : 50) / 100);
+    let y = canvasH * ((subOptions.subY !== undefined ? subOptions.subY : 85) / 100);
 
-    if (subOptions.position === 'top') {
-      y = textHeight + (60 * scaleFactor);
-    } else if (subOptions.position === 'center') {
-      y = canvasH / 2;
+    if (subOptions.subY === undefined) {
+      if (subOptions.position === 'top') {
+        y = textHeight + (60 * scaleFactor);
+      } else if (subOptions.position === 'center') {
+        y = canvasH / 2;
+      } else if (subOptions.position === 'bottom') {
+        y = canvasH - textHeight - (60 * scaleFactor);
+      }
     }
 
     const paddingX = fontSize * 0.5;
