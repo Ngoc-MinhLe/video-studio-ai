@@ -96,6 +96,7 @@ export default function App() {
   const [bgMirrorBlur, setBgMirrorBlur] = useState(true); // Gương Phủ Mờ Lề Dư
   const [zoomSpeed, setZoomSpeed] = useState(0.2); // 0.05 to 1.0
   const [zoomRange, setZoomRange] = useState(30); // 10 to 100%
+  const [exportBitrate, setExportBitrate] = useState(2500000); // Mặc định 2.5 Mbps (Tiêu chuẩn)
 
   const handleBgImageUpload = (e) => {
     const file = e.target.files[0];
@@ -661,6 +662,7 @@ export default function App() {
         audioVideoOffset,
         subtitles,
         aspectRatio,
+        videoBitsPerSecond: exportBitrate,
         onProgress: (p) => setProgress(p),
         onStatus: (s) => setStatusText(s)
       });
@@ -853,6 +855,20 @@ export default function App() {
                 <span>📥 TẢI VIDEO MP4 VỀ MÁY</span>
               </a>
             )}
+
+            {/* Bộ Chọn Chất Lượng Video Bitrate */}
+            <select
+              value={exportBitrate}
+              onChange={(e) => setExportBitrate(Number(e.target.value))}
+              disabled={isProcessing}
+              className="bg-[#12151e] border border-[#2b3042] text-xs text-[#94a3b8] rounded-xl px-2.5 py-2.5 focus:outline-none focus:ring-1 focus:ring-purple-500 font-bold cursor-pointer shrink-0"
+              title="Chọn chất lượng video (Bitrate)"
+            >
+              <option value={1200000}>💾 Tiết Kiệm (1.2 Mbps - Tối ưu 1-2 tiếng)</option>
+              <option value={2500000}>📊 Tiêu Chuẩn (2.5 Mbps - Mặc định)</option>
+              <option value={5000000}>🎬 Chất Lượng Cao (5.0 Mbps)</option>
+              <option value={8000000}>🔥 Siêu Sắc Nét (8.0 Mbps)</option>
+            </select>
 
             <button 
               onClick={handleExport}

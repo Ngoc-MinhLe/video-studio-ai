@@ -37,6 +37,7 @@ export const processVideoCanvas = async ({
   subtitles = [],
   subOptions = { fontSize: 24, fontColor: 'white', position: 'bottom' },
   aspectRatio = '16:9',
+  videoBitsPerSecond = 3000000,
   onProgress,
   onStatus
 }) => {
@@ -514,7 +515,7 @@ export const processVideoCanvas = async ({
 
   const mediaRecorder = new MediaRecorder(combinedStream, {
     mimeType,
-    videoBitsPerSecond: 6000000
+    videoBitsPerSecond: videoBitsPerSecond || 3000000
   });
 
   const chunks = [];
