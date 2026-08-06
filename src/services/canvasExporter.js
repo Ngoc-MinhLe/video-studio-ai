@@ -242,8 +242,27 @@ export const processVideoCanvas = async ({
       ? (canvasW * (boxWPercent / 100))
       : (textWidth + (fontSize * 1.0));
     const boxHeight = textHeight + (fontSize * 0.6);
-    const boxX = - (boxWidth / 2);
-    const boxY = - (boxHeight / 2);
+
+    let boxX = - (boxWidth / 2);
+    let boxY = - (boxHeight / 2);
+    let textX = 0;
+    let textY = 0;
+
+    if (posX >= 75) {
+      boxX = - boxWidth;
+      textX = - boxWidth / 2;
+    } else if (posX <= 25) {
+      boxX = 0;
+      textX = boxWidth / 2;
+    }
+
+    if (posY >= 75) {
+      boxY = - boxHeight;
+      textY = - boxHeight / 2;
+    } else if (posY <= 25) {
+      boxY = 0;
+      textY = boxHeight / 2;
+    }
 
     // Render Theo Mẫu Style Đã Chọn
     if (style === 'led' || isMarqueeMode) {
@@ -270,14 +289,14 @@ export const processVideoCanvas = async ({
         const scrollSpeed = 65 * scaleFactor * animSpeed;
         const totalDist = textWidth + boxWidth;
         const currentOffset = (elapsed * scrollSpeed) % totalDist;
-        const textX = (boxWidth / 2) - currentOffset + (textWidth / 2);
+        const mTextX = boxX + boxWidth - currentOffset + (textWidth / 2);
         ctx.fillStyle = '#fef08a';
         ctx.shadowColor = '#f59e0b';
         ctx.shadowBlur = 12 * scaleFactor;
-        ctx.fillText(text, textX, 0);
+        ctx.fillText(text, mTextX, textY);
       } else {
         ctx.fillStyle = '#fef08a';
-        ctx.fillText(text, 0, 0);
+        ctx.fillText(text, textX, textY);
       }
       ctx.restore();
     } else if (style === 'tiktok') {
@@ -295,7 +314,7 @@ export const processVideoCanvas = async ({
       ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
       ctx.fillStyle = '#090b10';
-      ctx.fillText(displayText, 0, 0);
+      ctx.fillText(displayText, textX, textY);
     } else if (style === 'victory') {
       // Style 2: ⚡ VICTORY Sấm Sét Neon Aura (CapCut Trending)
       ctx.shadowColor = '#a855f7';
@@ -315,7 +334,7 @@ export const processVideoCanvas = async ({
       ctx.fillStyle = '#e9d5ff';
       ctx.shadowColor = '#c084fc';
       ctx.shadowBlur = 15 * scaleFactor;
-      ctx.fillText(`⚡ ${text} ⚡`, 0, 0);
+      ctx.fillText(`⚡ ${text} ⚡`, textX, textY);
     } else if (style === 'boom') {
       // Style 3: 💥 BOOM Bùng Nổ Đỏ 3D
       ctx.fillStyle = '#dc2626';
@@ -331,7 +350,7 @@ export const processVideoCanvas = async ({
       ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(`💥 ${text}`, 0, 0);
+      ctx.fillText(`💥 ${text}`, textX, textY);
     } else if (style === 'sponge') {
       // Style 4: 🟩 SPONGE Viền Xanh 3D
       ctx.fillStyle = '#15803d';
@@ -349,7 +368,7 @@ export const processVideoCanvas = async ({
       ctx.fillStyle = '#ffffff';
       ctx.shadowColor = '#4ade80';
       ctx.shadowBlur = 15 * scaleFactor;
-      ctx.fillText(displayText, 0, 0);
+      ctx.fillText(displayText, textX, textY);
     } else if (style === 'social') {
       // Style 5: 📢 LIKE & SHARE BADGE
       ctx.fillStyle = '#2563eb';
@@ -365,7 +384,7 @@ export const processVideoCanvas = async ({
       ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(`📢 ${text}`, 0, 0);
+      ctx.fillText(`📢 ${text}`, textX, textY);
     } else if (style === 'custom') {
       // Style 6: 🎨 TỰ CHỌN MÀU TÙY Ý
       ctx.fillStyle = customBgColor;
@@ -377,7 +396,7 @@ export const processVideoCanvas = async ({
         ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
       }
       ctx.fillStyle = customColor;
-      ctx.fillText(displayText, 0, 0);
+      ctx.fillText(displayText, textX, textY);
     } else if (style === 'neon') {
       // Style 7: Cyber Neon Tím Hồng
       ctx.shadowColor = '#ec4899';
@@ -395,7 +414,7 @@ export const processVideoCanvas = async ({
       ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
       ctx.fillStyle = '#f472b6';
-      ctx.fillText(text, 0, 0);
+      ctx.fillText(text, textX, textY);
     } else if (style === 'cinema') {
       // Style 8: Điện Ảnh Sang Trọng
       ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
@@ -409,7 +428,7 @@ export const processVideoCanvas = async ({
       ctx.fillStyle = '#ffffff';
       ctx.shadowColor = 'rgba(0,0,0,0.8)';
       ctx.shadowBlur = 10 * scaleFactor;
-      ctx.fillText(text, 0, 0);
+      ctx.fillText(text, textX, textY);
     } else {
       // Style Default
       ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
@@ -425,7 +444,7 @@ export const processVideoCanvas = async ({
       ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(text, 0, 0);
+      ctx.fillText(text, textX, textY);
     }
 
     ctx.restore();

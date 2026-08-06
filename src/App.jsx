@@ -980,10 +980,13 @@ export default function App() {
                     const posY = sub.y !== undefined ? sub.y : 85;
                     const isSelected = selectedSubId === sub.id;
 
+                    const alignTransformX = posX >= 75 ? '-100%' : posX <= 25 ? '0%' : '-50%';
+                    const alignTransformY = posY >= 75 ? '-100%' : posY <= 25 ? '0%' : '-50%';
+
                     return (
                       <div 
                         key={sub.id}
-                        className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing select-none group z-20 flex justify-center touch-none ${
+                        className={`absolute cursor-grab active:cursor-grabbing select-none group z-20 flex justify-center touch-none ${
                           isSelected ? 'ring-2 ring-pink-500 rounded-lg p-0.5 shadow-[0_0_15px_rgba(236,72,153,0.8)]' : ''
                         }`}
                         style={{ 
@@ -991,7 +994,7 @@ export default function App() {
                           left: `${posX}%`, 
                           top: `${posY}%`,
                           width: style === 'led' || anim === 'marquee' ? `${boxWidth}%` : 'auto',
-                          transform: `translate(-50%, -50%) rotate(${rotation}deg)`
+                          transform: `translate(${alignTransformX}, ${alignTransformY}) rotate(${rotation}deg)`
                         }}
                         onPointerDown={(e) => {
                           e.preventDefault();
@@ -1389,25 +1392,25 @@ export default function App() {
                   <div className="grid grid-cols-3 gap-1 bg-[#1a1e2b] p-1.5 rounded-xl border border-[#2b3042]">
                     {/* Hàng 1: Trên Trái - Trên Giữa - Trên Phải */}
                     <button
-                      onClick={() => { updateSubtitle(activeSub.id, 'x', 20); updateSubtitle(activeSub.id, 'y', 15); }}
+                      onClick={() => { updateSubtitle(activeSub.id, 'x', 3); updateSubtitle(activeSub.id, 'y', 3); }}
                       className={`py-1 px-1 rounded font-medium text-[10px] cursor-pointer transition-all ${
-                        activeSub.x === 20 && activeSub.y === 15 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
+                        activeSub.x === 3 && activeSub.y === 3 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
                       }`}
                     >
                       ↖️ Trên Trái
                     </button>
                     <button
-                      onClick={() => { updateSubtitle(activeSub.id, 'x', 50); updateSubtitle(activeSub.id, 'y', 15); }}
+                      onClick={() => { updateSubtitle(activeSub.id, 'x', 50); updateSubtitle(activeSub.id, 'y', 3); }}
                       className={`py-1 px-1 rounded font-medium text-[10px] cursor-pointer transition-all ${
-                        activeSub.x === 50 && activeSub.y === 15 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
+                        activeSub.x === 50 && activeSub.y === 3 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
                       }`}
                     >
                       ⬆️ Trên Giữa
                     </button>
                     <button
-                      onClick={() => { updateSubtitle(activeSub.id, 'x', 80); updateSubtitle(activeSub.id, 'y', 15); }}
+                      onClick={() => { updateSubtitle(activeSub.id, 'x', 97); updateSubtitle(activeSub.id, 'y', 3); }}
                       className={`py-1 px-1 rounded font-medium text-[10px] cursor-pointer transition-all ${
-                        activeSub.x === 80 && activeSub.y === 15 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
+                        activeSub.x === 97 && activeSub.y === 3 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
                       }`}
                     >
                       ↗️ Trên Phải
@@ -1415,9 +1418,9 @@ export default function App() {
 
                     {/* Hàng 2: Giữa Trái - Chính Giữa - Giữa Phải */}
                     <button
-                      onClick={() => { updateSubtitle(activeSub.id, 'x', 20); updateSubtitle(activeSub.id, 'y', 50); }}
+                      onClick={() => { updateSubtitle(activeSub.id, 'x', 3); updateSubtitle(activeSub.id, 'y', 50); }}
                       className={`py-1 px-1 rounded font-medium text-[10px] cursor-pointer transition-all ${
-                        activeSub.x === 20 && activeSub.y === 50 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
+                        activeSub.x === 3 && activeSub.y === 50 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
                       }`}
                     >
                       ⬅️ Giữa Trái
@@ -1431,9 +1434,9 @@ export default function App() {
                       🎯 Chính Giữa
                     </button>
                     <button
-                      onClick={() => { updateSubtitle(activeSub.id, 'x', 80); updateSubtitle(activeSub.id, 'y', 50); }}
+                      onClick={() => { updateSubtitle(activeSub.id, 'x', 97); updateSubtitle(activeSub.id, 'y', 50); }}
                       className={`py-1 px-1 rounded font-medium text-[10px] cursor-pointer transition-all ${
-                        activeSub.x === 80 && activeSub.y === 50 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
+                        activeSub.x === 97 && activeSub.y === 50 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
                       }`}
                     >
                       ➡️ Giữa Phải
@@ -1441,25 +1444,25 @@ export default function App() {
 
                     {/* Hàng 3: Dưới Trái - Dưới Giữa - Dưới Phải */}
                     <button
-                      onClick={() => { updateSubtitle(activeSub.id, 'x', 20); updateSubtitle(activeSub.id, 'y', 85); }}
+                      onClick={() => { updateSubtitle(activeSub.id, 'x', 3); updateSubtitle(activeSub.id, 'y', 97); }}
                       className={`py-1 px-1 rounded font-medium text-[10px] cursor-pointer transition-all ${
-                        activeSub.x === 20 && activeSub.y === 85 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
+                        activeSub.x === 3 && activeSub.y === 97 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
                       }`}
                     >
                       ↙️ Dưới Trái
                     </button>
                     <button
-                      onClick={() => { updateSubtitle(activeSub.id, 'x', 50); updateSubtitle(activeSub.id, 'y', 85); }}
+                      onClick={() => { updateSubtitle(activeSub.id, 'x', 50); updateSubtitle(activeSub.id, 'y', 97); }}
                       className={`py-1 px-1 rounded font-medium text-[10px] cursor-pointer transition-all ${
-                        activeSub.x === 50 && activeSub.y === 85 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
+                        activeSub.x === 50 && activeSub.y === 97 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
                       }`}
                     >
                       ⬇️ Dưới Giữa
                     </button>
                     <button
-                      onClick={() => { updateSubtitle(activeSub.id, 'x', 80); updateSubtitle(activeSub.id, 'y', 85); }}
+                      onClick={() => { updateSubtitle(activeSub.id, 'x', 97); updateSubtitle(activeSub.id, 'y', 97); }}
                       className={`py-1 px-1 rounded font-medium text-[10px] cursor-pointer transition-all ${
-                        activeSub.x === 80 && activeSub.y === 85 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
+                        activeSub.x === 97 && activeSub.y === 97 ? 'bg-purple-600 text-white font-bold shadow ring-1 ring-purple-400' : 'bg-[#12151e] text-[#94a3b8] hover:text-white'
                       }`}
                     >
                       ↘️ Dưới Phải
