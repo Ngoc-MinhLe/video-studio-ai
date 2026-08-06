@@ -72,22 +72,12 @@ export default function App() {
   const [audioStartOffset, setAudioStartOffset] = useState(0);
   const [audioVideoOffset, setAudioVideoOffset] = useState(0);
 
-  // --- States Phụ đề ---
+  // --- States Phụ đề Độc Lập ---
   const [subtitles, setSubtitles] = useState([
-    { id: 1, startTime: 0, endTime: 3, text: '👋 Chào mừng bạn đến với Studio Video!' },
-    { id: 2, startTime: 3, endTime: 6, text: '✨ Thay nhạc & thêm phụ đề cực kỳ dễ dàng.' }
+    { id: 1, startTime: 0, endTime: 3, text: '👋 Chào mừng bạn đến với Studio Video!', x: 50, y: 80, style: 'tiktok', anim: 'bounce', fontSize: 24, rotation: 0, color: '#ffffff', bgColor: '#000000', boxWidth: 80, animSpeed: 0.5 },
+    { id: 2, startTime: 3, endTime: 6, text: '✨ Thay nhạc & thêm phụ đề cực kỳ dễ dàng.', x: 50, y: 88, style: 'victory', anim: 'bounce', fontSize: 24, rotation: 0, color: '#ffffff', bgColor: '#000000', boxWidth: 80, animSpeed: 0.5 }
   ]);
-  const [subFontSize, setSubFontSize] = useState(24);
-  const [subPosition, setSubPosition] = useState('bottom');
-  const [subX, setSubX] = useState(50);
-  const [subY, setSubY] = useState(85);
-  const [subColor, setSubColor] = useState('#ffffff');
-  const [subBgColor, setSubBgColor] = useState('#000000');
-  const [subRotation, setSubRotation] = useState(0);
-  const [subStyle, setSubStyle] = useState('tiktok'); // 'tiktok' | 'led' | 'victory' | 'boom' | 'sponge' | 'social' | 'neon' | 'cinema' | 'custom'
-  const [subAnimation, setSubAnimation] = useState('bounce'); // 'typewriter' | 'marquee' | 'shake' | 'bounce' | 'fade' | 'pulse' | 'none'
-  const [subAnimSpeed, setSubAnimSpeed] = useState(0.5); // Tốc độ chạy hiệu ứng (0.1x -> 1.5x)
-  const [subBoxWidth, setSubBoxWidth] = useState(80); // Độ rộng khung LED/Banner (30% -> 100%)
+  const [selectedSubId, setSelectedSubId] = useState(1);
   const [isDraggingSub, setIsDraggingSub] = useState(false);
   const [aspectRatio, setAspectRatio] = useState('16:9');
 
@@ -453,8 +443,7 @@ export default function App() {
       { id: newId, startTime: start, endTime: start + 3, text: 'Phụ đề mới...' }
     ]);
   };
-
-  const updateSubtitle = (id, field, value) => {
+    const updateSubtitle = (id, field, value) => {
     setSubtitles(subtitles.map(s => {
       if (s.id !== id) return s;
       const updated = { ...s, [field]: value };
@@ -463,6 +452,11 @@ export default function App() {
       }
       return updated;
     }));
+  };
+
+  // Phụ đề đang được chọn biên tập riêng biệt
+  const activeSub = subtitles.find(s => s.id === selectedSubId) || subtitles[0] || {
+    id: 1, startTime: 0, endTime: 3, text: '', x: 50, y: 85, style: 'tiktok', anim: 'bounce', fontSize: 24, rotation: 0, color: '#ffffff', bgColor: '#000000', boxWidth: 80, animSpeed: 0.5
   };
 
   const deleteSubtitle = (id) => {
@@ -515,7 +509,7 @@ export default function App() {
         audioStartOffset,
         audioVideoOffset,
         subtitles,
-        subOptions: { fontSize: subFontSize, position: subPosition, subX, subY, subStyle, subAnimation, subAnimSpeed, subBoxWidth, subColor, subBgColor, subRotation },
+        subOptions: { fontSize: activeSub.fontSize || 24, subStyle: activeSub.style || 'tiktok', subAnimation: activeSub.anim || 'bounce', subAnimSpeed: activeSub.animSpeed || 0.5, subBoxWidth: activeSub.boxWidth || 80, subColor: activeSub.color || '#ffffff', subBgColor: activeSub.bgColor || '#000000', subRotation: activeSub.rotation || 0 },
         aspectRatio,
         onProgress: (prog) => setProgress(prog),
         onStatus: (stat) => setStatusText(stat)
@@ -975,96 +969,113 @@ export default function App() {
                     }}
                   />
                   
-                  {/* Lớp Phụ Đề Live Preview chuẩn kích thước - Hỗ trợ Kéo Thả & Chạy Song Song ✋ */}
-                  {activeSubs.length > 0 && activeSubs.map((sub, subIdx) => (
-                    <div 
-                      key={sub.id}
-                      className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing select-none group z-20 transition-all flex justify-center"
-                      style={{ 
-                        left: `${subX}%`, 
-                        top: `${Math.max(10, Math.min(90, subY - (subIdx * 8)))}%`,
-                        width: subStyle === 'led' || subAnimation === 'marquee' ? `${subBoxWidth}%` : 'auto',
-                        transform: `translate(-50%, -50%) rotate(${subRotation}deg)`
-                      }}
-                      onPointerDown={(e) => {
-                        e.preventDefault();
-                        const container = e.currentTarget.parentElement;
-                        if (!container) return;
-                        setIsDraggingSub(true);
+                  {/* Lớp Phụ Đề Live Preview chuẩn kích thước - Hỗ trợ Kéo Thả & Phong Cách Riêng Biệt ✋ */}
+                  {activeSubs.length > 0 && activeSubs.map((sub) => {
+                    const style = sub.style || 'tiktok';
+                    const anim = sub.anim || 'bounce';
+                    const fontSize = sub.fontSize || 24;
+                    const rotation = sub.rotation || 0;
+                    const color = sub.color || '#ffffff';
+                    const bgColor = sub.bgColor || '#000000';
+                    const boxWidth = sub.boxWidth || 80;
+                    const animSpeed = sub.animSpeed || 0.5;
+                    const posX = sub.x !== undefined ? sub.x : 50;
+                    const posY = sub.y !== undefined ? sub.y : 85;
+                    const isSelected = selectedSubId === sub.id;
 
-                        const handlePointerMove = (moveEv) => {
-                          const rect = container.getBoundingClientRect();
-                          const relX = moveEv.clientX - rect.left;
-                          const relY = moveEv.clientY - rect.top;
+                    return (
+                      <div 
+                        key={sub.id}
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing select-none group z-20 transition-all flex justify-center ${
+                          isSelected ? 'ring-2 ring-pink-500 rounded-lg p-0.5 shadow-[0_0_15px_rgba(236,72,153,0.8)]' : ''
+                        }`}
+                        style={{ 
+                          left: `${posX}%`, 
+                          top: `${posY}%`,
+                          width: style === 'led' || anim === 'marquee' ? `${boxWidth}%` : 'auto',
+                          transform: `translate(-50%, -50%) rotate(${rotation}deg)`
+                        }}
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          setSelectedSubId(sub.id);
+                          const container = e.currentTarget.parentElement;
+                          if (!container) return;
+                          setIsDraggingSub(true);
 
-                          const pctX = Math.max(5, Math.min(95, (relX / rect.width) * 100));
-                          const pctY = Math.max(5, Math.min(95, (relY / rect.height) * 100));
+                          const handlePointerMove = (moveEv) => {
+                            const rect = container.getBoundingClientRect();
+                            const relX = moveEv.clientX - rect.left;
+                            const relY = moveEv.clientY - rect.top;
 
-                          setSubX(Math.round(pctX));
-                          setSubY(Math.round(pctY));
-                        };
+                            const pctX = Math.max(5, Math.min(95, (relX / rect.width) * 100));
+                            const pctY = Math.max(5, Math.min(95, (relY / rect.height) * 100));
 
-                        const handlePointerUp = () => {
-                          setIsDraggingSub(false);
-                          window.removeEventListener('pointermove', handlePointerMove);
-                          window.removeEventListener('pointerup', handlePointerUp);
-                        };
+                            updateSubtitle(sub.id, 'x', Math.round(pctX));
+                            updateSubtitle(sub.id, 'y', Math.round(pctY));
+                          };
 
-                        window.addEventListener('pointermove', handlePointerMove);
-                        window.addEventListener('pointerup', handlePointerUp);
-                      }}
-                    >
-                      {subStyle === 'led' || subAnimation === 'marquee' ? (
-                        /* Khung Bảng Đèn LED Chạy Chữ Quảng Cáo (LED Marquee Window) */
-                        <div className="w-full overflow-hidden border-2 border-amber-500 bg-[#06080d]/95 p-2 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.7)] text-amber-200 font-mono font-extrabold whitespace-nowrap flex items-center">
+                          const handlePointerUp = () => {
+                            setIsDraggingSub(false);
+                            window.removeEventListener('pointermove', handlePointerMove);
+                            window.removeEventListener('pointerup', handlePointerUp);
+                          };
+
+                          window.addEventListener('pointermove', handlePointerMove);
+                          window.addEventListener('pointerup', handlePointerUp);
+                        }}
+                      >
+                        {style === 'led' || anim === 'marquee' ? (
+                          /* Khung Bảng Đèn LED Chạy Chữ Quảng Cáo (LED Marquee Window) */
+                          <div className="w-full overflow-hidden border-2 border-amber-500 bg-[#06080d]/95 p-2 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.7)] text-amber-200 font-mono font-extrabold whitespace-nowrap flex items-center">
+                            <span 
+                              style={{
+                                fontSize: `${fontSize}px`,
+                                animationDuration: `${10 / animSpeed}s`
+                              }}
+                              className="animate-marquee inline-block font-mono text-amber-200 tracking-wider shadow-amber-400"
+                            >
+                              📟 {sub.text}
+                            </span>
+                          </div>
+                        ) : (
                           <span 
                             style={{
-                              fontSize: `${subFontSize}px`,
-                              animationDuration: `${10 / subAnimSpeed}s`
+                              fontSize: `${fontSize}px`,
+                              color: style === 'custom' ? color : undefined,
+                              backgroundColor: style === 'custom' ? bgColor : undefined
                             }}
-                            className="animate-marquee inline-block font-mono text-amber-200 tracking-wider shadow-amber-400"
+                            className={`inline-block font-extrabold px-3.5 py-1.5 rounded-lg shadow-2xl tracking-wide whitespace-nowrap transition-all ${
+                              anim === 'bounce' ? 'animate-bounce' : 
+                              anim === 'pulse' ? 'animate-pulse' : 
+                              anim === 'shake' ? 'animate-ping' : ''
+                            } ${
+                              style === 'tiktok' ? 'bg-yellow-400 text-slate-950 border-2 border-black font-black shadow-yellow-500/20' :
+                              style === 'victory' ? 'bg-[#0f0720]/90 text-purple-200 border-2 border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.8)] font-black' :
+                              style === 'boom' ? 'bg-red-600 text-white border-2 border-yellow-300 font-black shadow-lg' :
+                              style === 'sponge' ? 'bg-green-700 text-white border-2 border-green-400 font-black shadow-green-500/30' :
+                              style === 'social' ? 'bg-blue-600 text-white border-2 border-white font-bold shadow-md' :
+                              style === 'neon' ? 'bg-[#18092b]/90 text-pink-400 border-2 border-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.6)] font-bold' :
+                              style === 'cinema' ? 'bg-black/75 text-white border border-white/20 shadow-2xl font-semibold backdrop-blur-sm' :
+                              'bg-black/85 text-white border border-white/20 shadow-xl'
+                            }`}
                           >
-                            📟 {sub.text}
+                            {(() => {
+                              let raw = sub.text;
+                              if (anim === 'typewriter') {
+                                const words = raw.split(' ');
+                                const subDur = (Number(sub.endTime) - Number(sub.startTime)) || 3;
+                                const elapsed = Math.max(0, currentTime - Number(sub.startTime));
+                                const revealProg = Math.min(1, Math.max(0, (elapsed * animSpeed) / subDur));
+                                const visibleCount = Math.max(1, Math.ceil(revealProg * words.length));
+                                raw = words.slice(0, visibleCount).join(' ');
+                              }
+                              return style === 'victory' ? `⚡ ${raw} ⚡` : style === 'boom' ? `💥 ${raw}` : style === 'social' ? `📢 ${raw}` : raw;
+                            })()}
                           </span>
-                        </div>
-                      ) : (
-                        <span 
-                          style={{
-                            fontSize: `${subFontSize}px`,
-                            color: subStyle === 'custom' ? subColor : undefined,
-                            backgroundColor: subStyle === 'custom' ? subBgColor : undefined
-                          }}
-                          className={`inline-block font-extrabold px-3.5 py-1.5 rounded-lg shadow-2xl tracking-wide whitespace-nowrap transition-all ${
-                            subAnimation === 'bounce' ? 'animate-bounce' : 
-                            subAnimation === 'pulse' ? 'animate-pulse' : 
-                            subAnimation === 'shake' ? 'animate-ping' : ''
-                          } ${
-                            subStyle === 'tiktok' ? 'bg-yellow-400 text-slate-950 border-2 border-black font-black shadow-yellow-500/20' :
-                            subStyle === 'victory' ? 'bg-[#0f0720]/90 text-purple-200 border-2 border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.8)] font-black' :
-                            subStyle === 'boom' ? 'bg-red-600 text-white border-2 border-yellow-300 font-black shadow-lg' :
-                            subStyle === 'sponge' ? 'bg-green-700 text-white border-2 border-green-400 font-black shadow-green-500/30' :
-                            subStyle === 'social' ? 'bg-blue-600 text-white border-2 border-white font-bold shadow-md' :
-                            subStyle === 'neon' ? 'bg-[#18092b]/90 text-pink-400 border-2 border-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.6)] font-bold' :
-                            subStyle === 'cinema' ? 'bg-black/75 text-white border border-white/20 shadow-2xl font-semibold backdrop-blur-sm' :
-                            'bg-black/85 text-white border border-white/20 shadow-xl'
-                          }`}
-                        >
-                          {(() => {
-                            let raw = sub.text;
-                            if (subAnimation === 'typewriter') {
-                              const words = raw.split(' ');
-                              const subDur = (Number(sub.endTime) - Number(sub.startTime)) || 3;
-                              const elapsed = Math.max(0, currentTime - Number(sub.startTime));
-                              const revealProg = Math.min(1, Math.max(0, (elapsed * subAnimSpeed) / subDur));
-                              const visibleCount = Math.max(1, Math.ceil(revealProg * words.length));
-                              raw = words.slice(0, visibleCount).join(' ');
-                            }
-                            return subStyle === 'victory' ? `⚡ ${raw} ⚡` : subStyle === 'boom' ? `💥 ${raw}` : subStyle === 'social' ? `📢 ${raw}` : raw;
-                          })()}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                        )}
+                      </div>
+                    );
+                  })}
                 </>
               ) : (
                 <div className="flex flex-col items-center gap-3 text-[#64748b] p-8">
@@ -1340,10 +1351,9 @@ export default function App() {
               onClick={() => {
                 const now = Math.floor(currentTime * 10) / 10;
                 const newId = subtitles.length > 0 ? Math.max(...subtitles.map(s => s.id)) + 1 : 1;
-                setSubtitles([
-                  ...subtitles,
-                  { id: newId, startTime: now, endTime: Math.floor((now + 3) * 10) / 10, text: 'Phụ đề mới...' }
-                ]);
+                const newSub = { id: newId, startTime: now, endTime: Math.floor((now + 3) * 10) / 10, text: 'Phụ đề mới...', x: 50, y: 85, style: 'tiktok', anim: 'bounce', fontSize: 24, rotation: 0, color: '#ffffff', bgColor: '#000000', boxWidth: 80, animSpeed: 0.5 };
+                setSubtitles([...subtitles, newSub]);
+                setSelectedSubId(newId);
               }} 
               className="btn-secondary text-xs cursor-pointer"
               title="Thêm phụ đề mới ngay tại mốc thời gian đang xem"
@@ -1352,39 +1362,39 @@ export default function App() {
             </button>
           </div>
 
-          {/* Tùy chỉnh Kiểu Chữ & Vị Trí Kéo Thả Subtitle */}
+          {/* Tùy chỉnh Kiểu Chữ & Vị Trí Kéo Thả Subtitle Chi Tiết Theo Thẻ */}
           <div className="flex flex-col gap-2.5 bg-[#12151e] p-3 rounded-xl border border-[#2b3042]">
             <div className="flex items-center justify-between">
               <label className="text-xs text-[#94a3b8] font-medium flex items-center gap-1.5">
-                <Sliders className="w-3.5 h-3.5 text-purple-400" /> Vị Trí Phụ Đề
+                <Sliders className="w-3.5 h-3.5 text-purple-400" /> Vị Trí Phụ Đề (Thẻ #{activeSub.id})
               </label>
               <span className="text-[10px] font-mono text-purple-300 font-bold bg-purple-950/60 px-2 py-0.5 rounded border border-purple-500/30">
-                X: {subX}% | Y: {subY}%
+                X: {activeSub.x !== undefined ? activeSub.x : 50}% | Y: {activeSub.y !== undefined ? activeSub.y : 85}%
               </span>
             </div>
 
             {/* Bộ Nút Định Vị Nhanh */}
             <div className="flex items-center gap-1.5 text-xs">
               <button
-                onClick={() => { setSubX(50); setSubY(15); setSubPosition('top'); }}
+                onClick={() => { updateSubtitle(activeSub.id, 'x', 50); updateSubtitle(activeSub.id, 'y', 15); }}
                 className={`flex-1 py-1 px-2 rounded-lg font-medium transition-all cursor-pointer text-center text-[11px] ${
-                  subY === 15 ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  activeSub.y === 15 ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                 }`}
               >
                 📍 Trên Cùng
               </button>
               <button
-                onClick={() => { setSubX(50); setSubY(50); setSubPosition('center'); }}
+                onClick={() => { updateSubtitle(activeSub.id, 'x', 50); updateSubtitle(activeSub.id, 'y', 50); }}
                 className={`flex-1 py-1 px-2 rounded-lg font-medium transition-all cursor-pointer text-center text-[11px] ${
-                  subY === 50 ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  activeSub.y === 50 ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                 }`}
               >
                 📍 Chính Giữa
               </button>
               <button
-                onClick={() => { setSubX(50); setSubY(85); setSubPosition('bottom'); }}
+                onClick={() => { updateSubtitle(activeSub.id, 'x', 50); updateSubtitle(activeSub.id, 'y', 85); }}
                 className={`flex-1 py-1 px-2 rounded-lg font-medium transition-all cursor-pointer text-center text-[11px] ${
-                  subY === 85 ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                  activeSub.y === 85 ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                 }`}
               >
                 📍 Dưới Cùng
@@ -1393,67 +1403,67 @@ export default function App() {
 
             {/* Mẹo Kéo Thả Trực Tiếp */}
             <div className="flex items-center gap-1.5 text-[10px] text-pink-300 bg-pink-950/30 p-1.5 rounded-lg border border-pink-500/20 font-medium">
-              <span>✋ Mẹo: Kéo thả trực tiếp chữ Phụ đề trên Video xem trước để di chuyển tự do!</span>
+              <span>✋ Mẹo: Bấm chọn thẻ phụ đề bất kỳ rồi kéo thả trực tiếp trên màn hình!</span>
             </div>
 
             {/* Bộ Mẫu Template Phụ Đề Hot Trend (CapCut / VideoShow Style) */}
             <div className="flex flex-col gap-1.5 pt-2 border-t border-[#2b3042]/50">
               <label className="text-xs text-[#94a3b8] font-medium flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-pink-400" /> Mẫu Phong Cách Phụ Đề Hot Trend
+                <Sparkles className="w-3.5 h-3.5 text-pink-400" /> Mẫu Phong Cách (Thẻ #{activeSub.id})
               </label>
               <div className="grid grid-cols-2 gap-1.5 text-xs">
                 <button
-                  onClick={() => setSubStyle('tiktok')}
+                  onClick={() => updateSubtitle(activeSub.id, 'style', 'tiktok')}
                   className={`p-1.5 rounded-lg font-bold transition-all text-left text-[11px] cursor-pointer ${
-                    subStyle === 'tiktok' ? 'bg-yellow-400 text-slate-950 shadow-md ring-2 ring-yellow-300' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                    (activeSub.style || 'tiktok') === 'tiktok' ? 'bg-yellow-400 text-slate-950 shadow-md ring-2 ring-yellow-300' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
                   🟨 TikTok Viral
                 </button>
                 <button
-                  onClick={() => setSubStyle('led')}
+                  onClick={() => updateSubtitle(activeSub.id, 'style', 'led')}
                   className={`p-1.5 rounded-lg font-bold transition-all text-left text-[11px] cursor-pointer ${
-                    subStyle === 'led' ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-300' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                    (activeSub.style || 'tiktok') === 'led' ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-300' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
                   📟 BẢNG ĐÈN LED
                 </button>
                 <button
-                  onClick={() => setSubStyle('victory')}
+                  onClick={() => updateSubtitle(activeSub.id, 'style', 'victory')}
                   className={`p-1.5 rounded-lg font-bold transition-all text-left text-[11px] cursor-pointer ${
-                    subStyle === 'victory' ? 'bg-purple-600 text-white shadow-md ring-2 ring-purple-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                    (activeSub.style || 'tiktok') === 'victory' ? 'bg-purple-600 text-white shadow-md ring-2 ring-purple-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
                   ⚡ VICTORY Neon
                 </button>
                 <button
-                  onClick={() => setSubStyle('boom')}
+                  onClick={() => updateSubtitle(activeSub.id, 'style', 'boom')}
                   className={`p-1.5 rounded-lg font-bold transition-all text-left text-[11px] cursor-pointer ${
-                    subStyle === 'boom' ? 'bg-red-600 text-white shadow-md ring-2 ring-red-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                    (activeSub.style || 'tiktok') === 'boom' ? 'bg-red-600 text-white shadow-md ring-2 ring-red-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
                   💥 BOOM 3D
                 </button>
                 <button
-                  onClick={() => setSubStyle('sponge')}
+                  onClick={() => updateSubtitle(activeSub.id, 'style', 'sponge')}
                   className={`p-1.5 rounded-lg font-bold transition-all text-left text-[11px] cursor-pointer ${
-                    subStyle === 'sponge' ? 'bg-green-700 text-white shadow-md ring-2 ring-green-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                    (activeSub.style || 'tiktok') === 'sponge' ? 'bg-green-700 text-white shadow-md ring-2 ring-green-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
                   🟩 SPONGE 3D
                 </button>
                 <button
-                  onClick={() => setSubStyle('social')}
+                  onClick={() => updateSubtitle(activeSub.id, 'style', 'social')}
                   className={`p-1.5 rounded-lg font-bold transition-all text-left text-[11px] cursor-pointer ${
-                    subStyle === 'social' ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                    (activeSub.style || 'tiktok') === 'social' ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
                   📢 LIKE & SHARE
                 </button>
                 <button
-                  onClick={() => setSubStyle('custom')}
+                  onClick={() => updateSubtitle(activeSub.id, 'style', 'custom')}
                   className={`p-1.5 rounded-lg font-bold transition-all text-left text-[11px] cursor-pointer ${
-                    subStyle === 'custom' ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-md ring-2 ring-pink-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                    (activeSub.style || 'tiktok') === 'custom' ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-md ring-2 ring-pink-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
                   🎨 Tự Chọn Màu
@@ -1462,21 +1472,21 @@ export default function App() {
             </div>
 
             {/* Bảng Chọn Màu Tự Chọn (Khi chọn Style Custom) */}
-            {subStyle === 'custom' && (
+            {activeSub.style === 'custom' && (
               <div className="grid grid-cols-2 gap-2 p-2 bg-[#1a1e2b] rounded-lg border border-[#2b3042] text-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-[#94a3b8]">Màu chữ:</span>
                   <input 
-                    type="color" value={subColor} 
-                    onChange={(e) => setSubColor(e.target.value)}
+                    type="color" value={activeSub.color || '#ffffff'} 
+                    onChange={(e) => updateSubtitle(activeSub.id, 'color', e.target.value)}
                     className="w-7 h-7 rounded border-0 cursor-pointer bg-transparent"
                   />
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[#94a3b8]">Màu nền:</span>
                   <input 
-                    type="color" value={subBgColor} 
-                    onChange={(e) => setSubBgColor(e.target.value)}
+                    type="color" value={activeSub.bgColor || '#000000'} 
+                    onChange={(e) => updateSubtitle(activeSub.id, 'bgColor', e.target.value)}
                     className="w-7 h-7 rounded border-0 cursor-pointer bg-transparent"
                   />
                 </div>
@@ -1484,16 +1494,16 @@ export default function App() {
             )}
 
             {/* Tùy chỉnh Độ rộng khung Bảng Đèn LED (Box Width Slider) */}
-            {(subStyle === 'led' || subAnimation === 'marquee') && (
+            {(activeSub.style === 'led' || activeSub.anim === 'marquee') && (
               <div className="flex flex-col gap-1 p-2 bg-[#1a1e2b] rounded-lg border border-[#2b3042]">
                 <div className="flex justify-between text-[11px] text-[#94a3b8]">
-                  <span>📟 Độ rộng khung Đèn LED (kéo dài ngắn):</span>
-                  <span className="font-mono text-amber-300 font-bold">{subBoxWidth}%</span>
+                  <span>📟 Độ rộng khung Đèn LED:</span>
+                  <span className="font-mono text-amber-300 font-bold">{activeSub.boxWidth || 80}%</span>
                 </div>
                 <input 
                   type="range" min="30" max="100" step="5"
-                  value={subBoxWidth}
-                  onChange={(e) => setSubBoxWidth(Number(e.target.value))}
+                  value={activeSub.boxWidth || 80}
+                  onChange={(e) => updateSubtitle(activeSub.id, 'boxWidth', Number(e.target.value))}
                   className="w-full accent-amber-500 cursor-pointer"
                 />
               </div>
@@ -1503,12 +1513,12 @@ export default function App() {
             <div className="flex flex-col gap-1 pt-2 border-t border-[#2b3042]/50">
               <div className="flex justify-between text-xs text-[#94a3b8]">
                 <span>Xoay nghiêng chữ:</span>
-                <span className="font-mono text-purple-300 font-bold">{subRotation}°</span>
+                <span className="font-mono text-purple-300 font-bold">{activeSub.rotation || 0}°</span>
               </div>
               <input 
                 type="range" min="-45" max="45" step="1"
-                value={subRotation}
-                onChange={(e) => setSubRotation(Number(e.target.value))}
+                value={activeSub.rotation || 0}
+                onChange={(e) => updateSubtitle(activeSub.id, 'rotation', Number(e.target.value))}
                 className="w-full accent-purple-500 cursor-pointer"
               />
             </div>
@@ -1516,53 +1526,53 @@ export default function App() {
             {/* Bộ Hiệu Ứng Nhảy Múa Chữ (Kinetic Animation) */}
             <div className="flex flex-col gap-2 pt-2 border-t border-[#2b3042]/50">
               <label className="text-xs text-[#94a3b8] font-medium flex items-center gap-1.5">
-                <Zap className="w-3.5 h-3.5 text-amber-400" /> Hiệu Ứng Chữ Nhảy Múa
+                <Zap className="w-3.5 h-3.5 text-amber-400" /> Hiệu Ứng Chữ (Thẻ #{activeSub.id})
               </label>
               <div className="grid grid-cols-2 gap-1.5 text-xs">
                 <button
-                  onClick={() => setSubAnimation('typewriter')}
+                  onClick={() => updateSubtitle(activeSub.id, 'anim', 'typewriter')}
                   className={`p-1.5 rounded-lg font-bold transition-all text-center text-[11px] cursor-pointer ${
-                    subAnimation === 'typewriter' ? 'bg-emerald-600 text-white shadow ring-2 ring-emerald-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                    (activeSub.anim || 'bounce') === 'typewriter' ? 'bg-emerald-600 text-white shadow ring-2 ring-emerald-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
                   ⌨️ Hiện Từng Chữ
                 </button>
                 <button
-                  onClick={() => setSubAnimation('marquee')}
+                  onClick={() => updateSubtitle(activeSub.id, 'anim', 'marquee')}
                   className={`p-1.5 rounded-lg font-bold transition-all text-center text-[11px] cursor-pointer ${
-                    subAnimation === 'marquee' ? 'bg-indigo-600 text-white shadow ring-2 ring-indigo-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                    (activeSub.anim || 'bounce') === 'marquee' ? 'bg-indigo-600 text-white shadow ring-2 ring-indigo-400' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
                   ◀️ Phải Sang Trái
                 </button>
                 <button
-                  onClick={() => setSubAnimation('shake')}
+                  onClick={() => updateSubtitle(activeSub.id, 'anim', 'shake')}
                   className={`p-1.5 rounded-lg font-medium transition-all text-center text-[11px] cursor-pointer ${
-                    subAnimation === 'shake' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                    (activeSub.anim || 'bounce') === 'shake' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
                   ⚡ Lắc Lư Sấm Sét
                 </button>
                 <button
-                  onClick={() => setSubAnimation('bounce')}
+                  onClick={() => updateSubtitle(activeSub.id, 'anim', 'bounce')}
                   className={`p-1.5 rounded-lg font-medium transition-all text-center text-[11px] cursor-pointer ${
-                    subAnimation === 'bounce' ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                    (activeSub.anim || 'bounce') === 'bounce' ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
                   💥 Bounce (Nảy Chữ)
                 </button>
                 <button
-                  onClick={() => setSubAnimation('fade')}
+                  onClick={() => updateSubtitle(activeSub.id, 'anim', 'fade')}
                   className={`p-1.5 rounded-lg font-medium transition-all text-center text-[11px] cursor-pointer ${
-                    subAnimation === 'fade' ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                    (activeSub.anim || 'bounce') === 'fade' ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
                   ✨ Trượt Hiện
                 </button>
                 <button
-                  onClick={() => setSubAnimation('pulse')}
+                  onClick={() => updateSubtitle(activeSub.id, 'anim', 'pulse')}
                   className={`p-1.5 rounded-lg font-medium transition-all text-center text-[11px] cursor-pointer ${
-                    subAnimation === 'pulse' ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
+                    (activeSub.anim || 'bounce') === 'pulse' ? 'bg-purple-600 text-white font-bold shadow' : 'bg-[#1a1e2b] text-[#94a3b8] hover:text-white'
                   }`}
                 >
                   🌊 Pulse Wave
@@ -1574,16 +1584,16 @@ export default function App() {
             <div className="flex flex-col gap-1 p-2.5 bg-[#1a1e2b] rounded-xl border border-[#2b3042]/80 mt-1">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-[#94a3b8] font-medium flex items-center gap-1">
-                  ⚡ Tốc độ chạy chữ / hiệu ứng:
+                  ⚡ Tốc độ chạy chữ:
                 </span>
                 <span className="font-mono text-amber-300 font-bold bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/30">
-                  {subAnimSpeed}x
+                  {activeSub.animSpeed || 0.5}x
                 </span>
               </div>
               <input 
                 type="range" min="0.1" max="1.5" step="0.05"
-                value={subAnimSpeed}
-                onChange={(e) => setSubAnimSpeed(Number(e.target.value))}
+                value={activeSub.animSpeed || 0.5}
+                onChange={(e) => updateSubtitle(activeSub.id, 'animSpeed', Number(e.target.value))}
                 className="w-full accent-amber-500 cursor-pointer"
               />
               <div className="flex justify-between text-[10px] text-[#64748b] px-0.5">
@@ -1598,11 +1608,11 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <input 
                   type="range" min="14" max="64" step="1"
-                  value={subFontSize}
-                  onChange={(e) => setSubFontSize(Number(e.target.value))}
+                  value={activeSub.fontSize || 24}
+                  onChange={(e) => updateSubtitle(activeSub.id, 'fontSize', Number(e.target.value))}
                   className="w-24 accent-purple-500 cursor-pointer"
                 />
-                <span className="text-xs font-mono text-purple-300 font-bold">{subFontSize}px</span>
+                <span className="text-xs font-mono text-purple-300 font-bold">{activeSub.fontSize || 24}px</span>
               </div>
             </div>
           </div>
@@ -1616,21 +1626,30 @@ export default function App() {
             ) : (
               subtitles.map((sub) => {
                 const isActive = currentTime >= sub.startTime && currentTime <= sub.endTime;
+                const isSelected = selectedSubId === sub.id;
                 const nowSec = Math.floor(currentTime * 10) / 10;
 
                 return (
                   <div 
                     key={sub.id} 
-                    className={`p-3 rounded-xl border transition-all flex flex-col gap-2.5 ${
-                      isActive
-                        ? 'bg-purple-950/50 border-purple-500/70 shadow-lg ring-1 ring-purple-500/40'
-                        : 'bg-[#12151e] border-[#2b3042]'
+                    onClick={() => setSelectedSubId(sub.id)}
+                    className={`p-3 rounded-xl border transition-all flex flex-col gap-2.5 cursor-pointer ${
+                      isSelected
+                        ? 'bg-purple-950/70 border-pink-500 shadow-lg ring-2 ring-pink-500/50'
+                        : isActive
+                        ? 'bg-purple-950/30 border-purple-500/40'
+                        : 'bg-[#12151e] border-[#2b3042] hover:border-[#3b4259]'
                     }`}
                   >
                     {/* Nhập mốc thời gian & Nút gán thời gian nhanh */}
                     <div className="flex flex-col gap-1.5">
                       <div className="flex items-center justify-between gap-1">
-                        <div className="flex items-center gap-1 text-xs text-[#94a3b8] font-mono">
+                        <div className="flex items-center gap-1.5 text-xs text-[#94a3b8] font-mono">
+                          {isSelected && (
+                            <span className="text-[10px] font-bold bg-pink-600 text-white px-1.5 py-0.5 rounded">
+                              ✏️ Đang sửa
+                            </span>
+                          )}
                           <input 
                             type="number" step="0.1" min="0" value={sub.startTime}
                             onChange={(e) => updateSubtitle(sub.id, 'startTime', parseFloat(e.target.value) || 0)}

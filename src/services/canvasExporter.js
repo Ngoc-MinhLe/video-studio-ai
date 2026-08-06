@@ -165,13 +165,15 @@ export const processVideoCanvas = async ({
     activeSubs.forEach((sub, subIdx) => {
       const text = sub.text.trim();
       const scaleFactor = canvasH / 720;
-      const baseFontSize = Math.max(16, Math.round((subOptions.fontSize || 24) * scaleFactor));
-      const style = subOptions.subStyle || 'tiktok';
-      const anim = subOptions.subAnimation || 'bounce';
-      const rotationDeg = subOptions.subRotation || 0;
-      const customColor = subOptions.subColor || '#ffffff';
-      const customBgColor = subOptions.subBgColor || '#000000';
-      const animSpeed = subOptions.subAnimSpeed || 1.0;
+      const baseFontSize = Math.max(16, Math.round(((sub.fontSize !== undefined ? sub.fontSize : subOptions.fontSize) || 24) * scaleFactor));
+      const style = sub.style || subOptions.subStyle || 'tiktok';
+      const anim = sub.anim || subOptions.subAnimation || 'bounce';
+      const rotationDeg = sub.rotation !== undefined ? sub.rotation : (subOptions.subRotation || 0);
+      const customColor = sub.color || subOptions.subColor || '#ffffff';
+      const customBgColor = sub.bgColor || subOptions.subBgColor || '#000000';
+      const animSpeed = sub.animSpeed !== undefined ? sub.animSpeed : (subOptions.subAnimSpeed || 1.0);
+      const posX = sub.x !== undefined ? sub.x : (subOptions.subX !== undefined ? subOptions.subX : 50);
+      const posY = sub.y !== undefined ? sub.y : (subOptions.subY !== undefined ? subOptions.subY : 85);
 
       // Tính toán tiến trình hiệu ứng animation
       const elapsed = projectTime - Number(sub.startTime);
@@ -217,20 +219,8 @@ export const processVideoCanvas = async ({
       ctx.save();
       ctx.globalAlpha = animAlpha;
 
-      // Xếp chồng song song các phụ đề nếu có nhiều phụ đề xuất hiện cùng lúc
-      const parallelOffsetY = subIdx * (fontSize * 1.5);
-      let x = canvasW * ((subOptions.subX !== undefined ? subOptions.subX : 50) / 100) + animShakeX;
-      let y = canvasH * ((subOptions.subY !== undefined ? subOptions.subY : 85) / 100) - animOffsetY + animShakeY - parallelOffsetY;
-
-      if (subOptions.subY === undefined) {
-        if (subOptions.position === 'top') {
-          y = (80 * scaleFactor) - animOffsetY + parallelOffsetY;
-        } else if (subOptions.position === 'center') {
-          y = (canvasH / 2) - animOffsetY + parallelOffsetY;
-        } else if (subOptions.position === 'bottom') {
-          y = canvasH - (80 * scaleFactor) - animOffsetY - parallelOffsetY;
-        }
-      }
+      let x = canvasW * (posX / 100) + animShakeX;
+      let y = canvasH * (posY / 100) - animOffsetY + animShakeY;
 
     // Áp dụng Xoay Nghiêng Chữ
     ctx.translate(x, y);
@@ -247,8 +237,9 @@ export const processVideoCanvas = async ({
     const textHeight = fontSize * 1.35;
 
     const isMarqueeMode = anim === 'marquee' || style === 'led';
+    const boxWPercent = sub.boxWidth !== undefined ? sub.boxWidth : (subOptions.subBoxWidth || 80);
     const boxWidth = isMarqueeMode
-      ? (canvasW * ((subOptions.subBoxWidth || 80) / 100))
+      ? (canvasW * (boxWPercent / 100))
       : (textWidth + (fontSize * 1.0));
     const boxHeight = textHeight + (fontSize * 0.6);
     const boxX = - (boxWidth / 2);
