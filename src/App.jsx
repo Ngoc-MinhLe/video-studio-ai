@@ -455,7 +455,14 @@ export default function App() {
   };
 
   const updateSubtitle = (id, field, value) => {
-    setSubtitles(subtitles.map(s => s.id === id ? { ...s, [field]: value } : s));
+    setSubtitles(subtitles.map(s => {
+      if (s.id !== id) return s;
+      const updated = { ...s, [field]: value };
+      if (field === 'startTime' && Number(updated.startTime) >= Number(updated.endTime)) {
+        updated.endTime = Math.floor((Number(updated.startTime) + 3) * 10) / 10;
+      }
+      return updated;
+    }));
   };
 
   const deleteSubtitle = (id) => {
@@ -1334,7 +1341,7 @@ export default function App() {
                 const newId = subtitles.length > 0 ? Math.max(...subtitles.map(s => s.id)) + 1 : 1;
                 setSubtitles([
                   ...subtitles,
-                  { id: newId, startTime: now, endTime: Math.min(Math.floor((duration || now + 3) * 10) / 10, now + 3), text: 'Phụ đề mới...' }
+                  { id: newId, startTime: now, endTime: Math.floor((now + 3) * 10) / 10, text: 'Phụ đề mới...' }
                 ]);
               }} 
               className="btn-secondary text-xs cursor-pointer"
