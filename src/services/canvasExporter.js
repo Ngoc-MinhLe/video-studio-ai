@@ -577,12 +577,11 @@ export const processVideoCanvas = async ({
       }
     }
 
-    const renderLoop = (timestamp) => {
-      if (!lastTimestamp) lastTimestamp = timestamp;
-      const delta = (timestamp - lastTimestamp) / 1000;
-      lastTimestamp = timestamp;
+    const fps = 30;
+    const frameDuration = 1 / fps;
 
-      projectTime += delta;
+    const renderLoop = () => {
+      projectTime += frameDuration;
 
       if (projectTime >= totalProjectDuration) {
         if (mediaRecorder.state === 'recording') {

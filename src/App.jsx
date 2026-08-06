@@ -1954,6 +1954,9 @@ export default function App() {
                     style={{ width: `${progress}%` }}
                   />
                 </div>
+                <div className="text-[10px] text-amber-400 bg-amber-950/40 p-2 rounded border border-amber-500/20 leading-relaxed font-bold mt-1 text-center">
+                  ⚠️ KHÔNG CHUYỂN TAB HOẶC ẨN TRÌNH DUYỆT TRONG KHI XUẤT VIDEO ĐỂ TRÁNH BỊ ĐỨNG HÌNH (TRÌNH DUYỆT TỰ DỪNG VẼ KHI ẨN TAB).
+                </div>
               </div>
             )}
 
