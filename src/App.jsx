@@ -204,15 +204,106 @@ export default function App() {
     }
   };
 
-  // Đồng bộ thời gian khi kéo Seekbar
-  const handleSeek = (e) => {
-    const time = parseFloat(e.target.value);
-    setCurrentTime(time);
-    if (videoRef.current) {
-      videoRef.current.currentTime = time;
+  // Hàm tính toán thông tin clip tại vị trí thời gian Dự án (projectTime)
+  const getClipAtProjectTime = (projectTime) => {
+    if (!videoClips || videoClips.length === 0) return null;
+    let accum = 0;
+    for (let i = 0; i < videoClips.length; i++) {
+      const clip = videoClips[i];
+      const clipDur = (clip.clipEnd && clip.clipEnd > clip.clipStart)
+        ? (clip.clipEnd - clip.clipStart)
+        : (clip.duration || 10);
+
+      if (projectTime >= accum && projectTime < accum + clipDur) {
+        const offsetInClip = projectTime - accum;
+        return {
+          clip,
+          clipIndex: i,
+          clipTimelineStart: accum,
+          clipTimelineEnd: accum + clipDur,
+          clipDur,
+          localTime: clip.clipStart + offsetInClip
+        };
+      }
+      accum += clipDur;
     }
+    const lastClip = videoClips[videoClips.length - 1];
+    const lastDur = (lastClip.clipEnd && lastClip.clipEnd > lastClip.clipStart)
+      ? (lastClip.clipEnd - lastClip.clipStart)
+      : (lastClip.duration || 10);
+    return {
+      clip: lastClip,
+      clipIndex: videoClips.length - 1,
+      clipTimelineStart: accum - lastDur,
+      clipTimelineEnd: accum,
+      clipDur: lastDur,
+      localTime: lastClip.clipEnd || lastClip.duration || 10
+    };
+  };
+
+  // Đồng bộ thời gian khi kéo Seekbar hoặc bấm trên Trục Thời Gian
+  const handleSeek = (val) => {
+    const targetTime = typeof val === 'number' ? val : parseFloat(val.target.value);
+    setCurrentTime(targetTime);
+
+    const clipInfo = getClipAtProjectTime(targetTime);
+    if (clipInfo) {
+      if (videoUrl !== clipInfo.clip.url) {
+        setVideoFile(clipInfo.clip.file);
+        setVideoUrl(clipInfo.clip.url);
+      }
+      setSelectedClipId(clipInfo.clip.id);
+
+      if (videoRef.current) {
+        videoRef.current.currentTime = clipInfo.localTime;
+      }
+    }
+
     if (audioRef.current) {
-      audioRef.current.currentTime = time;
+      const audioTime = Math.max(0, targetTime - audioVideoOffset + audioStartOffset);
+      audioRef.current.currentTime = audioTime;
+    }
+  };
+
+  // Xử lý khi Video đang phát cập nhật thời gian
+  const handleVideoTimeUpdate = () => {
+    if (!videoRef.current || videoClips.length === 0) return;
+
+    const currentClipIdx = videoClips.findIndex(c => c.id === selectedClipId);
+    if (currentClipIdx === -1) return;
+
+    const currentClip = videoClips[currentClipIdx];
+    const localTime = videoRef.current.currentTime;
+
+    let accumBefore = 0;
+    for (let i = 0; i < currentClipIdx; i++) {
+      const c = videoClips[i];
+      accumBefore += (c.clipEnd && c.clipEnd > c.clipStart) ? (c.clipEnd - c.clipStart) : (c.duration || 10);
+    }
+
+    const elapsedInClip = Math.max(0, localTime - currentClip.clipStart);
+    const projectTime = accumBefore + elapsedInClip;
+
+    setCurrentTime(projectTime);
+
+    // Kiểm tra hết clip hiện tại ➔ tự phát tiếp clip kế tiếp
+    const clipEnd = currentClip.clipEnd || currentClip.duration || 10;
+    if (localTime >= clipEnd - 0.15) {
+      if (currentClipIdx < videoClips.length - 1) {
+        const nextClip = videoClips[currentClipIdx + 1];
+        setSelectedClipId(nextClip.id);
+        setVideoFile(nextClip.file);
+        setVideoUrl(nextClip.url);
+        setTimeout(() => {
+          if (videoRef.current) {
+            videoRef.current.currentTime = nextClip.clipStart;
+            if (isPlaying) videoRef.current.play().catch(() => {});
+          }
+        }, 50);
+      } else {
+        setIsPlaying(false);
+        if (audioRef.current) audioRef.current.pause();
+      }
     }
   };
 
@@ -225,7 +316,6 @@ export default function App() {
       const url = URL.createObjectURL(file);
       const id = Date.now() + idx;
 
-      // Đọc thời lượng của từng clip video
       const tempVideo = document.createElement('video');
       tempVideo.src = url;
       await new Promise((res) => {
@@ -263,31 +353,40 @@ export default function App() {
 
   // Hàm Tách Video Clip tại vị trí Kim thời gian hiện tại (Split Clip ✂️)
   const splitCurrentClip = () => {
-    if (!selectedClipId || videoClips.length === 0) return;
-    const clipIdx = videoClips.findIndex(c => c.id === selectedClipId);
-    if (clipIdx === -1) return;
+    if (videoClips.length === 0) return;
+    const clipInfo = getClipAtProjectTime(currentTime);
+    if (!clipInfo) return;
 
-    const targetClip = videoClips[clipIdx];
-    const nowSec = Math.floor(currentTime * 10) / 10;
+    const { clip: targetClip, clipIndex, localTime } = clipInfo;
+    const splitSec = Math.floor(localTime * 10) / 10;
+
+    if (splitSec <= targetClip.clipStart + 0.3 || splitSec >= (targetClip.clipEnd || targetClip.duration) - 0.3) {
+      alert('Vị trí kim thời gian quá gần đầu hoặc cuối clip, không thể tách!');
+      return;
+    }
 
     const firstPart = {
       ...targetClip,
-      clipEnd: nowSec
+      clipEnd: splitSec,
+      duration: splitSec - targetClip.clipStart
     };
 
     const secondPart = {
       ...targetClip,
       id: Date.now(),
       name: `${targetClip.name} (Phần 2)`,
-      clipStart: nowSec,
-      clipEnd: targetClip.clipEnd || targetClip.duration
+      clipStart: splitSec,
+      clipEnd: targetClip.clipEnd || targetClip.duration,
+      duration: (targetClip.clipEnd || targetClip.duration) - splitSec
     };
 
     const nextClips = [...videoClips];
-    nextClips.splice(clipIdx, 1, firstPart, secondPart);
+    nextClips.splice(clipIndex, 1, firstPart, secondPart);
 
     setVideoClips(nextClips);
     setSelectedClipId(secondPart.id);
+    setVideoFile(secondPart.file);
+    setVideoUrl(secondPart.url);
   };
 
   // Hàm Xóa Video Clip được chọn (Delete Clip 🗑️)
@@ -818,15 +917,25 @@ export default function App() {
                     src={videoUrl}
                     playsInline
                     className="w-full h-full object-contain"
-                    onTimeUpdate={() => {
-                      if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
-                    }}
-                    onLoadedMetadata={() => {
-                      if (videoRef.current) setDuration(videoRef.current.duration);
-                    }}
+                    onTimeUpdate={handleVideoTimeUpdate}
                     onEnded={() => {
-                      setIsPlaying(false);
-                      if (audioRef.current) audioRef.current.pause();
+                      // Xử lý chuyển clip tiếp theo khi video hiện tại kết thúc
+                      const currentClipIdx = videoClips.findIndex(c => c.id === selectedClipId);
+                      if (currentClipIdx !== -1 && currentClipIdx < videoClips.length - 1) {
+                        const nextClip = videoClips[currentClipIdx + 1];
+                        setSelectedClipId(nextClip.id);
+                        setVideoFile(nextClip.file);
+                        setVideoUrl(nextClip.url);
+                        setTimeout(() => {
+                          if (videoRef.current) {
+                            videoRef.current.currentTime = nextClip.clipStart;
+                            if (isPlaying) videoRef.current.play().catch(() => {});
+                          }
+                        }, 50);
+                      } else {
+                        setIsPlaying(false);
+                        if (audioRef.current) audioRef.current.pause();
+                      }
                     }}
                   />
                   
