@@ -32,14 +32,14 @@ export default async function handler(req, res) {
     console.log('[SePay Webhook Received Payload]:', JSON.stringify(data));
 
     const transferType = data.transferType || 'in';
-    const content = (data.content || data.code || data.description || '').toString();
+    const content = (data.content || data.code || data.description || data.referenceCode || '').toString();
     const transferAmount = Number(data.transferAmount || data.amount || 0);
 
     if (transferType !== 'in') {
       return res.status(200).json({ success: true, message: 'Ignored outbound transaction' });
     }
 
-    // Tách mã 6 chữ số
+    // Tách mã 6 chữ số từ chuỗi bất kỳ (VD: MBVCB.15443858530.6218BFTVGL256UBX.VS 498036)
     let matchedDigits = null;
     const vsMatch = content.match(/VS\s*[-_]?\s*(\d{6})/i);
     if (vsMatch) {
@@ -69,7 +69,7 @@ export default async function handler(req, res) {
         timestamp: Date.now()
       };
     }
-    // Lưu vết theo số tiền
+
     store[`amount_${transferAmount}`] = {
       digits: matchedDigits || 'unknown',
       amount: transferAmount,

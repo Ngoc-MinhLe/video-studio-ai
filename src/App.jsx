@@ -108,6 +108,28 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Lắng hệ thống SePay toàn cục 1 giây 1 lần để tự động cộng xu ngay khi tiền về
+  useEffect(() => {
+    if (!currentUser || !userData) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/check-order?amount=10000');
+        const data = await res.json();
+        if (data.completed && data.coins > 0) {
+          const key = `credited_sepay_trans_${data.digits || data.amount}`;
+          if (!localStorage.getItem(key)) {
+            localStorage.setItem(key, 'true');
+            const currentCoins = Number(userData.coins || 0);
+            const newTotal = currentCoins + data.coins;
+            await updateUserCoinsInDb(currentUser.uid, newTotal);
+            console.log(`[Global SePay Auto-Credit Success]: +${data.coins} xu credited to user!`);
+          }
+        }
+      } catch (e) {}
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [currentUser, userData?.coins]);
+
   // --- Video & Audio Player Controls ---
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
