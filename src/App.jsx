@@ -136,6 +136,7 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const [exportUrl, setExportUrl] = useState(null);
   const [exportExtension, setExportExtension] = useState('mp4');
+  const [statusText, setStatusText] = useState('Hệ thống sẵn sàng!');
   const [benchmarkData, setBenchmarkData] = useState(null);
   const [showDebug, setShowDebug] = useState(false);
 
