@@ -490,6 +490,35 @@ export const processVideoCanvas = async ({
         scheduler.recordCaptureRequest();
       }
 
+      // [VALIDATION INSTRUMENTATION LOGGER]
+      const currentFrameCount = scheduler.renderedFrames;
+      if (currentFrameCount <= 10) {
+        const activeClip = loadedVideoElements.length > 0 ? loadedVideoElements[currentClipIdx] : null;
+        console.log(`[INSTRUMENTATION FRAME ${currentFrameCount}]`, {
+          frameIndex: scheduler.lastRenderedFrameIndex,
+          projectTime: projectTime.toFixed(4) + 's',
+          requestFrameTimestamp: performance.now().toFixed(2) + 'ms',
+          renderStart: renderStart.toFixed(2) + 'ms',
+          renderEnd: renderEnd.toFixed(2) + 'ms',
+          renderDuration: (renderEnd - renderStart).toFixed(2) + 'ms',
+          schedulerSkipped: scheduler.schedulerSkippedFrames,
+          audioCurrentTime: audioEl ? audioEl.currentTime.toFixed(4) + 's' : 'N/A',
+          expectedAudioTime: audioEl ? (projectTime - audioVideoOffset + audioStartOffset).toFixed(4) + 's' : 'N/A',
+          audioDrift: audioEl ? (audioEl.currentTime - (projectTime - audioVideoOffset + audioStartOffset)).toFixed(4) + 's' : 'N/A',
+          videoCurrentTime: activeClip ? activeClip.videoEl.currentTime.toFixed(4) + 's' : 'N/A',
+          videoDrift: activeClip ? (activeClip.videoEl.currentTime - (projectTime - activeClip.timelineStart + activeClip.clipStart)).toFixed(4) + 's' : 'N/A'
+        });
+      }
+
+      // [ARTIFICIAL LAG WORKLOAD FOR TIMEOUT VALIDATION]
+      const simulateLag = false; // Thiết lập true để chạy Stress Test giả lập chậm đồ họa
+      if (simulateLag) {
+        const startWait = performance.now();
+        while (performance.now() - startWait < 60) {
+          // Khóa CPU Thread đúng 60ms để kiểm chứng đường ống
+        }
+      }
+
       if (onProgress && totalProjectDuration > 0) {
         const percent = Math.min(99, Math.round((projectTime / totalProjectDuration) * 100));
         onProgress(percent);
