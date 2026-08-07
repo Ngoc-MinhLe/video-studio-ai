@@ -693,11 +693,31 @@ export default function App() {
       tempVideo.src = generatedUrl;
       let durationUpdated = false;
 
+      // Thiết lập timeout 5 giây phòng trường hợp trình duyệt không kích hoạt sự kiện metadata
+      const durationTimeoutId = setTimeout(() => {
+        if (durationUpdated) return;
+        durationUpdated = true;
+        setBenchmarkData(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            outputDuration: 'Not directly measurable (Timeout)'
+          };
+        });
+        // Dọn dẹp tài nguyên thẻ video tạm
+        try {
+          tempVideo.src = "";
+          tempVideo.load();
+        } catch (e) {}
+        console.log("Video Studio AI Exporter: Metadata measurement timed out after 5s.");
+      }, 5000);
+
       const updateDuration = () => {
         if (durationUpdated) return;
         const actualDur = tempVideo.duration;
         if (actualDur !== undefined && !isNaN(actualDur)) {
           durationUpdated = true;
+          clearTimeout(durationTimeoutId);
           setBenchmarkData(prev => {
             if (!prev) return prev;
             let outputDurationStr = 'Not directly measurable (WebM missing duration headers)';
@@ -720,6 +740,9 @@ export default function App() {
       tempVideo.addEventListener('loadedmetadata', updateDuration);
       tempVideo.addEventListener('durationchange', updateDuration);
       tempVideo.addEventListener('error', () => {
+        if (durationUpdated) return;
+        durationUpdated = true;
+        clearTimeout(durationTimeoutId);
         setBenchmarkData(prev => {
           if (!prev) return prev;
           return {
@@ -2032,7 +2055,7 @@ export default function App() {
                         <div>Lần Tạm Dừng: <span className="text-amber-400">{benchmarkData.pauseCount} ({benchmarkData.totalPauseDuration}s)</span></div>
                         <div>Lệch Lớn / TB: <span className="text-white">{benchmarkData.maxDrift}s / {benchmarkData.averageDrift}s</span></div>
                         <div>Thay Tốc Độ: <span className="text-white">{benchmarkData.playbackRateChanges} lần</span></div>
-                        <div>Thời gian Chạy Thực Tế: <span className="text-white">{benchmarkData.elapsed}s</span></div>
+                        <div>Thời gian Render: <span className="text-white">{benchmarkData.elapsed}s</span></div>
                         <div>Thời lượng Dự Án: <span className="text-white">{benchmarkData.projectDuration || '0.0'}s</span></div>
                         <div>Thời lượng Output: <span className="text-amber-400 font-bold">Đang đo khi hoàn tất...</span></div>
                         <div className="col-span-2 text-white border-t border-purple-500/10 pt-1 mt-1 font-bold">
@@ -2098,7 +2121,7 @@ export default function App() {
                         <div>Lần Tạm Dừng: <span className="text-amber-400">{benchmarkData.pauseCount} ({benchmarkData.totalPauseDuration}s)</span></div>
                         <div>Lệch Lớn / TB: <span className="text-white">{benchmarkData.maxDrift}s / {benchmarkData.averageDrift}s</span></div>
                         <div>Thay Tốc Độ: <span className="text-white">{benchmarkData.playbackRateChanges} lần</span></div>
-                        <div>Thời gian Chạy Thực Tế: <span className="text-white">{benchmarkData.elapsed}s</span></div>
+                        <div>Thời gian Render: <span className="text-white">{benchmarkData.elapsed}s</span></div>
                         <div>Thời lượng Dự Án: <span className="text-white">{benchmarkData.projectDuration || '0.0'}s</span></div>
                         <div>Thời lượng Output: <span className="text-amber-400 font-bold">{benchmarkData.outputDuration || 'Đang đo...'}</span></div>
                         <div className="col-span-2 text-white border-t border-purple-500/10 pt-1 mt-1 font-bold">
