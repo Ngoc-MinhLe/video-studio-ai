@@ -7,6 +7,7 @@
  */
 
 import { Canvas2DRenderer } from './video_editor/renderers/Canvas2DRenderer';
+import { FrameScheduler } from './video_editor/core/FrameScheduler';
 
 export const processVideoCanvas = async ({
   mode = 'video_studio',
@@ -41,7 +42,8 @@ export const processVideoCanvas = async ({
   aspectRatio = '16:9',
   videoBitsPerSecond = 3000000,
   onProgress,
-  onStatus
+  onStatus,
+  onBenchmark
 }) => {
   if (onStatus) onStatus('Đang khởi tạo Trình Render Đa Luồng Canvas...');
   if (onProgress) onProgress(5);
@@ -284,10 +286,19 @@ export const processVideoCanvas = async ({
     }
 
     const fps = 30;
-    const frameDuration = 1 / fps;
+    const scheduler = new FrameScheduler(fps);
+    scheduler.start();
 
     const renderLoop = () => {
-      projectTime += frameDuration;
+      // 1. Dùng scheduler.tick() để đồng bộ cứng thời gian thực theo 1x
+      const targetTime = scheduler.tick(totalProjectDuration);
+      if (targetTime === null) {
+        // Chưa đến lúc vẽ hoặc bỏ qua frame trùng lặp
+        animId = requestAnimationFrame(renderLoop);
+        return;
+      }
+
+      projectTime = targetTime;
 
       if (projectTime >= totalProjectDuration) {
         if (mediaRecorder.state === 'recording') {
@@ -344,6 +355,25 @@ export const processVideoCanvas = async ({
         const activeItem = loadedVideoElements[currentClipIdx];
         const activeVideoEl = activeItem.videoEl;
 
+        if (activeVideoEl.paused) {
+          activeVideoEl.play().catch(() => {});
+        }
+
+        // Đồng bộ mềm (Smooth synchronization) bằng cách điều chỉnh tốc độ phát
+        const targetVideoTime = projectTime - activeItem.timelineStart + activeItem.clipStart;
+        const actualVideoTime = activeVideoEl.currentTime;
+        const drift = actualVideoTime - targetVideoTime;
+
+        if (Math.abs(drift) > 0.5) {
+          activeVideoEl.currentTime = targetVideoTime;
+        } else if (drift < -0.03) {
+          activeVideoEl.playbackRate = 1.15; // Tăng tốc nếu chạy chậm hơn
+        } else if (drift > 0.03) {
+          activeVideoEl.playbackRate = 0.85; // Giảm tốc nếu chạy nhanh hơn
+        } else {
+          activeVideoEl.playbackRate = 1.0;
+        }
+
         renderer.clear();
         renderer.drawVideoFrame(activeVideoEl, canvasW, canvasH);
       }
@@ -354,6 +384,29 @@ export const processVideoCanvas = async ({
       if (onProgress && totalProjectDuration > 0) {
         const percent = Math.min(99, Math.round((projectTime / totalProjectDuration) * 100));
         onProgress(percent);
+      }
+
+      // 4. Phát Benchmark dữ liệu
+      if (onBenchmark) {
+        const frameCount = scheduler.renderedFrames;
+        if (frameCount % 15 === 0) {
+          const metrics = scheduler.getMetrics(totalProjectDuration);
+          if (metrics) {
+            onBenchmark({
+              resolution: `${canvasW}x${canvasH}`,
+              sourceFps: '30',
+              targetFps: fps,
+              renderFps: metrics.renderFps.toFixed(1),
+              expectedFrames: metrics.expectedFrames,
+              renderedFrames: metrics.renderedFrames,
+              droppedFrames: metrics.droppedFrames,
+              dropRate: metrics.dropRate.toFixed(2),
+              elapsed: metrics.elapsed.toFixed(1),
+              remaining: metrics.remainingTime.toFixed(1),
+              progress: Math.min(99, Math.round((projectTime / totalProjectDuration) * 100))
+            });
+          }
+        }
       }
 
       animId = requestAnimationFrame(renderLoop);

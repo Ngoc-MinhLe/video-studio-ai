@@ -136,7 +136,8 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const [exportUrl, setExportUrl] = useState(null);
   const [exportExtension, setExportExtension] = useState('mp4');
-  const [statusText, setStatusText] = useState('Hệ thống sẵn sàng!');
+  const [benchmarkData, setBenchmarkData] = useState(null);
+  const [showDebug, setShowDebug] = useState(true);
 
   // Lắng nghe Firebase Auth & Firestore User Data realtime
   useEffect(() => {
@@ -624,6 +625,7 @@ export default function App() {
 
     setIsProcessing(true);
     setProgress(0);
+    setBenchmarkData(null);
 
     if (deductRes.usedFree) {
       setStatusText(`Đang render... (Dùng 1 lượt Free hôm nay, còn ${deductRes.remainingFree} lượt)`);
@@ -664,7 +666,8 @@ export default function App() {
         aspectRatio,
         videoBitsPerSecond: exportBitrate,
         onProgress: (p) => setProgress(p),
-        onStatus: (s) => setStatusText(s)
+        onStatus: (s) => setStatusText(s),
+        onBenchmark: (b) => setBenchmarkData(b)
       });
 
       const generatedUrl = result.url;
@@ -1954,6 +1957,32 @@ export default function App() {
                     style={{ width: `${progress}%` }}
                   />
                 </div>
+
+                {benchmarkData && (
+                  <div className="mt-1 text-xs border border-purple-500/20 bg-purple-950/20 p-2.5 rounded-lg flex flex-col gap-1.5 text-purple-300 font-mono">
+                    <div className="flex justify-between items-center border-b border-purple-500/10 pb-1 mb-1">
+                      <span className="font-bold text-[10px] uppercase text-purple-400">📊 Render Benchmark</span>
+                      <button 
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowDebug(!showDebug); }} 
+                        className="text-[10px] text-purple-400 hover:text-white underline cursor-pointer"
+                      >
+                        {showDebug ? '[Ẩn]' : '[Hiện]'}
+                      </button>
+                    </div>
+                    {showDebug && (
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+                        <div>Độ Phân Giải: <span className="text-white">{benchmarkData.resolution}</span></div>
+                        <div>Render FPS: <span className="text-emerald-400 font-bold">{benchmarkData.renderFps}</span></div>
+                        <div>Target FPS: <span className="text-white">{benchmarkData.targetFps}</span></div>
+                        <div>Đã Vẽ: <span className="text-white">{benchmarkData.renderedFrames} / {benchmarkData.expectedFrames}</span></div>
+                        <div>Bị Drop: <span className="text-rose-400">{benchmarkData.droppedFrames} ({benchmarkData.dropRate}%)</span></div>
+                        <div>Thời gian chạy: <span className="text-white">{benchmarkData.elapsed}s</span></div>
+                        <div>Còn Lại (ước tính): <span className="text-amber-400 font-bold">{benchmarkData.remaining}s</span></div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="text-[10px] text-amber-400 bg-amber-950/40 p-2 rounded border border-amber-500/20 leading-relaxed font-bold mt-1 text-center">
                   ⚠️ KHÔNG CHUYỂN TAB HOẶC ẨN TRÌNH DUYỆT TRONG KHI XUẤT VIDEO ĐỂ TRÁNH BỊ ĐỨNG HÌNH (TRÌNH DUYỆT TỰ DỪNG VẼ KHI ẨN TAB).
                 </div>
