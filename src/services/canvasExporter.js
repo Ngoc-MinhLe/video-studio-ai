@@ -366,12 +366,25 @@ export const processVideoCanvas = async ({
 
         if (Math.abs(drift) > 0.5) {
           activeVideoEl.currentTime = targetVideoTime;
-        } else if (drift < -0.03) {
-          activeVideoEl.playbackRate = 1.15; // Tăng tốc nếu chạy chậm hơn
-        } else if (drift > 0.03) {
-          activeVideoEl.playbackRate = 0.85; // Giảm tốc nếu chạy nhanh hơn
-        } else {
           activeVideoEl.playbackRate = 1.0;
+        } else if (drift > 0.04) {
+          // Video nguồn chạy nhanh hơn project timeline -> Tạm dừng video 1 nhịp để project time đuổi kịp
+          activeVideoEl.pause();
+          activeVideoEl.playbackRate = 1.0;
+        } else {
+          // Đảm bảo video phát lại
+          if (activeVideoEl.paused) {
+            activeVideoEl.play().catch(() => {});
+          }
+          if (drift < -0.03) {
+            // Video chạy hơi chậm -> Tăng nhẹ tốc độ phát (+3%) hoàn toàn không thể nhận thấy
+            activeVideoEl.playbackRate = 1.03;
+          } else if (drift > 0.01) {
+            // Video chạy hơi nhanh -> Giảm nhẹ tốc độ phát (-3%)
+            activeVideoEl.playbackRate = 0.97;
+          } else {
+            activeVideoEl.playbackRate = 1.0;
+          }
         }
 
         renderer.clear();
