@@ -257,6 +257,8 @@ export const processVideoCanvas = async ({
 
   if (onStatus) onStatus(`Đang render nối ${loadedVideoElements.length} clip video (${aspectRatio})...`);
 
+  console.log(`[TIMESTAMP] processVideoCanvas start at ${performance.now().toFixed(2)}ms`);
+
   return new Promise((resolve, reject) => {
     let animId = null;
     let currentClipIdx = 0;
@@ -309,9 +311,11 @@ export const processVideoCanvas = async ({
     };
 
     mediaRecorder.onstop = () => {
+      console.log(`[TIMESTAMP] MediaRecorder.onstop triggered at ${performance.now().toFixed(2)}ms`);
       cleanup();
       const isMp4 = mimeType.includes('mp4');
       const finalBlob = new Blob(chunks, { type: isMp4 ? 'video/mp4' : 'video/webm' });
+      console.log(`[TIMESTAMP] Blob created successfully. Size: ${(finalBlob.size / 1024 / 1024).toFixed(2)}MB at ${performance.now().toFixed(2)}ms`);
       const finalUrl = URL.createObjectURL(finalBlob);
       if (onProgress) onProgress(100);
       if (onStatus) onStatus('Render hoàn tất!');
@@ -339,17 +343,10 @@ export const processVideoCanvas = async ({
     scheduler.start();
 
     const renderLoop = () => {
-      // 1. Dùng scheduler.tick() để đồng bộ cứng thời gian thực theo 1x
-      const targetTime = scheduler.tick(totalProjectDuration);
-      if (targetTime === null) {
-        // Chưa đến lúc vẽ hoặc bỏ qua frame trùng lặp
-        animId = requestAnimationFrame(renderLoop);
-        return;
-      }
-
-      projectTime = targetTime;
-
-      if (projectTime >= totalProjectDuration) {
+      // Kiểm tra kết thúc dựa trên thời gian trôi qua thực tế trước khi lấy tick mới
+      const elapsed = (performance.now() - scheduler.startTime) / 1000;
+      if (elapsed >= totalProjectDuration) {
+        console.log(`[TIMESTAMP] Render Loop finished at elapsed = ${elapsed.toFixed(2)}s (real time: ${performance.now().toFixed(2)}ms)`);
         if (onBenchmark) {
           const metrics = scheduler.getMetrics(totalProjectDuration);
           if (metrics) {
@@ -379,10 +376,21 @@ export const processVideoCanvas = async ({
           }
         }
         if (mediaRecorder.state === 'recording') {
+          console.log(`[TIMESTAMP] Calling mediaRecorder.stop() at ${performance.now().toFixed(2)}ms`);
           mediaRecorder.stop();
         }
         return;
       }
+
+      // 1. Dùng scheduler.tick() để đồng bộ cứng thời gian thực theo 1x
+      const targetTime = scheduler.tick(totalProjectDuration);
+      if (targetTime === null) {
+        // Chưa đến lúc vẽ hoặc bỏ qua frame trùng lặp
+        animId = requestAnimationFrame(renderLoop);
+        return;
+      }
+
+      projectTime = targetTime;
 
       // Xử lý phát nhạc nền độc lập (Đồng bộ trực tiếp với Master Project Clock)
       if (audioEl) {

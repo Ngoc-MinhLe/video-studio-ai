@@ -688,6 +688,7 @@ export default function App() {
       setStatusText('Xuất Video thành công! File đã tự động tải xuống.');
 
       // Đo lường thời lượng thực tế của file xuất ra sử dụng cả loadedmetadata & durationchange
+      console.log(`[TIMESTAMP] Finalize phase start: temporary video created at ${performance.now().toFixed(2)}ms`);
       const tempVideo = document.createElement('video');
       tempVideo.preload = 'metadata';
       tempVideo.src = generatedUrl;
@@ -697,6 +698,7 @@ export default function App() {
       const durationTimeoutId = setTimeout(() => {
         if (durationUpdated) return;
         durationUpdated = true;
+        console.log(`[TIMESTAMP] Output Duration measurement TIMEOUT (5s expired) at ${performance.now().toFixed(2)}ms`);
         setBenchmarkData(prev => {
           if (!prev) return prev;
           return {
@@ -709,7 +711,6 @@ export default function App() {
           tempVideo.src = "";
           tempVideo.load();
         } catch (e) {}
-        console.log("Video Studio AI Exporter: Metadata measurement timed out after 5s.");
       }, 5000);
 
       const updateDuration = () => {
@@ -718,6 +719,7 @@ export default function App() {
         if (actualDur !== undefined && !isNaN(actualDur)) {
           durationUpdated = true;
           clearTimeout(durationTimeoutId);
+          console.log(`[TIMESTAMP] Output Duration measured successfully: ${actualDur}s at ${performance.now().toFixed(2)}ms`);
           setBenchmarkData(prev => {
             if (!prev) return prev;
             let outputDurationStr = 'Not directly measurable (WebM missing duration headers)';
@@ -743,6 +745,7 @@ export default function App() {
         if (durationUpdated) return;
         durationUpdated = true;
         clearTimeout(durationTimeoutId);
+        console.log(`[TIMESTAMP] Output Duration measurement ERROR at ${performance.now().toFixed(2)}ms`);
         setBenchmarkData(prev => {
           if (!prev) return prev;
           return {
