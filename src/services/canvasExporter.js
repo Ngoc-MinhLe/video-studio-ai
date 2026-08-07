@@ -350,6 +350,34 @@ export const processVideoCanvas = async ({
       projectTime = targetTime;
 
       if (projectTime >= totalProjectDuration) {
+        if (onBenchmark) {
+          const metrics = scheduler.getMetrics(totalProjectDuration);
+          if (metrics) {
+            onBenchmark({
+              captureMode,
+              resolution: `${canvasW}x${canvasH}`,
+              sourceFps: '30',
+              targetFps: fps,
+              renderFps: metrics.renderFps.toFixed(1),
+              expectedFrames: metrics.expectedFrames,
+              renderedFrames: metrics.renderedFrames,
+              schedulerSkippedFrames: metrics.schedulerSkippedFrames,
+              skipRate: metrics.skipRate.toFixed(2),
+              elapsed: metrics.elapsed.toFixed(1),
+              remaining: '0.0',
+              pauseCount: metrics.pauseCount,
+              totalPauseDuration: metrics.totalPauseDuration.toFixed(2),
+              maxDrift: metrics.maxDrift.toFixed(3),
+              averageDrift: metrics.averageDrift.toFixed(3),
+              playbackRateChanges: metrics.playbackRateChanges,
+              captureRequests: metrics.captureRequests,
+              averageRenderTime: metrics.averageRenderTime.toFixed(1),
+              maxRenderTime: metrics.maxRenderTime.toFixed(1),
+              projectDuration: totalProjectDuration.toFixed(1),
+              progress: 100
+            });
+          }
+        }
         if (mediaRecorder.state === 'recording') {
           mediaRecorder.stop();
         }
@@ -551,6 +579,7 @@ export const processVideoCanvas = async ({
               captureRequests: metrics.captureRequests,
               averageRenderTime: metrics.averageRenderTime.toFixed(1),
               maxRenderTime: metrics.maxRenderTime.toFixed(1),
+              projectDuration: totalProjectDuration.toFixed(1),
               progress: Math.min(99, Math.round((projectTime / totalProjectDuration) * 100))
             });
           }

@@ -137,7 +137,7 @@ export default function App() {
   const [exportUrl, setExportUrl] = useState(null);
   const [exportExtension, setExportExtension] = useState('mp4');
   const [benchmarkData, setBenchmarkData] = useState(null);
-  const [showDebug, setShowDebug] = useState(true);
+  const [showDebug, setShowDebug] = useState(false);
 
   // Lắng nghe Firebase Auth & Firestore User Data realtime
   useEffect(() => {
@@ -1983,8 +1983,12 @@ export default function App() {
                         <div>Lệch Lớn / TB: <span className="text-white">{benchmarkData.maxDrift}s / {benchmarkData.averageDrift}s</span></div>
                         <div>Thay Tốc Độ: <span className="text-white">{benchmarkData.playbackRateChanges} lần</span></div>
                         <div>Thời gian chạy: <span className="text-white">{benchmarkData.elapsed}s</span></div>
-                        <div>Còn Lại (ước tính): <span className="text-amber-400 font-bold">{benchmarkData.remaining}s</span></div>
-                        <div className="col-span-2 text-gray-500 border-t border-purple-500/10 pt-1 mt-1">
+                        <div>Thời lượng Dự Án: <span className="text-white">{benchmarkData.projectDuration || '0.0'}s</span></div>
+                        <div>Thời lượng Output (Ước tính): <span className="text-amber-400">{benchmarkData.elapsed}s</span></div>
+                        <div className="col-span-2 text-white border-t border-purple-500/10 pt-1 mt-1 font-bold">
+                          Độ lệch Output - Project: <span className="text-amber-400">{(parseFloat(benchmarkData.elapsed || 0) - parseFloat(benchmarkData.projectDuration || 0)).toFixed(1)}s</span>
+                        </div>
+                        <div className="col-span-2 text-gray-500 border-t border-purple-500/10 pt-1">
                           Encoded/Dropped Frames: Not directly measurable from this pipeline
                         </div>
                       </div>
@@ -2000,22 +2004,63 @@ export default function App() {
 
             {/* Hộp Thông Báo Tải Về Video Nút Đẹp */}
             {exportUrl && !isProcessing && (
-              <div className="p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/40 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg shadow-emerald-500/10">
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-7 h-7 text-emerald-400 shrink-0" />
-                  <div>
-                    <h4 className="font-bold text-sm text-emerald-300">File Đã Tự Động Tải Xuống Máy!</h4>
-                    <p className="text-xs text-[#94a3b8]">Nếu file chưa xuất hiện trong thư mục Downloads, bấm nút bên phải để tải lại.</p>
+              <div className="flex flex-col gap-3">
+                <div className="p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/40 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg shadow-emerald-500/10">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="w-7 h-7 text-emerald-400 shrink-0" />
+                    <div>
+                      <h4 className="font-bold text-sm text-emerald-300">File Đã Tự Động Tải Xuống Máy!</h4>
+                      <p className="text-xs text-[#94a3b8]">Nếu file chưa xuất hiện trong thư mục Downloads, bấm nút bên phải để tải lại.</p>
+                    </div>
                   </div>
+                  <a 
+                    href={exportUrl} 
+                    download={`video_studio_output.${exportExtension}`}
+                    className="btn-primary bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30 shrink-0 text-xs py-2.5 px-4 font-bold"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Tải Lại Video ({exportExtension.toUpperCase()})</span>
+                  </a>
                 </div>
-                <a 
-                  href={exportUrl} 
-                  download={`video_studio_output.${exportExtension}`}
-                  className="btn-primary bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30 shrink-0 text-xs py-2.5 px-4 font-bold"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Tải Lại Video ({exportExtension.toUpperCase()})</span>
-                </a>
+
+                {/* Giữ lại summary benchmark kết quả sau khi export xong */}
+                {benchmarkData && (
+                  <div className="p-3 border border-purple-500/20 bg-purple-950/20 rounded-xl flex flex-col gap-2.5 text-purple-300 font-mono text-xs">
+                    <div className="flex justify-between items-center border-b border-purple-500/10 pb-1.5">
+                      <span className="font-bold text-[10px] uppercase text-purple-400">📊 TỔNG KẾT RENDER BENCHMARK (ĐÃ XUẤT XONG)</span>
+                      <button 
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowDebug(!showDebug); }} 
+                        className="text-[10px] text-purple-400 hover:text-white underline cursor-pointer"
+                      >
+                        {showDebug ? '[Ẩn Chi Tiết]' : '[Hiện Chi Tiết]'}
+                      </button>
+                    </div>
+                    {showDebug && (
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[10px]">
+                        <div>Chế Độ Ghi: <span className="text-white font-bold">{benchmarkData.captureMode}</span></div>
+                        <div>Độ Phân Giải: <span className="text-white">{benchmarkData.resolution}</span></div>
+                        <div>Render FPS TB: <span className="text-emerald-400 font-bold">{benchmarkData.renderFps}</span></div>
+                        <div>Target FPS: <span className="text-white">{benchmarkData.targetFps}</span></div>
+                        <div>Tổng Số Frame Đã Vẽ: <span className="text-white">{benchmarkData.renderedFrames} / {benchmarkData.expectedFrames}</span></div>
+                        <div>Capture Requests: <span className="text-white font-bold">{benchmarkData.captureRequests}</span></div>
+                        <div>Bỏ Qua (Skipped): <span className="text-rose-400">{benchmarkData.schedulerSkippedFrames} ({benchmarkData.skipRate}%)</span></div>
+                        <div>Thời gian Vẽ TB/Max: <span className="text-amber-400">{benchmarkData.averageRenderTime}ms / {benchmarkData.maxRenderTime}ms</span></div>
+                        <div>Lần Tạm Dừng: <span className="text-amber-400">{benchmarkData.pauseCount} ({benchmarkData.totalPauseDuration}s)</span></div>
+                        <div>Lệch Lớn / TB: <span className="text-white">{benchmarkData.maxDrift}s / {benchmarkData.averageDrift}s</span></div>
+                        <div>Thay Tốc Độ: <span className="text-white">{benchmarkData.playbackRateChanges} lần</span></div>
+                        <div>Thời gian Chạy Thực Tế: <span className="text-white">{benchmarkData.elapsed}s</span></div>
+                        <div>Thời lượng Dự Án: <span className="text-white">{benchmarkData.projectDuration || '0.0'}s</span></div>
+                        <div>Thời lượng Output (Ước tính): <span className="text-amber-400 font-bold">{benchmarkData.elapsed}s</span></div>
+                        <div className="col-span-2 text-white border-t border-purple-500/10 pt-1 mt-1 font-bold">
+                          Độ lệch Output - Project: <span className="text-amber-400">{(parseFloat(benchmarkData.elapsed || 0) - parseFloat(benchmarkData.projectDuration || 0)).toFixed(1)}s</span>
+                        </div>
+                        <div className="col-span-2 text-gray-500 border-t border-purple-500/10 pt-1">
+                          Encoded/Dropped Frames: Not directly measurable from this pipeline
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
