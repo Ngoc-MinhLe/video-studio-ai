@@ -623,9 +623,16 @@ export default function App() {
       togglePlay();
     }
 
+    if (exportUrl) {
+      try {
+        URL.revokeObjectURL(exportUrl);
+      } catch (e) {}
+    }
+
     setIsProcessing(true);
     setProgress(0);
     setBenchmarkData(null);
+    setExportUrl(null);
 
     if (deductRes.usedFree) {
       setStatusText(`Đang render... (Dùng 1 lượt Free hôm nay, còn ${deductRes.remainingFree} lượt)`);
@@ -679,28 +686,38 @@ export default function App() {
       setProgress(100);
       setStatusText('Xuất Video thành công! File đã tự động tải xuống.');
 
-      // Thử nghiệm đo lường thời lượng thực tế của file xuất ra
+      // Đo lường thời lượng thực tế của file xuất ra sử dụng cả loadedmetadata & durationchange
       const tempVideo = document.createElement('video');
+      tempVideo.preload = 'metadata';
       tempVideo.src = generatedUrl;
-      tempVideo.addEventListener('loadedmetadata', () => {
+      let durationUpdated = false;
+
+      const updateDuration = () => {
+        if (durationUpdated) return;
         const actualDur = tempVideo.duration;
-        setBenchmarkData(prev => {
-          if (!prev) return prev;
-          let outputDurationStr = 'Not directly measurable (WebM missing duration headers)';
-          if (actualDur && isFinite(actualDur)) {
-            outputDurationStr = `${actualDur.toFixed(1)}s`;
-          }
-          return {
-            ...prev,
-            outputDuration: outputDurationStr
-          };
-        });
-        // Dọn dẹp tài nguyên thẻ video tạm
-        try {
-          tempVideo.src = "";
-          tempVideo.load();
-        } catch (e) {}
-      });
+        if (actualDur !== undefined && !isNaN(actualDur)) {
+          durationUpdated = true;
+          setBenchmarkData(prev => {
+            if (!prev) return prev;
+            let outputDurationStr = 'Not directly measurable (WebM missing duration headers)';
+            if (actualDur && isFinite(actualDur)) {
+              outputDurationStr = `${actualDur.toFixed(1)}s`;
+            }
+            return {
+              ...prev,
+              outputDuration: outputDurationStr
+            };
+          });
+          // Dọn dẹp tài nguyên thẻ video tạm
+          try {
+            tempVideo.src = "";
+            tempVideo.load();
+          } catch (e) {}
+        }
+      };
+
+      tempVideo.addEventListener('loadedmetadata', updateDuration);
+      tempVideo.addEventListener('durationchange', updateDuration);
       tempVideo.addEventListener('error', () => {
         setBenchmarkData(prev => {
           if (!prev) return prev;
