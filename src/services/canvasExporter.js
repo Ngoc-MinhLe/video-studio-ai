@@ -368,10 +368,13 @@ export const processVideoCanvas = async ({
           if (audioEl.paused) {
             audioEl.play().catch(() => {});
           }
-          // Chỉ đồng bộ cứng (seek) nhạc nền nếu bị lệch pha lớn (>200ms) do delay khởi động
-          const audioDrift = audioEl.currentTime - expectedAudioTime;
-          if (Math.abs(audioDrift) > 0.2) {
-            audioEl.currentTime = expectedAudioTime;
+          // Chỉ đồng bộ cứng (seek) nhạc nền nếu bị lệch pha lớn (>200ms) và nhạc chưa kết thúc
+          const duration = audioEl.duration;
+          if (isNaN(duration) || expectedAudioTime < duration) {
+            const audioDrift = audioEl.currentTime - expectedAudioTime;
+            if (Math.abs(audioDrift) > 0.2) {
+              audioEl.currentTime = expectedAudioTime;
+            }
           }
         }
       }
