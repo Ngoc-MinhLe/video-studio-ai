@@ -421,20 +421,29 @@ export const processVideoCanvas = async ({
         if (Math.abs(drift) > 0.5) {
           activeVideoEl.currentTime = targetVideoTime;
           activeVideoEl.playbackRate = 1.0;
+          if (audioEl) {
+            audioEl.playbackRate = 1.0;
+          }
           if (isVideoPausedForSync) {
             isVideoPausedForSync = false;
             scheduler.recordPauseEnd();
           }
         } else if (drift > 0.04) {
-          // Hysteresis Band: Tạm dừng video nguồn nếu chạy nhanh hơn project timeline (>40ms)
+          // Hysteresis Band: Tạm dừng video nguồn & nhạc nền nếu chạy nhanh hơn project timeline (>40ms)
           if (!isVideoPausedForSync) {
             activeVideoEl.pause();
+            if (audioEl && audioStarted) {
+              audioEl.pause();
+            }
             isVideoPausedForSync = true;
             scheduler.recordPauseStart();
           }
         } else if (isVideoPausedForSync && drift <= 0.01) {
-          // Hysteresis Band: Chỉ cho phép phát lại khi độ lệch giảm xuống dưới 10ms để tránh dao động bật/tắt liên tục
+          // Hysteresis Band: Chỉ phát lại khi độ lệch giảm xuống dưới 10ms để tránh dao động bật/tắt liên tục
           activeVideoEl.play().catch(() => {});
+          if (audioEl && audioStarted) {
+            audioEl.play().catch(() => {});
+          }
           isVideoPausedForSync = false;
           scheduler.recordPauseEnd();
         }
@@ -443,6 +452,9 @@ export const processVideoCanvas = async ({
         if (!isVideoPausedForSync) {
           if (activeVideoEl.paused) {
             activeVideoEl.play().catch(() => {});
+          }
+          if (audioEl && audioEl.paused && audioStarted) {
+            audioEl.play().catch(() => {});
           }
 
           let targetRate = 1.0;
@@ -454,6 +466,9 @@ export const processVideoCanvas = async ({
 
           if (targetRate !== lastPlaybackRate) {
             activeVideoEl.playbackRate = targetRate;
+            if (audioEl) {
+              audioEl.playbackRate = targetRate;
+            }
             lastPlaybackRate = targetRate;
             scheduler.recordPlaybackRateChange();
           }
