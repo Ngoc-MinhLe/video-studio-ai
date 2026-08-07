@@ -1975,7 +1975,10 @@ export default function App() {
                         <div>Render FPS: <span className="text-emerald-400 font-bold">{benchmarkData.renderFps}</span></div>
                         <div>Target FPS: <span className="text-white">{benchmarkData.targetFps}</span></div>
                         <div>Đã Vẽ: <span className="text-white">{benchmarkData.renderedFrames} / {benchmarkData.expectedFrames}</span></div>
-                        <div>Bị Drop: <span className="text-rose-400">{benchmarkData.droppedFrames} ({benchmarkData.dropRate}%)</span></div>
+                        <div>Bỏ Qua (Skipped): <span className="text-rose-400">{benchmarkData.schedulerSkippedFrames} ({benchmarkData.skipRate}%)</span></div>
+                        <div>Lần Tạm Dừng: <span className="text-amber-400">{benchmarkData.pauseCount} ({benchmarkData.totalPauseDuration}s)</span></div>
+                        <div>Lệch Lớn / TB: <span className="text-white">{benchmarkData.maxDrift}s / {benchmarkData.averageDrift}s</span></div>
+                        <div>Thay Tốc Độ: <span className="text-white">{benchmarkData.playbackRateChanges} lần</span></div>
                         <div>Thời gian chạy: <span className="text-white">{benchmarkData.elapsed}s</span></div>
                         <div>Còn Lại (ước tính): <span className="text-amber-400 font-bold">{benchmarkData.remaining}s</span></div>
                       </div>

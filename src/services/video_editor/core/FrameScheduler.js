@@ -9,9 +9,18 @@ export class FrameScheduler {
     this.startTime = null;
     this.lastRenderedFrameIndex = -1;
     this.renderedFrames = 0;
-    this.droppedFrames = 0;
+    this.schedulerSkippedFrames = 0;
     this.expectedFrames = 0;
     this.renderStartRealTime = null;
+
+    // Các thông số đo đạc đồng bộ (Sync Metrics)
+    this.pauseCount = 0;
+    this.totalPauseDuration = 0;
+    this.maxDrift = 0;
+    this.sumDrift = 0;
+    this.driftCount = 0;
+    this.playbackRateChanges = 0;
+    this.lastPauseStartTime = null;
   }
 
   start() {
@@ -21,7 +30,45 @@ export class FrameScheduler {
   }
 
   /**
-   * Returns current master clock metrics for debugging and benchmark display.
+   * Ghi nhận một lần đổi playbackRate
+   */
+  recordPlaybackRateChange() {
+    this.playbackRateChanges += 1;
+  }
+
+  /**
+   * Ghi nhận độ lệch drift hiện tại
+   */
+  recordDrift(drift) {
+    const absDrift = Math.abs(drift);
+    if (absDrift > this.maxDrift) {
+      this.maxDrift = absDrift;
+    }
+    this.sumDrift += absDrift;
+    this.driftCount += 1;
+  }
+
+  /**
+   * Ghi nhận bắt đầu tạm dừng video để chờ sync
+   */
+  recordPauseStart() {
+    this.pauseCount += 1;
+    this.lastPauseStartTime = performance.now();
+  }
+
+  /**
+   * Ghi nhận khi video phát lại sau khi tạm dừng sync
+   */
+  recordPauseEnd() {
+    if (this.lastPauseStartTime !== null) {
+      const duration = (performance.now() - this.lastPauseStartTime) / 1000;
+      this.totalPauseDuration += duration;
+      this.lastPauseStartTime = null;
+    }
+  }
+
+  /**
+   * Lấy các số liệu benchmark để hiển thị và lưu trữ log
    */
   getMetrics(totalDuration) {
     if (!this.startTime) return null;
@@ -29,7 +76,6 @@ export class FrameScheduler {
     const elapsed = (now - this.startTime) / 1000;
     const renderFps = elapsed > 0 ? (this.renderedFrames / elapsed) : this.fps;
 
-    // Ước lượng thời gian còn lại dựa trên tốc độ render thực tế
     let remainingTime = 0;
     if (totalDuration > 0 && elapsed < totalDuration) {
       const progress = elapsed / totalDuration;
@@ -38,35 +84,40 @@ export class FrameScheduler {
       }
     }
 
+    const averageDrift = this.driftCount > 0 ? (this.sumDrift / this.driftCount) : 0;
+
     return {
       elapsed,
       renderFps,
       expectedFrames: this.expectedFrames,
       renderedFrames: this.renderedFrames,
-      droppedFrames: this.droppedFrames,
-      dropRate: this.expectedFrames > 0 ? (this.droppedFrames / this.expectedFrames) * 100 : 0,
-      remainingTime
+      schedulerSkippedFrames: this.schedulerSkippedFrames,
+      skipRate: this.expectedFrames > 0 ? (this.schedulerSkippedFrames / this.expectedFrames) * 100 : 0,
+      remainingTime,
+      pauseCount: this.pauseCount,
+      totalPauseDuration: this.totalPauseDuration,
+      maxDrift: this.maxDrift,
+      averageDrift,
+      playbackRateChanges: this.playbackRateChanges
     };
   }
 
   /**
-   * Kiểm tra xem đã đến thời điểm vẽ khung hình tiếp theo chưa.
-   * Nếu có, trả về projectTime tương ứng, nếu không trả về null.
+   * Kiểm tra xem đã đến thời điểm vẽ khung hình tiếp theo chưa
    */
   tick(totalDuration) {
     if (!this.startTime) return null;
     const now = performance.now();
     const elapsed = (now - this.startTime) / 1000;
 
-    // Giới hạn thời gian tối đa của dự án
     const currentMasterTime = Math.min(elapsed, totalDuration);
     const currentFrameIndex = Math.floor(currentMasterTime * this.fps);
 
     if (currentFrameIndex > this.lastRenderedFrameIndex) {
-      // Đếm số lượng khung hình bị bỏ qua (dropped frames)
+      // Đếm số lượng khung hình bị bỏ qua bởi Scheduler (Scheduler Skipped Frames)
       if (this.lastRenderedFrameIndex !== -1) {
         const skipped = currentFrameIndex - this.lastRenderedFrameIndex - 1;
-        this.droppedFrames += skipped;
+        this.schedulerSkippedFrames += skipped;
         this.expectedFrames += skipped + 1;
       } else {
         this.expectedFrames += 1;

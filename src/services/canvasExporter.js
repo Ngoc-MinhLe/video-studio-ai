@@ -241,6 +241,8 @@ export const processVideoCanvas = async ({
     let projectTime = 0;
     let lastTimestamp = null;
     let audioStarted = false;
+    let isVideoPausedForSync = false;
+    let lastPlaybackRate = 1.0;
 
     const cleanup = () => {
       if (animId) cancelAnimationFrame(animId);
@@ -364,26 +366,46 @@ export const processVideoCanvas = async ({
         const actualVideoTime = activeVideoEl.currentTime;
         const drift = actualVideoTime - targetVideoTime;
 
+        scheduler.recordDrift(drift);
+
         if (Math.abs(drift) > 0.5) {
           activeVideoEl.currentTime = targetVideoTime;
           activeVideoEl.playbackRate = 1.0;
+          if (isVideoPausedForSync) {
+            isVideoPausedForSync = false;
+            scheduler.recordPauseEnd();
+          }
         } else if (drift > 0.04) {
-          // Video nguồn chạy nhanh hơn project timeline -> Tạm dừng video 1 nhịp để project time đuổi kịp
-          activeVideoEl.pause();
-          activeVideoEl.playbackRate = 1.0;
-        } else {
-          // Đảm bảo video phát lại
+          // Hysteresis Band: Tạm dừng video nguồn nếu chạy nhanh hơn project timeline (>40ms)
+          if (!isVideoPausedForSync) {
+            activeVideoEl.pause();
+            isVideoPausedForSync = true;
+            scheduler.recordPauseStart();
+          }
+        } else if (isVideoPausedForSync && drift <= 0.01) {
+          // Hysteresis Band: Chỉ cho phép phát lại khi độ lệch giảm xuống dưới 10ms để tránh dao động bật/tắt liên tục
+          activeVideoEl.play().catch(() => {});
+          isVideoPausedForSync = false;
+          scheduler.recordPauseEnd();
+        }
+
+        // Điều tiết tốc độ phát tinh vi (±3%) nếu đang phát bình thường
+        if (!isVideoPausedForSync) {
           if (activeVideoEl.paused) {
             activeVideoEl.play().catch(() => {});
           }
+
+          let targetRate = 1.0;
           if (drift < -0.03) {
-            // Video chạy hơi chậm -> Tăng nhẹ tốc độ phát (+3%) hoàn toàn không thể nhận thấy
-            activeVideoEl.playbackRate = 1.03;
+            targetRate = 1.03; // Video chạy hơi chậm -> Tăng nhẹ (+3%)
           } else if (drift > 0.01) {
-            // Video chạy hơi nhanh -> Giảm nhẹ tốc độ phát (-3%)
-            activeVideoEl.playbackRate = 0.97;
-          } else {
-            activeVideoEl.playbackRate = 1.0;
+            targetRate = 0.97; // Video chạy hơi nhanh -> Giảm nhẹ (-3%)
+          }
+
+          if (targetRate !== lastPlaybackRate) {
+            activeVideoEl.playbackRate = targetRate;
+            lastPlaybackRate = targetRate;
+            scheduler.recordPlaybackRateChange();
           }
         }
 
@@ -412,10 +434,15 @@ export const processVideoCanvas = async ({
               renderFps: metrics.renderFps.toFixed(1),
               expectedFrames: metrics.expectedFrames,
               renderedFrames: metrics.renderedFrames,
-              droppedFrames: metrics.droppedFrames,
-              dropRate: metrics.dropRate.toFixed(2),
+              schedulerSkippedFrames: metrics.schedulerSkippedFrames,
+              skipRate: metrics.skipRate.toFixed(2),
               elapsed: metrics.elapsed.toFixed(1),
               remaining: metrics.remainingTime.toFixed(1),
+              pauseCount: metrics.pauseCount,
+              totalPauseDuration: metrics.totalPauseDuration.toFixed(2),
+              maxDrift: metrics.maxDrift.toFixed(3),
+              averageDrift: metrics.averageDrift.toFixed(3),
+              playbackRateChanges: metrics.playbackRateChanges,
               progress: Math.min(99, Math.round((projectTime / totalProjectDuration) * 100))
             });
           }
