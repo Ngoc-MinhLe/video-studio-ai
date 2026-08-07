@@ -268,16 +268,41 @@ export const processVideoCanvas = async ({
 
     const cleanup = () => {
       if (animId) cancelAnimationFrame(animId);
+      
+      // Dừng tất cả track của stream để tránh rò rỉ webcam/canvas/audio recording icon
+      if (combinedStream) {
+        combinedStream.getTracks().forEach(track => {
+          try { track.stop(); } catch (e) {}
+        });
+      }
+      if (canvasStream) {
+        canvasStream.getTracks().forEach(track => {
+          try { track.stop(); } catch (e) {}
+        });
+      }
+
+      // Xóa nguồn giải mã của các thẻ video
       if (loadedVideoElements && loadedVideoElements.length > 0) {
         loadedVideoElements.forEach(item => {
           if (item && item.videoEl) {
-            try { item.videoEl.pause(); } catch (e) {}
+            try {
+              item.videoEl.pause();
+              item.videoEl.src = "";
+              item.videoEl.load();
+            } catch (e) {}
           }
         });
       }
+
+      // Xóa nguồn giải mã nhạc nền
       if (audioEl) {
-        try { audioEl.pause(); } catch (e) {}
+        try {
+          audioEl.pause();
+          audioEl.src = "";
+          audioEl.load();
+        } catch (e) {}
       }
+
       if (audioCtx) {
         try { audioCtx.close(); } catch (e) {}
       }
