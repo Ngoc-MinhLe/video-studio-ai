@@ -679,6 +679,38 @@ export default function App() {
       setProgress(100);
       setStatusText('Xuất Video thành công! File đã tự động tải xuống.');
 
+      // Thử nghiệm đo lường thời lượng thực tế của file xuất ra
+      const tempVideo = document.createElement('video');
+      tempVideo.src = generatedUrl;
+      tempVideo.addEventListener('loadedmetadata', () => {
+        const actualDur = tempVideo.duration;
+        setBenchmarkData(prev => {
+          if (!prev) return prev;
+          let outputDurationStr = 'Not directly measurable (WebM missing duration headers)';
+          if (actualDur && isFinite(actualDur)) {
+            outputDurationStr = `${actualDur.toFixed(1)}s`;
+          }
+          return {
+            ...prev,
+            outputDuration: outputDurationStr
+          };
+        });
+        // Dọn dẹp tài nguyên thẻ video tạm
+        try {
+          tempVideo.src = "";
+          tempVideo.load();
+        } catch (e) {}
+      });
+      tempVideo.addEventListener('error', () => {
+        setBenchmarkData(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            outputDuration: 'Not directly measurable (Failed to parse container)'
+          };
+        });
+      });
+
       // 🔥 TỰ ĐỘNG TẢI FILE MP4 XUỐNG MÁY KHÔNG CẦN CHỜ 🔥
       const downloadAnchor = document.createElement('a');
       downloadAnchor.href = generatedUrl;
@@ -1982,11 +2014,11 @@ export default function App() {
                         <div>Lần Tạm Dừng: <span className="text-amber-400">{benchmarkData.pauseCount} ({benchmarkData.totalPauseDuration}s)</span></div>
                         <div>Lệch Lớn / TB: <span className="text-white">{benchmarkData.maxDrift}s / {benchmarkData.averageDrift}s</span></div>
                         <div>Thay Tốc Độ: <span className="text-white">{benchmarkData.playbackRateChanges} lần</span></div>
-                        <div>Thời gian chạy: <span className="text-white">{benchmarkData.elapsed}s</span></div>
+                        <div>Thời gian Chạy Thực Tế: <span className="text-white">{benchmarkData.elapsed}s</span></div>
                         <div>Thời lượng Dự Án: <span className="text-white">{benchmarkData.projectDuration || '0.0'}s</span></div>
-                        <div>Thời lượng Output (Ước tính): <span className="text-amber-400">{benchmarkData.elapsed}s</span></div>
+                        <div>Thời lượng Output: <span className="text-amber-400 font-bold">Đang đo khi hoàn tất...</span></div>
                         <div className="col-span-2 text-white border-t border-purple-500/10 pt-1 mt-1 font-bold">
-                          Độ lệch Output - Project: <span className="text-amber-400">{(parseFloat(benchmarkData.elapsed || 0) - parseFloat(benchmarkData.projectDuration || 0)).toFixed(1)}s</span>
+                          Độ lệch Output - Project: <span className="text-amber-400">Đang đo khi hoàn tất...</span>
                         </div>
                         <div className="col-span-2 text-gray-500 border-t border-purple-500/10 pt-1">
                           Encoded/Dropped Frames: Not directly measurable from this pipeline
@@ -2050,9 +2082,14 @@ export default function App() {
                         <div>Thay Tốc Độ: <span className="text-white">{benchmarkData.playbackRateChanges} lần</span></div>
                         <div>Thời gian Chạy Thực Tế: <span className="text-white">{benchmarkData.elapsed}s</span></div>
                         <div>Thời lượng Dự Án: <span className="text-white">{benchmarkData.projectDuration || '0.0'}s</span></div>
-                        <div>Thời lượng Output (Ước tính): <span className="text-amber-400 font-bold">{benchmarkData.elapsed}s</span></div>
+                        <div>Thời lượng Output: <span className="text-amber-400 font-bold">{benchmarkData.outputDuration || 'Đang đo...'}</span></div>
                         <div className="col-span-2 text-white border-t border-purple-500/10 pt-1 mt-1 font-bold">
-                          Độ lệch Output - Project: <span className="text-amber-400">{(parseFloat(benchmarkData.elapsed || 0) - parseFloat(benchmarkData.projectDuration || 0)).toFixed(1)}s</span>
+                          Độ lệch Output - Project: <span className="text-amber-400">
+                            {(!benchmarkData.outputDuration || isNaN(parseFloat(benchmarkData.outputDuration))) 
+                              ? 'Not directly measurable' 
+                              : `${(parseFloat(benchmarkData.outputDuration) - parseFloat(benchmarkData.projectDuration)).toFixed(1)}s`
+                            }
+                          </span>
                         </div>
                         <div className="col-span-2 text-gray-500 border-t border-purple-500/10 pt-1">
                           Encoded/Dropped Frames: Not directly measurable from this pipeline
