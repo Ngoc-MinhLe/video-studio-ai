@@ -490,9 +490,10 @@ export const processVideoCanvas = async ({
         scheduler.recordCaptureRequest();
       }
 
-      // [VALIDATION INSTRUMENTATION LOGGER]
+      // [VALIDATION INSTRUMENTATION LOGGER] - Chỉ kích hoạt khi có cờ debug đặc biệt trên window để tránh spam production console
+      const isDebugActive = typeof window !== 'undefined' && !!window.__VIDEO_STUDIO_DEBUG__;
       const currentFrameCount = scheduler.renderedFrames;
-      if (currentFrameCount <= 10) {
+      if (isDebugActive && currentFrameCount <= 10) {
         const activeClip = loadedVideoElements.length > 0 ? loadedVideoElements[currentClipIdx] : null;
         console.log(`[INSTRUMENTATION FRAME ${currentFrameCount}]`, {
           frameIndex: scheduler.lastRenderedFrameIndex,
@@ -510,8 +511,8 @@ export const processVideoCanvas = async ({
         });
       }
 
-      // [ARTIFICIAL LAG WORKLOAD FOR TIMEOUT VALIDATION]
-      const simulateLag = false; // Thiết lập true để chạy Stress Test giả lập chậm đồ họa
+      // [ARTIFICIAL LAG WORKLOAD FOR TIMEOUT VALIDATION] - Mặc định tắt (OFF) ở production, chỉ bật khi dev yêu cầu rõ ràng
+      const simulateLag = isDebugActive && !!window.__VIDEO_STUDIO_SIMULATE_LAG__;
       if (simulateLag) {
         const startWait = performance.now();
         while (performance.now() - startWait < 60) {
