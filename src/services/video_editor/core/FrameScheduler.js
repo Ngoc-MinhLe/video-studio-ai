@@ -21,6 +21,12 @@ export class FrameScheduler {
     this.driftCount = 0;
     this.playbackRateChanges = 0;
     this.lastPauseStartTime = null;
+
+    // Controlled Capture & Render Time Metrics
+    this.captureRequests = 0;
+    this.sumRenderTime = 0;
+    this.maxRenderTime = 0;
+    this.renderTimeCount = 0;
   }
 
   start() {
@@ -68,6 +74,24 @@ export class FrameScheduler {
   }
 
   /**
+   * Ghi nhận số lượng capture request thủ công
+   */
+  recordCaptureRequest() {
+    this.captureRequests += 1;
+  }
+
+  /**
+   * Ghi nhận thời gian render của 1 frame (ms)
+   */
+  recordRenderTime(durationMs) {
+    if (durationMs > this.maxRenderTime) {
+      this.maxRenderTime = durationMs;
+    }
+    this.sumRenderTime += durationMs;
+    this.renderTimeCount += 1;
+  }
+
+  /**
    * Lấy các số liệu benchmark để hiển thị và lưu trữ log
    */
   getMetrics(totalDuration) {
@@ -85,6 +109,7 @@ export class FrameScheduler {
     }
 
     const averageDrift = this.driftCount > 0 ? (this.sumDrift / this.driftCount) : 0;
+    const averageRenderTime = this.renderTimeCount > 0 ? (this.sumRenderTime / this.renderTimeCount) : 0;
 
     return {
       elapsed,
@@ -98,7 +123,10 @@ export class FrameScheduler {
       totalPauseDuration: this.totalPauseDuration,
       maxDrift: this.maxDrift,
       averageDrift,
-      playbackRateChanges: this.playbackRateChanges
+      playbackRateChanges: this.playbackRateChanges,
+      captureRequests: this.captureRequests,
+      averageRenderTime,
+      maxRenderTime: this.maxRenderTime
     };
   }
 

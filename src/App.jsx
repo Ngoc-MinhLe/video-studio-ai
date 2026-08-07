@@ -1971,16 +1971,22 @@ export default function App() {
                     </div>
                     {showDebug && (
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+                        <div>Chế Độ Ghi: <span className="text-white font-bold">{benchmarkData.captureMode}</span></div>
                         <div>Độ Phân Giải: <span className="text-white">{benchmarkData.resolution}</span></div>
                         <div>Render FPS: <span className="text-emerald-400 font-bold">{benchmarkData.renderFps}</span></div>
                         <div>Target FPS: <span className="text-white">{benchmarkData.targetFps}</span></div>
                         <div>Đã Vẽ: <span className="text-white">{benchmarkData.renderedFrames} / {benchmarkData.expectedFrames}</span></div>
+                        <div>Capture Requests: <span className="text-white font-bold">{benchmarkData.captureRequests}</span></div>
                         <div>Bỏ Qua (Skipped): <span className="text-rose-400">{benchmarkData.schedulerSkippedFrames} ({benchmarkData.skipRate}%)</span></div>
+                        <div>Thời gian Vẽ TB/Max: <span className="text-amber-400">{benchmarkData.averageRenderTime}ms / {benchmarkData.maxRenderTime}ms</span></div>
                         <div>Lần Tạm Dừng: <span className="text-amber-400">{benchmarkData.pauseCount} ({benchmarkData.totalPauseDuration}s)</span></div>
                         <div>Lệch Lớn / TB: <span className="text-white">{benchmarkData.maxDrift}s / {benchmarkData.averageDrift}s</span></div>
                         <div>Thay Tốc Độ: <span className="text-white">{benchmarkData.playbackRateChanges} lần</span></div>
                         <div>Thời gian chạy: <span className="text-white">{benchmarkData.elapsed}s</span></div>
                         <div>Còn Lại (ước tính): <span className="text-amber-400 font-bold">{benchmarkData.remaining}s</span></div>
+                        <div className="col-span-2 text-gray-500 border-t border-purple-500/10 pt-1 mt-1">
+                          Encoded/Dropped Frames: Not directly measurable from this pipeline
+                        </div>
                       </div>
                     )}
                   </div>

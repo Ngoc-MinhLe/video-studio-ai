@@ -201,8 +201,30 @@ export const processVideoCanvas = async ({
   const ctx = canvas.getContext('2d');
   const renderer = new Canvas2DRenderer(canvas);
 
-  // 6. MediaRecorder Stream
-  const canvasStream = canvas.captureStream(30);
+  // 6. MediaRecorder Stream với Capability Detection ( manual capture vs automatic fallback )
+  let canvasStream;
+  let canvasTrack = null;
+  let captureMode = 'Automatic';
+
+  try {
+    const tempStream = canvas.captureStream(0);
+    const tempTrack = tempStream.getVideoTracks()[0];
+    if (tempTrack && typeof tempTrack.requestFrame === 'function') {
+      canvasStream = tempStream;
+      canvasTrack = tempTrack;
+      captureMode = 'Manual';
+      console.log('Video Studio AI Renderer: Controlled Capture Mode (Manual) activated.');
+    } else {
+      canvasStream = canvas.captureStream(30);
+      captureMode = 'Fallback (Automatic)';
+      console.log('Video Studio AI Renderer: Fallback Mode (Automatic 30fps) activated (requestFrame not supported).');
+    }
+  } catch (e) {
+    canvasStream = canvas.captureStream(30);
+    captureMode = 'Fallback (Automatic)';
+    console.log('Video Studio AI Renderer: Fallback Mode (Automatic 30fps) activated due to exception:', e);
+  }
+
   const audioTracks = dest.stream.getAudioTracks();
 
   const combinedStream = new MediaStream([
@@ -318,6 +340,9 @@ export const processVideoCanvas = async ({
         }
       }
 
+      // Bắt đầu đo lường thời gian xử lý đồ họa (graphics render workload) của frame
+      const renderStart = performance.now();
+
       // Nếu ở chế độ Image Music Visualizer
       if (mode === 'image_music') {
         let motionScale = 1.0;
@@ -416,18 +441,29 @@ export const processVideoCanvas = async ({
       // 3. Vẽ phụ đề (sử dụng cache Offscreen Canvas bên trong Renderer)
       renderer.drawSubtitles(subtitles, projectTime, subOptions, canvasW, canvasH);
 
+      // Kết thúc đo lường thời gian xử lý đồ họa
+      const renderEnd = performance.now();
+      scheduler.recordRenderTime(renderEnd - renderStart);
+
+      // 4. Controlled Capture Request: Chỉ chụp ảnh đưa vào bộ ghi khi vẽ xong
+      if (captureMode === 'Manual' && canvasTrack) {
+        canvasTrack.requestFrame();
+        scheduler.recordCaptureRequest();
+      }
+
       if (onProgress && totalProjectDuration > 0) {
         const percent = Math.min(99, Math.round((projectTime / totalProjectDuration) * 100));
         onProgress(percent);
       }
 
-      // 4. Phát Benchmark dữ liệu
+      // 5. Phát Benchmark dữ liệu
       if (onBenchmark) {
         const frameCount = scheduler.renderedFrames;
         if (frameCount % 15 === 0) {
           const metrics = scheduler.getMetrics(totalProjectDuration);
           if (metrics) {
             onBenchmark({
+              captureMode,
               resolution: `${canvasW}x${canvasH}`,
               sourceFps: '30',
               targetFps: fps,
@@ -443,6 +479,9 @@ export const processVideoCanvas = async ({
               maxDrift: metrics.maxDrift.toFixed(3),
               averageDrift: metrics.averageDrift.toFixed(3),
               playbackRateChanges: metrics.playbackRateChanges,
+              captureRequests: metrics.captureRequests,
+              averageRenderTime: metrics.averageRenderTime.toFixed(1),
+              maxRenderTime: metrics.maxRenderTime.toFixed(1),
               progress: Math.min(99, Math.round((projectTime / totalProjectDuration) * 100))
             });
           }
