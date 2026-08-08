@@ -1984,6 +1984,15 @@ export default function App() {
                         )}
                       </div>
 
+                      {pocVideoResults.meta.timeline && (
+                        <div className="mt-1.5 border-t border-pink-500/10 pt-1.5 flex flex-col gap-0.5 font-mono text-[9px]">
+                          <div className="font-bold text-pink-400">⏱️ TIMELINE & CHUNK NORMALIZATION:</div>
+                          <div>• Raw First Chunk: PTS = <span className="text-white font-bold">{pocVideoResults.meta.timeline.firstChunkPtsBefore} µs</span> | DTS = <span className="text-white font-bold">{pocVideoResults.meta.timeline.firstChunkDtsBefore} µs</span></div>
+                          <div>• Normalized First: PTS = <span className="text-white font-bold">{pocVideoResults.meta.timeline.firstChunkPtsAfter} µs</span> | DTS = <span className="text-white font-bold">{pocVideoResults.meta.timeline.firstChunkDtsAfter} µs</span></div>
+                          <div>• Total Encoded Chunks: <span className="text-white font-bold">{pocVideoResults.meta.timeline.totalEncodedFrames} chunks</span></div>
+                        </div>
+                      )}
+
                       {pocVideoResults.meta.supportCheck && (
                         <div className="mt-1 border-t border-pink-500/10 pt-1.5 flex flex-col gap-0.5">
                           <div className="font-bold text-pink-400">🔍 BROWSER COMPATIBILITY CHECK:</div>

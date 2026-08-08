@@ -215,7 +215,7 @@ export async function runWebCodecsPoC() {
 
 /**
  * Runs an offline H.264 sequential decoding, rendering, and encoding PoC using a real uploaded MP4 file.
- * Performs deep debug metrics and writes them back to the results metadata.
+ * Decodes the entire video from start to finish.
  * 
  * @param {File} file The real uploaded video file.
  * @returns {Promise<Object>} The benchmark results and output blob URL.
@@ -242,7 +242,8 @@ export async function runWebCodecsVideoFilePoC(file) {
       supportCheck: null,
       debugBox: null,
       spsDebug: null,
-      ppsDebug: null
+      ppsDebug: null,
+      timeline: null
     },
     timings: {
       demux: 0,
@@ -329,7 +330,7 @@ export async function runWebCodecsVideoFilePoC(file) {
                     results.meta.debugBox.avccBoxConstructor = avcC.constructor?.name || typeof avcC;
                     results.meta.hasAvcc = true;
 
-                    // 1. DUMP avcC.SPS[0] diagnostics
+                    // DUMP avcC.SPS[0] diagnostics
                     if (avcC.SPS && avcC.SPS.length > 0) {
                       const sps = avcC.SPS[0];
                       results.meta.spsDebug = {
@@ -344,7 +345,6 @@ export async function runWebCodecsVideoFilePoC(file) {
                         keys: Object.keys(sps),
                         properties: {}
                       };
-                      // Safe properties extraction
                       for (const k of results.meta.spsDebug.keys) {
                         try {
                           const val = sps[k];
@@ -357,7 +357,6 @@ export async function runWebCodecsVideoFilePoC(file) {
                           results.meta.spsDebug.properties[k] = `Error: ${e.message}`;
                         }
                       }
-                      // HEX dump of first 32 bytes
                       try {
                         const targetBytes = sps.nalu || sps;
                         if (targetBytes) {
@@ -370,7 +369,7 @@ export async function runWebCodecsVideoFilePoC(file) {
                       results.meta.spsDebug = { exists: false };
                     }
 
-                    // 2. DUMP avcC.PPS[0] diagnostics
+                    // DUMP avcC.PPS[0] diagnostics
                     if (avcC.PPS && avcC.PPS.length > 0) {
                       const pps = avcC.PPS[0];
                       results.meta.ppsDebug = {
@@ -385,7 +384,6 @@ export async function runWebCodecsVideoFilePoC(file) {
                         keys: Object.keys(pps),
                         properties: {}
                       };
-                      // Safe properties extraction
                       for (const k of results.meta.ppsDebug.keys) {
                         try {
                           const val = pps[k];
@@ -398,7 +396,6 @@ export async function runWebCodecsVideoFilePoC(file) {
                           results.meta.ppsDebug.properties[k] = `Error: ${e.message}`;
                         }
                       }
-                      // HEX dump of first 32 bytes
                       try {
                         const targetBytes = pps.nalu || pps;
                         if (targetBytes) {
@@ -411,7 +408,7 @@ export async function runWebCodecsVideoFilePoC(file) {
                       results.meta.ppsDebug = { exists: false };
                     }
 
-                    // 3. Serialize AVCDecoderConfigurationRecord using mp4box official write()
+                    // Serialize AVCDecoderConfigurationRecord using mp4box official write()
                     try {
                       const stream = new MP4Box.DataStream(undefined, 0, MP4Box.DataStream.BIG_ENDIAN);
                       avcC.write(stream);
@@ -520,6 +517,13 @@ export async function runWebCodecsVideoFilePoC(file) {
     const totalFrames = processedSamples.length;
     results.metrics.framesProcessed = totalFrames;
 
+    // Create a precise presentation timestamp (PTS) mapping to its raw sample parameters
+    const ptsToSampleMap = new Map();
+    for (const sample of processedSamples) {
+      const ptsUs = Math.round((sample.cts / timescale) * 1000000);
+      ptsToSampleMap.set(ptsUs, sample);
+    }
+
     // Check capabilities
     results.browserSupport.videoEncoder = typeof VideoEncoder !== 'undefined';
     results.browserSupport.videoDecoder = typeof VideoDecoder !== 'undefined';
@@ -545,7 +549,7 @@ export async function runWebCodecsVideoFilePoC(file) {
     const trackWidth = results.meta.width;
     const trackHeight = results.meta.height;
 
-    // 2. Setup Muxer & VideoEncoder
+    // 2. Setup Muxer & VideoEncoder with 'offset' timestamp behavior
     const muxStart = performance.now();
     const muxer = new Muxer({
       target: new ArrayBufferTarget(),
@@ -554,12 +558,60 @@ export async function runWebCodecsVideoFilePoC(file) {
         width,
         height
       },
-      fastStart: 'in-memory'
+      fastStart: 'in-memory',
+      firstTimestampBehavior: 'offset'
     });
     
+    let baseDts = null;
+    let encodedCount = 0;
+    let firstChunkLogged = false;
+
     encoderInstance = new VideoEncoder({
       output: (chunk, metadata) => {
-        muxer.addVideoChunk(chunk, metadata);
+        encodedCount++;
+        
+        // Retrieve original raw PTS and DTS matching this chunk's presentation timestamp
+        const sample = ptsToSampleMap.get(chunk.timestamp);
+        let rawPts = chunk.timestamp;
+        let rawDts = chunk.timestamp;
+        let compOffsetUs = 0;
+
+        if (sample) {
+          rawPts = Math.round((sample.cts / timescale) * 1000000);
+          rawDts = Math.round((sample.dts / timescale) * 1000000);
+          compOffsetUs = rawPts - rawDts;
+        }
+
+        if (baseDts === null) {
+          baseDts = rawDts;
+        }
+
+        // Apply timeline normalization relative to baseDts (first decode timestamp)
+        const normDts = rawDts - baseDts;
+        const normPts = normDts + compOffsetUs;
+
+        if (!firstChunkLogged) {
+          firstChunkLogged = true;
+          results.meta.timeline = {
+            firstChunkPtsBefore: rawPts,
+            firstChunkDtsBefore: rawDts,
+            firstChunkPtsAfter: normPts,
+            firstChunkDtsAfter: normDts,
+            totalEncodedFrames: 0
+          };
+          console.log("PoC First Chunk Timeline Logs:", results.meta.timeline);
+        }
+
+        results.meta.timeline.totalEncodedFrames = encodedCount;
+
+        try {
+          // Pass compositionTimeOffset to preserve the correct PTS/DTS relation in mp4-muxer
+          muxer.addVideoChunk(chunk, metadata, normPts, compOffsetUs);
+        } catch (muxErr) {
+          console.error("Muxer chunk insertion failed:", muxErr);
+          pipelineError = `Muxer chunk error: ${muxErr.message || muxErr}`;
+          if (frameWaiter) frameWaiter();
+        }
       },
       error: (err) => {
         console.error("Encoder error in PoC Step 2:", err);
@@ -588,9 +640,7 @@ export async function runWebCodecsVideoFilePoC(file) {
       output: (frame) => {
         decodedFrames.push(frame);
         if (frameWaiter) {
-          const resolve = frameWaiter;
-          frameWaiter = null;
-          resolve();
+          frameWaiter();
         }
       },
       error: (err) => {
@@ -668,10 +718,13 @@ export async function runWebCodecsVideoFilePoC(file) {
       }
       return new Promise((resolve, reject) => {
         frameWaiter = () => {
+          frameWaiter = null;
           if (pipelineError) {
             reject(new Error(pipelineError));
-          } else {
+          } else if (decodedFrames.length > 0) {
             resolve(decodedFrames.shift());
+          } else {
+            reject(new Error("Frame waiter triggered but no decoded frames available."));
           }
         };
       });
@@ -747,10 +800,39 @@ export async function runWebCodecsVideoFilePoC(file) {
       framesProcessed++;
     }
 
-    // 5. Flush and Finalize
+    // 5. Flush and Finalize with asynchronous error racing protection
+    if (pipelineError) {
+      throw new Error(pipelineError);
+    }
+    
     const flushStart = performance.now();
-    await decoderInstance.flush();
-    await encoderInstance.flush();
+    await Promise.race([
+      decoderInstance.flush(),
+      new Promise((_, reject) => {
+        const interval = setInterval(() => {
+          if (pipelineError) {
+            clearInterval(interval);
+            reject(new Error(pipelineError));
+          }
+        }, 10);
+      })
+    ]);
+
+    if (pipelineError) {
+      throw new Error(pipelineError);
+    }
+
+    await Promise.race([
+      encoderInstance.flush(),
+      new Promise((_, reject) => {
+        const interval = setInterval(() => {
+          if (pipelineError) {
+            clearInterval(interval);
+            reject(new Error(pipelineError));
+          }
+        }, 10);
+      })
+    ]);
     results.timings.flush = performance.now() - flushStart;
 
     const muxFinalizeStart = performance.now();
