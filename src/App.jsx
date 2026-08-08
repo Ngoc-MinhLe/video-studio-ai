@@ -1886,6 +1886,17 @@ export default function App() {
                     <div className="text-rose-400 font-bold">Lỗi: {pocVideoResults.error}</div>
                   ) : (
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                      {pocVideoResults.meta && (
+                        <div className="col-span-2 font-bold text-pink-400 border-b border-pink-500/10 pb-1 mb-1 flex flex-col gap-0.5">
+                          <div>🎥 FILE METADATA:</div>
+                          <div className="text-[9px] text-gray-300 font-normal">
+                            - Source Codec: <span className="text-white font-bold">{pocVideoResults.meta.sourceCodec}</span><br />
+                            - Decoder Codec: <span className="text-white font-bold">{pocVideoResults.meta.targetCodec}</span><br />
+                            - Dimension: <span className="text-white font-bold">{pocVideoResults.meta.width}x{pocVideoResults.meta.height}</span><br />
+                            - Extradata avcC: <span className="text-white font-bold">{pocVideoResults.meta.hasAvcc ? `YES (SPS: ${pocVideoResults.meta.spsCount || 0}, PPS: ${pocVideoResults.meta.ppsCount || 0})` : 'NO'}</span>
+                          </div>
+                        </div>
+                      )}
                       <div className="col-span-2 font-bold text-pink-400 border-b border-pink-500/10 pb-0.5 mb-0.5">⏱️ Thời gian xử lý:</div>
                       <div>Đọc/Demux: <span className="text-white">{pocVideoResults.timings.demux.toFixed(1)}ms</span></div>
                       <div>VideoDecoder: <span className="text-white">{pocVideoResults.timings.decode.toFixed(1)}ms</span></div>

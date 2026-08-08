@@ -2,7 +2,7 @@ import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import * as MP4Box from 'mp4box';
 
 /**
- * Helper to extract codec description bytes (extradata) from the raw MP4 stsd box entries.
+ * Helper to extract codec description bytes (extradata) and its parsed box from the raw MP4 stsd box entries.
  * Necessary for VideoDecoder initialization with H.264, HEVC, or VP9 codec.
  */
 function getCodecDescription(mp4boxFile, trackId) {
@@ -53,7 +53,7 @@ function getCodecDescription(mp4boxFile, trackId) {
         data.set(pps.nalu, offset);
         offset += len;
       }
-      return data;
+      return { description: data, box };
     }
 
     // Fallback for HEVC/VP9: try writing the raw parsed config box
@@ -61,7 +61,7 @@ function getCodecDescription(mp4boxFile, trackId) {
     if (configBox && typeof configBox.write === 'function') {
       const stream = new MP4Box.DataStream(undefined, 0, MP4Box.DataStream.BIG_ENDIAN);
       configBox.write(stream);
-      return new Uint8Array(stream.buffer, 8); // Skip 8-byte box size/type header
+      return { description: new Uint8Array(stream.buffer, 8), box };
     }
   } catch (e) {
     console.warn("Failed to extract codec description from stsd box:", e);
@@ -298,6 +298,15 @@ export async function runWebCodecsVideoFilePoC(file) {
       h264DecodeSupported: false,
       aacEncodeSupported: false
     },
+    meta: {
+      sourceCodec: 'unknown',
+      targetCodec: 'unknown',
+      width: 0,
+      height: 0,
+      hasAvcc: false,
+      spsCount: 0,
+      ppsCount: 0
+    },
     timings: {
       demux: 0,
       decode: 0,
@@ -317,6 +326,11 @@ export async function runWebCodecsVideoFilePoC(file) {
   };
 
   const overallStart = performance.now();
+  let pipelineError = null;
+  const decodedFrames = [];
+  let frameWaiter = null;
+  let decoderInstance = null;
+  let encoderInstance = null;
 
   try {
     // 1. Demuxing with mp4box.js
@@ -325,6 +339,7 @@ export async function runWebCodecsVideoFilePoC(file) {
     
     let videoTrack = null;
     let descriptionBytes = null;
+    let targetCodecString = 'unknown';
     const samples = [];
     
     const demuxPromise = new Promise((resolve, reject) => {
@@ -335,7 +350,42 @@ export async function runWebCodecsVideoFilePoC(file) {
           return;
         }
         
-        descriptionBytes = getCodecDescription(mp4boxFile, videoTrack.id);
+        // Extract description and refine codec string to avoid ambiguous name errors
+        const descResult = getCodecDescription(mp4boxFile, videoTrack.id);
+        targetCodecString = videoTrack.codec;
+        
+        if (descResult) {
+          descriptionBytes = descResult.description;
+          const box = descResult.box;
+          
+          results.meta.hasAvcc = !!box.avcC;
+          if (box.avcC) {
+            results.meta.spsCount = box.avcC.SPS?.length || 0;
+            results.meta.ppsCount = box.avcC.PPS?.length || 0;
+            
+            // Build RFC 6381 codec string avc1.PPCCLL (profile, compatibility, level in hex)
+            if (videoTrack.codec.startsWith('avc1')) {
+              const profile = box.avcC.AVCProfileIndication.toString(16).padStart(2, '0');
+              const comp = box.avcC.profile_compatibility.toString(16).padStart(2, '0');
+              const level = box.avcC.AVCLevelIndication.toString(16).padStart(2, '0');
+              targetCodecString = `avc1.${profile}${comp}${level}`;
+            }
+          }
+        }
+        
+        results.meta.sourceCodec = videoTrack.codec;
+        results.meta.targetCodec = targetCodecString;
+        results.meta.width = videoTrack.video.width;
+        results.meta.height = videoTrack.video.height;
+
+        console.log("PoC Metadatas: ", { ...results.meta, descriptionSize: descriptionBytes?.length });
+
+        // Ensure file is H.264/AVC
+        if (!videoTrack.codec.startsWith('avc1') && !videoTrack.codec.startsWith('encv')) {
+          reject(new Error(`PoC only supports H.264 (avc1) files. Found codec: ${videoTrack.codec}`));
+          return;
+        }
+
         mp4boxFile.setExtractionOptions(videoTrack.id, null, { nbSamples: 1000 });
         mp4boxFile.start();
       };
@@ -346,7 +396,6 @@ export async function runWebCodecsVideoFilePoC(file) {
         const timescale = videoTrack.timescale;
         const maxDurationUs = 10 * 1000000; // 10 seconds in microseconds
         
-        // Calculate accumulated duration of samples collected so far
         let totalDurationUs = 0;
         for (const s of samples) {
           totalDurationUs += (s.duration / timescale) * 1000000;
@@ -362,7 +411,6 @@ export async function runWebCodecsVideoFilePoC(file) {
         reject(new Error("MP4Box parsing error: " + err));
       };
       
-      // Read file as ArrayBuffer
       const reader = new FileReader();
       reader.onload = (e) => {
         const arrayBuffer = e.target.result;
@@ -385,7 +433,7 @@ export async function runWebCodecsVideoFilePoC(file) {
       throw new Error("No samples extracted from the video file.");
     }
 
-    // Align to the first keyframe (sync frame) to guarantee VideoDecoder receives a keyframe first
+    // Align to the first keyframe (sync frame)
     const firstKeyframeIndex = samples.findIndex(s => s.is_sync);
     if (firstKeyframeIndex === -1) {
       throw new Error("No sync frame (keyframe) found in the video track. Cannot decode.");
@@ -393,8 +441,6 @@ export async function runWebCodecsVideoFilePoC(file) {
     
     // Slice samples from the first keyframe onwards
     const startingSamples = samples.slice(firstKeyframeIndex);
-
-    // Filter samples to exactly 10 seconds
     const timescale = videoTrack.timescale;
     const targetFps = videoTrack.video.fps || 30;
     const width = 1280;
@@ -414,7 +460,7 @@ export async function runWebCodecsVideoFilePoC(file) {
     const totalFrames = processedSamples.length;
     results.metrics.framesProcessed = totalFrames;
 
-    // Populate capabilities metadata
+    // Check capabilities metadata
     results.browserSupport.videoEncoder = typeof VideoEncoder !== 'undefined';
     results.browserSupport.videoDecoder = typeof VideoDecoder !== 'undefined';
     results.browserSupport.audioEncoder = typeof AudioEncoder !== 'undefined';
@@ -430,23 +476,6 @@ export async function runWebCodecsVideoFilePoC(file) {
       });
       results.browserSupport.h264EncodeSupported = support.supported;
     }
-    if (results.browserSupport.videoDecoder) {
-      const support = await VideoDecoder.isConfigSupported({
-        codec: videoTrack.codec,
-        width: videoTrack.video.width,
-        height: videoTrack.video.height
-      });
-      results.browserSupport.h264DecodeSupported = support.supported;
-    }
-    if (results.browserSupport.audioEncoder) {
-      const support = await AudioEncoder.isConfigSupported({
-        codec: 'mp4a.40.2',
-        numberOfChannels: 2,
-        sampleRate: 44100,
-        bitrate: 128000
-      });
-      results.browserSupport.aacEncodeSupported = support.supported;
-    }
 
     // 2. Setup Muxer & VideoEncoder
     const muxStart = performance.now();
@@ -460,11 +489,15 @@ export async function runWebCodecsVideoFilePoC(file) {
       fastStart: 'in-memory'
     });
     
-    const encoder = new VideoEncoder({
+    encoderInstance = new VideoEncoder({
       output: (chunk, metadata) => {
         muxer.addVideoChunk(chunk, metadata);
       },
-      error: (err) => console.error("Encoder error in PoC Step 2:", err)
+      error: (err) => {
+        console.error("Encoder error in PoC Step 2:", err);
+        pipelineError = `Encoder error: ${err.message || err}`;
+        if (frameWaiter) frameWaiter();
+      }
     });
 
     const videoConfig = {
@@ -476,17 +509,14 @@ export async function runWebCodecsVideoFilePoC(file) {
       hardwareAcceleration: 'prefer-hardware'
     };
     try {
-      encoder.configure(videoConfig);
+      encoderInstance.configure(videoConfig);
     } catch (err) {
       throw new Error(`VideoEncoder configuration failed (H.264 Profile): ${err.message}`);
     }
     results.timings.mux += performance.now() - muxStart;
 
-    // 3. Setup VideoDecoder with B-frame queue coordination (prevents deadlocks on B-frame reordering)
-    const decodedFrames = [];
-    let frameWaiter = null;
-
-    const decoder = new VideoDecoder({
+    // 3. Setup VideoDecoder with B-frame queue coordination
+    decoderInstance = new VideoDecoder({
       output: (frame) => {
         decodedFrames.push(frame);
         if (frameWaiter) {
@@ -495,21 +525,33 @@ export async function runWebCodecsVideoFilePoC(file) {
           resolve();
         }
       },
-      error: (err) => console.error("Decoder error in PoC Step 2:", err)
+      error: (err) => {
+        console.error("Decoder error in PoC Step 2:", err);
+        pipelineError = `Decoder error: ${err.message || err}`;
+        if (frameWaiter) frameWaiter();
+      }
     });
 
     const decoderConfig = {
-      codec: videoTrack.codec,
+      codec: targetCodecString,
       codedWidth: videoTrack.video.width,
       codedHeight: videoTrack.video.height
     };
     if (descriptionBytes) {
       decoderConfig.description = descriptionBytes;
     }
+
+    // Verify decoder config before configure()
+    const decSupport = await VideoDecoder.isConfigSupported(decoderConfig);
+    if (!decSupport.supported) {
+      throw new Error(`VideoDecoder does not support this codec configuration: "${targetCodecString}" (${videoTrack.video.width}x${videoTrack.video.height})`);
+    }
+    results.browserSupport.h264DecodeSupported = true;
+
     try {
-      decoder.configure(decoderConfig);
+      decoderInstance.configure(decoderConfig);
     } catch (err) {
-      throw new Error(`VideoDecoder configuration failed (Codec: ${videoTrack.codec}): ${err.message}. Your browser might not support decoding this video file format.`);
+      throw new Error(`VideoDecoder configuration failed (Codec: ${targetCodecString}): ${err.message}`);
     }
 
     // Canvas setup
@@ -525,19 +567,29 @@ export async function runWebCodecsVideoFilePoC(file) {
     let framesProcessed = 0;
     let chunksFed = 0;
 
-    // Helper to pull decoded frames from the queue (blocks asynchronously if queue is empty)
+    // Helper to pull decoded frames from the queue (rejects if pipelineError happens)
     const getNextFrame = () => {
+      if (pipelineError) {
+        return Promise.reject(new Error(pipelineError));
+      }
       if (decodedFrames.length > 0) {
         return Promise.resolve(decodedFrames.shift());
       }
-      return new Promise((resolve) => {
-        frameWaiter = () => resolve(decodedFrames.shift());
+      return new Promise((resolve, reject) => {
+        frameWaiter = () => {
+          if (pipelineError) {
+            reject(new Error(pipelineError));
+          } else {
+            resolve(decodedFrames.shift());
+          }
+        };
       });
     };
 
     // Helper to feed chunks ahead to maintain a 15-frame pipeline depth (prevents B-frame deadlock)
     const feedDecoder = () => {
       while (chunksFed < totalFrames && (chunksFed - framesProcessed) < 15) {
+        if (pipelineError) break;
         const sample = processedSamples[chunksFed];
         const sampleTimeUs = (sample.cts / timescale) * 1000000;
         const sampleDurationUs = (sample.duration / timescale) * 1000000;
@@ -548,13 +600,22 @@ export async function runWebCodecsVideoFilePoC(file) {
           duration: sampleDurationUs,
           data: sample.data
         });
-        decoder.decode(chunk);
+        decoderInstance.decode(chunk);
         chunksFed++;
       }
     };
 
     // 4. Sequential Decode -> Render -> Encode Loop
     for (let i = 0; i < totalFrames; i++) {
+      // Timeout Safety check (Abort if processing exceeds 10 seconds total)
+      if (performance.now() - overallStart > 10000) {
+        throw new Error("Timeout: WebCodecs processing took longer than 10 seconds. Aborted to prevent browser freeze.");
+      }
+
+      if (pipelineError) {
+        throw new Error(pipelineError);
+      }
+
       // Feed samples to decoder ahead
       feedDecoder();
 
@@ -565,7 +626,7 @@ export async function runWebCodecsVideoFilePoC(file) {
 
       const sampleTimeUs = decodedFrame.timestamp;
 
-      // Render Frame (Draw video source, visualizer bar, text subtitle)
+      // Render Frame
       const frameRenderStart = performance.now();
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(0, 0, width, height);
@@ -574,7 +635,7 @@ export async function runWebCodecsVideoFilePoC(file) {
       ctx.drawImage(decodedFrame, 0, 0, width, height);
       decodedFrame.close(); // Release GPU memory immediately!
 
-      // Draw visualizer bars on top (sine wave offset)
+      // Draw visualizer bars on top
       ctx.fillStyle = '#ec4899';
       const animTime = sampleTimeUs / 1000000;
       for (let b = 0; b < 16; b++) {
@@ -596,7 +657,7 @@ export async function runWebCodecsVideoFilePoC(file) {
       // Encode Frame
       const frameEncodeStart = performance.now();
       const outputFrame = new VideoFrame(canvas, { timestamp: sampleTimeUs });
-      encoder.encode(outputFrame, { keyFrame: i % 30 === 0 });
+      encoderInstance.encode(outputFrame, { keyFrame: i % 30 === 0 });
       outputFrame.close();
       encodeTime += performance.now() - frameEncodeStart;
 
@@ -605,8 +666,8 @@ export async function runWebCodecsVideoFilePoC(file) {
 
     // 5. Flush and Finalize
     const flushStart = performance.now();
-    await decoder.flush();
-    await encoder.flush();
+    await decoderInstance.flush();
+    await encoderInstance.flush();
     results.timings.flush = performance.now() - flushStart;
 
     const muxFinalizeStart = performance.now();
@@ -630,6 +691,25 @@ export async function runWebCodecsVideoFilePoC(file) {
 
   } catch (err) {
     results.error = err.message || String(err);
+  } finally {
+    // 6. Mandatory cleanup: Release decoders/encoders and pending frames on any exit/error
+    if (decoderInstance) {
+      try {
+        decoderInstance.close();
+      } catch (e) {}
+    }
+    if (encoderInstance) {
+      try {
+        encoderInstance.close();
+      } catch (e) {}
+    }
+    // Clean queue
+    for (const f of decodedFrames) {
+      try {
+        f.close();
+      } catch (e) {}
+    }
+    decodedFrames.length = 0;
   }
 
   return results;
