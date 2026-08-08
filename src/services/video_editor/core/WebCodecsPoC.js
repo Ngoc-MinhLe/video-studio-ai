@@ -295,7 +295,7 @@ export async function runWebCodecsVideoFilePoC(file) {
         }
         
         descriptionBytes = getCodecDescription(mp4boxFile, videoTrack.id);
-        mp4boxFile.setExtraction(videoTrack.id);
+        mp4boxFile.setExtractionOptions(videoTrack.id, null, { nbSamples: 1000 });
         mp4boxFile.start();
       };
       
