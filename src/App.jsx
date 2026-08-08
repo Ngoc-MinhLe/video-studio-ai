@@ -1887,20 +1887,52 @@ export default function App() {
                       <div className="font-bold text-pink-400">🎥 MP4 HEADER METADATA:</div>
                       <div>• Source Codec: <span className="text-white font-bold">{pocVideoResults.meta.sourceCodec}</span></div>
                       <div>• Size: <span className="text-white font-bold">{pocVideoResults.meta.width}x{pocVideoResults.meta.height}</span></div>
-                      <div>• Extradata (avcC): <span className="text-white font-bold">{pocVideoResults.meta.hasAvcc ? `YES (SPS: ${pocVideoResults.meta.spsCount}, PPS: ${pocVideoResults.meta.ppsCount})` : 'NO'}</span></div>
-                      {pocVideoResults.meta.avccHeaderHex && (
-                        <div className="text-[8px] bg-black/40 p-1.5 rounded border border-pink-500/10 whitespace-pre-wrap break-all font-mono leading-tight">
-                          HEX: {pocVideoResults.meta.avccHeaderHex}
+                      <div>• Extradata (avcC): <span className="text-white font-bold">{pocVideoResults.meta.hasAvcc ? "FOUND" : "NOT FOUND"}</span></div>
+                      
+                      {pocVideoResults.meta.avccData && (
+                        <div className="bg-black/30 p-2 rounded border border-pink-500/10 text-[9px] flex flex-col gap-0.5">
+                          <div className="font-bold text-pink-300 border-b border-pink-500/10 pb-0.5 mb-1">🛠️ avcC Record Properties:</div>
+                          <div>- configVersion: <span className="text-white font-bold">{pocVideoResults.meta.avccData.configurationVersion}</span></div>
+                          <div>- profileIndication: <span className="text-white font-bold">{pocVideoResults.meta.avccData.AVCProfileIndication} (0x{pocVideoResults.meta.avccData.AVCProfileIndication.toString(16).toUpperCase()})</span></div>
+                          <div>- profile_compatibility: <span className="text-white font-bold">{pocVideoResults.meta.avccData.profile_compatibility} (0x{pocVideoResults.meta.avccData.profile_compatibility.toString(16).toUpperCase()})</span></div>
+                          <div>- levelIndication: <span className="text-white font-bold">{pocVideoResults.meta.avccData.AVCLevelIndication} (0x{pocVideoResults.meta.avccData.AVCLevelIndication.toString(16).toUpperCase()})</span></div>
+                          <div>- lengthSizeMinusOne: <span className="text-white font-bold">{pocVideoResults.meta.avccData.lengthSizeMinusOne}</span></div>
+                          <div>- SPS Count: <span className="text-white font-bold">{pocVideoResults.meta.avccData.spsCount}</span> (Lengths: {JSON.stringify(pocVideoResults.meta.avccData.spsLengths)})</div>
+                          <div>- PPS Count: <span className="text-white font-bold">{pocVideoResults.meta.avccData.ppsCount}</span> (Lengths: {JSON.stringify(pocVideoResults.meta.avccData.ppsLengths)})</div>
+                          {pocVideoResults.meta.avccData.avccFullHex && (
+                            <div className="mt-1 text-[8px] text-pink-400 break-all leading-normal border-t border-pink-500/5 pt-1">
+                              HEX DUMP: {pocVideoResults.meta.avccData.avccFullHex}
+                            </div>
+                          )}
                         </div>
                       )}
+
+                      <div className="mt-1 border-t border-pink-500/10 pt-1.5 flex flex-col gap-0.5">
+                        <div className="font-bold text-pink-400">📦 DECODER CONFIGURATION (INPUT):</div>
+                        <div>• description.byteLength: <span className="text-white font-bold">{pocVideoResults.meta.descriptionByteLength} bytes</span></div>
+                        {pocVideoResults.meta.descriptionHex && (
+                          <div className="text-[8px] bg-black/40 p-1.5 rounded border border-pink-500/10 break-all font-mono leading-tight">
+                            {pocVideoResults.meta.descriptionHex}
+                          </div>
+                        )}
+                      </div>
+
                       {pocVideoResults.meta.supportCheck && (
                         <div className="mt-1 border-t border-pink-500/10 pt-1.5 flex flex-col gap-0.5">
-                          <div className="font-bold text-pink-400">🔍 BROWSER COMPATIBILITY CHECKS:</div>
-                          <div>• Original Codec ({pocVideoResults.meta.supportCheck.originalCodec}): <span className={pocVideoResults.meta.supportCheck.originalSupported ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocVideoResults.meta.supportCheck.originalSupported ? "SUPPORTED" : "UNSUPPORTED"}</span></div>
-                          {pocVideoResults.meta.supportCheck.fallbackTried && (
-                            <div>• Fallback Codec ({pocVideoResults.meta.supportCheck.fallbackCodec}): <span className={pocVideoResults.meta.supportCheck.fallbackSupported ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocVideoResults.meta.supportCheck.fallbackSupported ? "SUPPORTED" : "UNSUPPORTED"}</span></div>
+                          <div className="font-bold text-pink-400">🔍 BROWSER COMPATIBILITY CHECK:</div>
+                          <div>• Supported: <span className={pocVideoResults.meta.supportCheck.supported ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocVideoResults.meta.supportCheck.supported ? "TRUE" : "FALSE"}</span></div>
+                          {pocVideoResults.meta.supportCheck.error && (
+                            <div className="text-rose-400 font-bold">• Check Error: {pocVideoResults.meta.supportCheck.error}</div>
                           )}
-                          <div>• Final Config Accepted: <span className="text-white font-bold">{pocVideoResults.meta.supportCheck.finalCodecUsed}</span></div>
+                          {pocVideoResults.meta.supportCheck.configReturned && (
+                            <div className="text-[9px] bg-emerald-950/20 p-1.5 rounded border border-emerald-500/10 mt-0.5 leading-normal">
+                              <span className="font-bold text-emerald-400">Chosen Browser config:</span><br />
+                              - Codec: {pocVideoResults.meta.supportCheck.configReturned.codec}<br />
+                              - Dimension: {pocVideoResults.meta.supportCheck.configReturned.codedWidth}x{pocVideoResults.meta.supportCheck.configReturned.codedHeight}<br />
+                              - Display: {pocVideoResults.meta.supportCheck.configReturned.displayWidth}x{pocVideoResults.meta.supportCheck.configReturned.displayHeight}<br />
+                              - Hardware: {pocVideoResults.meta.supportCheck.configReturned.hardwareAcceleration}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

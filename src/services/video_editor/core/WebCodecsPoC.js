@@ -283,7 +283,7 @@ export async function runWebCodecsPoC() {
 
 /**
  * Runs an offline H.264 sequential decoding, rendering, and encoding PoC using a real uploaded MP4 file.
- * Decodes exactly the first 10 seconds of the video, overlays visualizer/subtitles, and muxes it back to MP4.
+ * Performs deep debug metrics and writes them back to the results metadata.
  * 
  * @param {File} file The real uploaded video file.
  * @returns {Promise<Object>} The benchmark results and output blob URL.
@@ -304,8 +304,10 @@ export async function runWebCodecsVideoFilePoC(file) {
       width: 0,
       height: 0,
       hasAvcc: false,
-      spsCount: 0,
-      ppsCount: 0
+      avccData: null,
+      descriptionByteLength: 0,
+      descriptionHex: '',
+      supportCheck: null
     },
     timings: {
       demux: 0,
@@ -350,7 +352,7 @@ export async function runWebCodecsVideoFilePoC(file) {
           return;
         }
         
-        // Extract description and refine codec string to avoid ambiguous name errors
+        // Extract description and profile level parameters
         const descResult = getCodecDescription(mp4boxFile, videoTrack.id);
         targetCodecString = videoTrack.codec;
         
@@ -359,15 +361,30 @@ export async function runWebCodecsVideoFilePoC(file) {
           const box = descResult.box;
           
           results.meta.hasAvcc = !!box.avcC;
+          
           if (box.avcC) {
-            results.meta.spsCount = box.avcC.SPS?.length || 0;
-            results.meta.ppsCount = box.avcC.PPS?.length || 0;
+            const avcC = box.avcC;
+            const spsList = avcC.SPS || [];
+            const ppsList = avcC.PPS || [];
             
-            // Build RFC 6381 codec string avc1.PPCCLL (profile, compatibility, level in hex)
+            results.meta.avccData = {
+              configurationVersion: avcC.configurationVersion || 1,
+              AVCProfileIndication: avcC.AVCProfileIndication,
+              profile_compatibility: avcC.profile_compatibility,
+              AVCLevelIndication: avcC.AVCLevelIndication,
+              lengthSizeMinusOne: avcC.lengthSizeMinusOne ?? 3,
+              spsCount: spsList.length,
+              ppsCount: ppsList.length,
+              spsLengths: spsList.map(s => s.length),
+              ppsLengths: ppsList.map(p => p.length),
+              avccFullHex: Array.from(descriptionBytes).map(b => b.toString(16).padStart(2, '0')).join(' ').toUpperCase()
+            };
+
+            // STRICT RFC 6381 compilation (no auto fallback)
             if (videoTrack.codec.startsWith('avc1')) {
-              const profile = box.avcC.AVCProfileIndication.toString(16).padStart(2, '0');
-              const comp = box.avcC.profile_compatibility.toString(16).padStart(2, '0');
-              const level = box.avcC.AVCLevelIndication.toString(16).padStart(2, '0');
+              const profile = avcC.AVCProfileIndication.toString(16).padStart(2, '0');
+              const comp = avcC.profile_compatibility.toString(16).padStart(2, '0');
+              const level = avcC.AVCLevelIndication.toString(16).padStart(2, '0');
               targetCodecString = `avc1.${profile}${comp}${level}`;
             }
           }
@@ -377,10 +394,16 @@ export async function runWebCodecsVideoFilePoC(file) {
         results.meta.targetCodec = targetCodecString;
         results.meta.width = videoTrack.video.width;
         results.meta.height = videoTrack.video.height;
+        results.meta.descriptionByteLength = descriptionBytes ? descriptionBytes.byteLength : 0;
+        
+        if (descriptionBytes) {
+          const firstBytesHex = Array.from(descriptionBytes.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' ').toUpperCase();
+          const lastBytesHex = Array.from(descriptionBytes.slice(-8)).map(b => b.toString(16).padStart(2, '0')).join(' ').toUpperCase();
+          results.meta.descriptionHex = `Start: [${firstBytesHex}] ... End: [${lastBytesHex}]`;
+        }
 
-        console.log("PoC Metadatas: ", { ...results.meta, descriptionSize: descriptionBytes?.length });
+        console.log("Strict PoC Metadatas: ", { ...results.meta });
 
-        // Ensure file is H.264/AVC
         if (!videoTrack.codec.startsWith('avc1') && !videoTrack.codec.startsWith('encv')) {
           reject(new Error(`PoC only supports H.264 (avc1) files. Found codec: ${videoTrack.codec}`));
           return;
@@ -394,7 +417,7 @@ export async function runWebCodecsVideoFilePoC(file) {
         samples.push(...extractedSamples);
         
         const timescale = videoTrack.timescale;
-        const maxDurationUs = 10 * 1000000; // 10 seconds in microseconds
+        const maxDurationUs = 10 * 1000000;
         
         let totalDurationUs = 0;
         for (const s of samples) {
@@ -433,13 +456,12 @@ export async function runWebCodecsVideoFilePoC(file) {
       throw new Error("No samples extracted from the video file.");
     }
 
-    // Align to the first keyframe (sync frame)
+    // Align to the first keyframe
     const firstKeyframeIndex = samples.findIndex(s => s.is_sync);
     if (firstKeyframeIndex === -1) {
       throw new Error("No sync frame (keyframe) found in the video track. Cannot decode.");
     }
     
-    // Slice samples from the first keyframe onwards
     const startingSamples = samples.slice(firstKeyframeIndex);
     const timescale = videoTrack.timescale;
     const targetFps = videoTrack.video.fps || 30;
@@ -460,7 +482,7 @@ export async function runWebCodecsVideoFilePoC(file) {
     const totalFrames = processedSamples.length;
     results.metrics.framesProcessed = totalFrames;
 
-    // Check capabilities metadata
+    // Check capabilities
     results.browserSupport.videoEncoder = typeof VideoEncoder !== 'undefined';
     results.browserSupport.videoDecoder = typeof VideoDecoder !== 'undefined';
     results.browserSupport.audioEncoder = typeof AudioEncoder !== 'undefined';
@@ -504,7 +526,7 @@ export async function runWebCodecsVideoFilePoC(file) {
       codec: 'avc1.4d001f',
       width,
       height,
-      bitrate: 3000000, // 3 Mbps
+      bitrate: 3000000,
       framerate: targetFps,
       hardwareAcceleration: 'prefer-hardware'
     };
@@ -535,60 +557,41 @@ export async function runWebCodecsVideoFilePoC(file) {
     const decoderConfig = {
       codec: targetCodecString,
       codedWidth: videoTrack.video.width,
-      codedHeight: videoTrack.video.height
+      codedHeight: videoTrack.video.height,
+      displayWidth: videoTrack.video.width,
+      displayHeight: videoTrack.video.height,
+      hardwareAcceleration: 'prefer-hardware'
     };
     if (descriptionBytes) {
       decoderConfig.description = descriptionBytes;
     }
 
-    // Verify decoder config before configure() using fallback options if needed
-    console.log("Checking VideoDecoder configuration support for codec:", targetCodecString);
-    let decSupport = await VideoDecoder.isConfigSupported(decoderConfig);
-    
-    results.meta.supportCheck = {
-      originalCodec: targetCodecString,
-      originalSupported: decSupport.supported,
-      fallbackTried: false,
-      fallbackCodec: '',
-      fallbackSupported: false,
-      finalCodecUsed: targetCodecString,
-      configObj: {
-        codec: decoderConfig.codec,
-        codedWidth: decoderConfig.codedWidth,
-        codedHeight: decoderConfig.codedHeight,
-        descriptionLength: descriptionBytes ? descriptionBytes.byteLength : 0
-      }
-    };
-
-    if (!decSupport.supported && targetCodecString.startsWith('avc1')) {
-      // Try resolving constraint flags profile compatibility issues: replace CC with '00'
-      const parts = targetCodecString.split('.');
-      if (parts.length === 2 && parts[1].length === 6) {
-        const profile = parts[1].slice(0, 2);
-        const level = parts[1].slice(4, 6);
-        const fallbackCodec = `avc1.${profile}00${level}`;
-        
-        results.meta.supportCheck.fallbackTried = true;
-        results.meta.supportCheck.fallbackCodec = fallbackCodec;
-        
-        console.log("Original codec rejected by browser. Retrying fallback config with:", fallbackCodec);
-        const fallbackConfig = { ...decoderConfig, codec: fallbackCodec };
-        const fallbackSupport = await VideoDecoder.isConfigSupported(fallbackConfig);
-        
-        results.meta.supportCheck.fallbackSupported = fallbackSupport.supported;
-        
-        if (fallbackSupport.supported) {
-          console.log("Fallback codec configuration is supported. Using:", fallbackCodec);
-          decoderConfig.codec = fallbackCodec;
-          targetCodecString = fallbackCodec;
-          results.meta.supportCheck.finalCodecUsed = fallbackCodec;
-          decSupport = fallbackSupport;
-        }
-      }
+    // STRICT browser configuration support checking
+    console.log("Checking support for STRICT configuration:", decoderConfig);
+    let decSupport = null;
+    try {
+      decSupport = await VideoDecoder.isConfigSupported(decoderConfig);
+      results.meta.supportCheck = {
+        supported: decSupport.supported,
+        codec: decSupport.config?.codec || decoderConfig.codec,
+        configReturned: decSupport.config ? {
+          codec: decSupport.config.codec,
+          codedWidth: decSupport.config.codedWidth,
+          codedHeight: decSupport.config.codedHeight,
+          displayWidth: decSupport.config.displayWidth,
+          displayHeight: decSupport.config.displayHeight,
+          hardwareAcceleration: decSupport.config.hardwareAcceleration
+        } : null
+      };
+    } catch (err) {
+      results.meta.supportCheck = {
+        supported: false,
+        error: err.message || String(err)
+      };
     }
 
-    if (!decSupport.supported) {
-      throw new Error(`VideoDecoder does not support this codec configuration: "${targetCodecString}" (${videoTrack.video.width}x${videoTrack.video.height}). isConfigSupported returned unsupported.`);
+    if (!decSupport || !decSupport.supported) {
+      throw new Error(`VideoDecoder STRICT configuration check failed for "${targetCodecString}" (${videoTrack.video.width}x${videoTrack.video.height}). browser isConfigSupported returned false.`);
     }
     
     results.browserSupport.h264DecodeSupported = true;
@@ -598,7 +601,7 @@ export async function runWebCodecsVideoFilePoC(file) {
     } catch (err) {
       throw new Error(`VideoDecoder configure() threw error for "${targetCodecString}": ${err.message}`);
     }
-    
+
     // Canvas setup
     const canvas = document.createElement('canvas');
     canvas.width = width;
@@ -612,7 +615,6 @@ export async function runWebCodecsVideoFilePoC(file) {
     let framesProcessed = 0;
     let chunksFed = 0;
 
-    // Helper to pull decoded frames from the queue (rejects if pipelineError happens)
     const getNextFrame = () => {
       if (pipelineError) {
         return Promise.reject(new Error(pipelineError));
@@ -631,7 +633,6 @@ export async function runWebCodecsVideoFilePoC(file) {
       });
     };
 
-    // Helper to feed chunks ahead to maintain a 15-frame pipeline depth (prevents B-frame deadlock)
     const feedDecoder = () => {
       while (chunksFed < totalFrames && (chunksFed - framesProcessed) < 15) {
         if (pipelineError) break;
@@ -652,35 +653,30 @@ export async function runWebCodecsVideoFilePoC(file) {
 
     // 4. Sequential Decode -> Render -> Encode Loop
     for (let i = 0; i < totalFrames; i++) {
-      // Timeout Safety check (Abort if processing exceeds 10 seconds total)
+      // Timeout safety guard
       if (performance.now() - overallStart > 10000) {
-        throw new Error("Timeout: WebCodecs processing took longer than 10 seconds. Aborted to prevent browser freeze.");
+        throw new Error("Timeout: WebCodecs processing exceeded 10 seconds total limit.");
       }
 
       if (pipelineError) {
         throw new Error(pipelineError);
       }
 
-      // Feed samples to decoder ahead
       feedDecoder();
 
-      // Retrieve the next decoded frame
       const frameDecodeStart = performance.now();
       const decodedFrame = await getNextFrame();
       decodeTime += performance.now() - frameDecodeStart;
 
       const sampleTimeUs = decodedFrame.timestamp;
 
-      // Render Frame
       const frameRenderStart = performance.now();
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(0, 0, width, height);
 
-      // Draw decoded video frame
       ctx.drawImage(decodedFrame, 0, 0, width, height);
-      decodedFrame.close(); // Release GPU memory immediately!
+      decodedFrame.close();
 
-      // Draw visualizer bars on top
       ctx.fillStyle = '#ec4899';
       const animTime = sampleTimeUs / 1000000;
       for (let b = 0; b < 16; b++) {
@@ -688,7 +684,6 @@ export async function runWebCodecsVideoFilePoC(file) {
         ctx.fillRect(240 + b * 50, 640 - barHeight, 40, barHeight);
       }
 
-      // Title & Subtitle overlay texts
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 24px sans-serif';
       ctx.textAlign = 'center';
@@ -699,7 +694,6 @@ export async function runWebCodecsVideoFilePoC(file) {
 
       renderTime += performance.now() - frameRenderStart;
 
-      // Encode Frame
       const frameEncodeStart = performance.now();
       const outputFrame = new VideoFrame(canvas, { timestamp: sampleTimeUs });
       encoderInstance.encode(outputFrame, { keyFrame: i % 30 === 0 });
@@ -737,22 +731,14 @@ export async function runWebCodecsVideoFilePoC(file) {
   } catch (err) {
     results.error = err.message || String(err);
   } finally {
-    // 6. Mandatory cleanup: Release decoders/encoders and pending frames on any exit/error
     if (decoderInstance) {
-      try {
-        decoderInstance.close();
-      } catch (e) {}
+      try { decoderInstance.close(); } catch (e) {}
     }
     if (encoderInstance) {
-      try {
-        encoderInstance.close();
-      } catch (e) {}
+      try { encoderInstance.close(); } catch (e) {}
     }
-    // Clean queue
     for (const f of decodedFrames) {
-      try {
-        f.close();
-      } catch (e) {}
+      try { f.close(); } catch (e) {}
     }
     decodedFrames.length = 0;
   }
