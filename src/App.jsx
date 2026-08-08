@@ -146,6 +146,7 @@ export default function App() {
   const [pocVideoRunning, setPocVideoRunning] = useState(false);
   const [pocVideoResults, setPocVideoResults] = useState(null);
   const [pocVideoProgress, setPocVideoProgress] = useState(null);
+  const [testFrameLimit, setTestFrameLimit] = useState(25);
 
   // Lắng nghe Firebase Auth & Firestore User Data realtime
   useEffect(() => {
@@ -623,12 +624,16 @@ export default function App() {
     setPocVideoResults(null);
     setPocVideoProgress(null);
     try {
-      const res = await runWebCodecsVideoFilePoC(videoFile, (prog) => {
+      const res = await runWebCodecsVideoFilePoC(videoFile, testFrameLimit, (prog) => {
         setPocVideoProgress(prog);
       });
       setPocVideoResults(res);
     } catch (e) {
-      setPocVideoResults({ error: e.message || String(e) });
+      console.error("Stack trace for error:", e);
+      setPocVideoResults({ 
+        error: e.message || String(e),
+        stackTrace: e.stack || "No stack trace available"
+      });
     } finally {
       setPocVideoRunning(false);
     }
@@ -1861,6 +1866,23 @@ export default function App() {
               </button>
 
               {videoFile && (
+                <div className="flex flex-col gap-1 w-full bg-pink-950/10 p-2 rounded-xl border border-pink-500/20 mb-2">
+                  <label className="text-pink-300 font-bold text-[9px] uppercase">🎯 Chọn mức thử nghiệm:</label>
+                  <select 
+                    value={testFrameLimit} 
+                    onChange={(e) => setTestFrameLimit(Number(e.target.value))}
+                    disabled={isProcessing || pocVideoRunning}
+                    className="w-full bg-black/40 border border-pink-500/30 text-white font-bold p-2 rounded text-[10px] outline-none cursor-pointer focus:border-pink-500"
+                  >
+                    <option value={5}>Mức 0: 5 frames (Diagnostic)</option>
+                    <option value={25}>Mức 1: 25 frames (~1 giây)</option>
+                    <option value={250}>Mức 2: 250 frames (~10 giây)</option>
+                    <option value={999999}>Mức 3: Toàn bộ video (~30 giây)</option>
+                  </select>
+                </div>
+              )}
+
+              {videoFile && (
                 <button
                   onClick={runWebCodecsVideoFileTest}
                   disabled={isProcessing || pocVideoRunning}
@@ -1871,7 +1893,7 @@ export default function App() {
                   ) : (
                     <Video className="w-4 h-4 text-pink-400" />
                   )}
-                  <span>🧪 WebCodecs PoC — Test video thật (Toàn bộ)</span>
+                  <span>🧪 WebCodecs PoC — Chạy thử nghiệm video</span>
                 </button>
               )}
 
@@ -1917,6 +1939,10 @@ export default function App() {
                       <div>• Source Codec: <span className="text-white font-bold">{pocVideoResults.meta.sourceCodec}</span></div>
                       <div>• Size: <span className="text-white font-bold">{pocVideoResults.meta.width}x{pocVideoResults.meta.height}</span></div>
                       <div>• Extradata (avcC): <span className="text-white font-bold">{pocVideoResults.meta.hasAvcc ? "FOUND" : "NOT FOUND"}</span></div>
+                      <div>• Input Duration: <span className="text-white font-bold">{pocVideoResults.meta.inputDuration?.toFixed(3)} seconds</span></div>
+                      <div>• Input FPS: <span className="text-white font-bold">{pocVideoResults.meta.inputFps?.toFixed(2)} FPS</span></div>
+                      <div>• Total File Samples: <span className="text-white font-bold">{pocVideoResults.meta.totalSamplesInFile} samples</span></div>
+                      <div>• Selected Test Limit: <span className="text-white font-bold">{pocVideoResults.meta.testLimitFramesCount} frames</span></div>
                       
                       {pocVideoResults.meta.debugBox && (
                         <div className="bg-black/40 p-2 rounded border border-pink-500/20 text-[9px] flex flex-col gap-0.5 mt-1 font-mono">
@@ -2178,6 +2204,17 @@ export default function App() {
                           )}
                         </div>
                       )}
+                      {/* TIMING STATISTICS */}
+                      <div className="font-bold text-pink-400 mt-2 border-t border-pink-500/10 pt-2 font-mono">⏱️ THỜI GIAN CHẠY & HIỆU NĂNG:</div>
+                      <div className="font-mono">• Demux Time: <span className="text-white font-bold">{pocVideoResults.timings.demux.toFixed(1)}ms</span></div>
+                      <div className="font-mono">• Decode Time: <span className="text-white font-bold">{pocVideoResults.timings.decode.toFixed(1)}ms</span></div>
+                      <div className="font-mono">• Render Time: <span className="text-white font-bold">{pocVideoResults.timings.render.toFixed(1)}ms</span></div>
+                      <div className="font-mono">• Encode Time: <span className="text-white font-bold">{pocVideoResults.timings.encode.toFixed(1)}ms</span></div>
+                      <div className="font-mono">• Mux Time: <span className="text-white font-bold">{pocVideoResults.timings.mux.toFixed(1)}ms</span></div>
+                      <div className="font-mono">• Total Time: <span className="text-white font-bold">{pocVideoResults.timings.total.toFixed(1)}ms</span></div>
+                      <div className="font-mono text-emerald-400 font-bold bg-emerald-950/20 p-1 rounded border border-emerald-500/10 text-center mt-1">
+                        Tốc độ xử lý: {pocVideoResults.metrics.realtimeSpeedFactor.toFixed(2)}× realtime
+                      </div>
 
                       {pocVideoResults.metrics.success && (
                         <div className="mt-2 text-center text-emerald-400 font-bold bg-emerald-950/30 p-2 rounded border border-emerald-500/20 text-[10px] font-mono flex flex-col gap-1">
@@ -2185,10 +2222,10 @@ export default function App() {
                           {pocVideoResults.videoUrl && (
                             <a 
                               href={pocVideoResults.videoUrl} 
-                              download="webcodecs_5frame_test.mp4" 
+                              download={`webcodecs_test_${pocVideoResults.meta.testLimitFramesCount}frames.mp4`}
                               className="mt-1 block py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded text-[8px] cursor-pointer text-center"
                             >
-                              📥 Tải xuống File Test 5 Frame
+                              📥 Tải xuống File Test {pocVideoResults.meta.testLimitFramesCount} Frame
                             </a>
                           )}
                         </div>
