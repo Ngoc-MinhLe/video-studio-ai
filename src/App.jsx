@@ -20,7 +20,8 @@ import {
   ShieldCheck,
   LogOut,
   User,
-  Gift
+  Gift,
+  Settings
 } from 'lucide-react';
 import ImageMusicWorkspace from './modules/ImageMusicVisualizer/ImageMusicWorkspace';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -35,6 +36,7 @@ import {
   updateUserCoinsInDb
 } from './services/authService';
 import { processVideoCanvas } from './services/canvasExporter';
+import { runWebCodecsPoC } from './services/video_editor/core/WebCodecsPoC';
 const AdminModal = React.lazy(() => import('./components/AdminModal'));
 const AuthModal = React.lazy(() => import('./components/AuthModal'));
 const PaymentModal = React.lazy(() => import('./components/PaymentModal'));
@@ -139,6 +141,8 @@ export default function App() {
   const [statusText, setStatusText] = useState('Hệ thống sẵn sàng!');
   const [benchmarkData, setBenchmarkData] = useState(null);
   const [showDebug, setShowDebug] = useState(false);
+  const [pocRunning, setPocRunning] = useState(false);
+  const [pocResults, setPocResults] = useState(null);
 
   // Lắng nghe Firebase Auth & Firestore User Data realtime
   useEffect(() => {
@@ -592,6 +596,19 @@ export default function App() {
 
   const deleteSubtitle = (id) => {
     setSubtitles(subtitles.filter(s => s.id !== id));
+  };
+
+  const runWebCodecsTest = async () => {
+    setPocRunning(true);
+    setPocResults(null);
+    try {
+      const res = await runWebCodecsPoC();
+      setPocResults(res);
+    } catch (e) {
+      setPocResults({ error: e.message || String(e) });
+    } finally {
+      setPocRunning(false);
+    }
   };
 
   // Tiến hành Render Xuất Video MP4 / WebM
@@ -2007,14 +2024,77 @@ export default function App() {
 
             {/* Nút RENDER & TẢI XUỐNG Ngay Dưới Trình Xem Preview */}
             {videoUrl && !isProcessing && (
-              <button
-                onClick={handleExport}
-                disabled={isProcessing}
-                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-rose-600 hover:from-purple-500 hover:to-rose-500 text-white font-extrabold text-sm shadow-xl shadow-purple-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-              >
-                <Download className="w-5 h-5" />
-                <span>🚀 XUẤT VIDEO & TẢI FILE MP4 VỀ MÁY</span>
-              </button>
+              <div className="flex flex-col gap-2 w-full">
+                <button
+                  onClick={handleExport}
+                  disabled={isProcessing || pocRunning}
+                  className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-rose-600 hover:from-purple-500 hover:to-rose-500 text-white font-extrabold text-sm shadow-xl shadow-purple-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                >
+                  <Download className="w-5 h-5" />
+                  <span>🚀 XUẤT VIDEO & TẢI FILE MP4 VỀ MÁY</span>
+                </button>
+
+                <button
+                  onClick={runWebCodecsTest}
+                  disabled={isProcessing || pocRunning}
+                  className="w-full py-2.5 px-4 rounded-xl border border-purple-500/40 bg-purple-950/20 hover:bg-purple-900/30 text-purple-300 font-bold text-[10px] transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                >
+                  {pocRunning ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                  ) : (
+                    <Settings className="w-4 h-4 text-purple-400" />
+                  )}
+                  <span>🧪 CHẠY THỬ NGHIỆM WEBCODECS OFFLINE POC (5 GIÂY)</span>
+                </button>
+
+                {pocResults && (
+                  <div className="p-3 border border-purple-500/30 bg-purple-950/30 rounded-xl text-purple-300 font-mono text-[10px] flex flex-col gap-2">
+                    <div className="flex justify-between items-center border-b border-purple-500/15 pb-1">
+                      <span className="font-bold text-purple-400 uppercase text-[9px]">🧪 KẾT QUẢ WEBCODECS POC (5 GIÂY)</span>
+                      <button 
+                        onClick={() => setPocResults(null)} 
+                        className="text-[9px] text-purple-400 hover:text-white underline cursor-pointer"
+                      >
+                        [Ẩn]
+                      </button>
+                    </div>
+                    {pocResults.error ? (
+                      <div className="text-rose-400 font-bold">Lỗi: {pocResults.error}</div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                        <div className="col-span-2 font-bold text-purple-400 border-b border-purple-500/10 pb-0.5 mb-0.5">🔍 Trình duyệt hỗ trợ:</div>
+                        <div>VideoEncoder: <span className={pocResults.browserSupport.videoEncoder ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocResults.browserSupport.videoEncoder ? "HỖ TRỢ" : "KHÔNG"}</span></div>
+                        <div>VideoDecoder: <span className={pocResults.browserSupport.videoDecoder ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocResults.browserSupport.videoDecoder ? "HỖ TRỢ" : "KHÔNG"}</span></div>
+                        <div>AudioEncoder: <span className={pocResults.browserSupport.audioEncoder ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocResults.browserSupport.audioEncoder ? "HỖ TRỢ" : "KHÔNG"}</span></div>
+                        <div>H.264 Encode: <span className={pocResults.browserSupport.h264EncodeSupported ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocResults.browserSupport.h264EncodeSupported ? "HỖ TRỢ" : "KHÔNG"}</span></div>
+                        <div>H.264 Decode: <span className={pocResults.browserSupport.h264DecodeSupported ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocResults.browserSupport.h264DecodeSupported ? "HỖ TRỢ" : "KHÔNG"}</span></div>
+                        <div>AAC Audio Encode: <span className={pocResults.browserSupport.aacEncodeSupported ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocResults.browserSupport.aacEncodeSupported ? "HỖ TRỢ" : "KHÔNG"}</span></div>
+                        
+                        <div className="col-span-2 font-bold text-purple-400 border-t border-b border-purple-500/10 py-0.5 my-0.5">⏱️ Thời gian xử lý:</div>
+                        <div>Check API: <span className="text-white">{pocResults.timings.checkSupport.toFixed(1)}ms</span></div>
+                        <div>Render Canvas: <span className="text-white">{pocResults.timings.render.toFixed(1)}ms</span></div>
+                        <div>Encode Video: <span className="text-white">{pocResults.timings.encode.toFixed(1)}ms</span></div>
+                        <div>Tổng thời gian: <span className="text-white">{pocResults.timings.total.toFixed(1)}ms</span></div>
+                        <div className="col-span-2 text-white font-bold bg-purple-900/30 p-1 rounded border border-purple-500/20 text-center text-[10px]">
+                          Tốc độ xuất offline: <span className="text-emerald-400">{(pocResults.metrics.realtimeSpeedFactor).toFixed(1)}× realtime</span>
+                        </div>
+                        
+                        <div className="col-span-2 font-bold text-purple-400 border-t border-purple-500/10 pt-0.5 mt-0.5">📦 File kết quả:</div>
+                        <div>Kích thước file: <span className="text-white font-bold">{pocResults.metrics.fileSizeMb.toFixed(2)} MB</span></div>
+                        <div className="col-span-2 mt-1.5 flex gap-2">
+                          <a 
+                            href={pocResults.videoUrl} 
+                            download="webcodecs_poc_output.mp4" 
+                            className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-center rounded text-[9px] shadow cursor-pointer"
+                          >
+                            📥 Tải xuống File Test MP4 (5s)
+                          </a>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Hộp Thông Báo Tiến Trình Render */}
