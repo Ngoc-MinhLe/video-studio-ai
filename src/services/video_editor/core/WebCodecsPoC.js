@@ -15,53 +15,61 @@ function getCodecDescription(mp4boxFile, trackId) {
     if (!stsd || !stsd.entries || stsd.entries.length === 0) return null;
     
     const entry = stsd.entries[0];
-    const box = entry.avc1 || entry.encv?.avc1 || entry.hvc1 || entry.hev1 || entry.vp09 || entry.vp9;
-    if (!box) return null;
+    if (!entry) return null;
 
-    // Handle H.264 (AVC) manually to serialise the AVCDecoderConfigurationRecord reliably
-    if (box.avcC) {
-      const avcC = box.avcC;
-      const spsList = avcC.SPS || [];
-      const ppsList = avcC.PPS || [];
-      
-      let totalSize = 6;
-      for (const sps of spsList) totalSize += 2 + sps.length;
-      for (const pps of ppsList) totalSize += 2 + pps.length;
-      
-      const data = new Uint8Array(totalSize);
-      data[0] = avcC.configurationVersion || 1;
-      data[1] = avcC.AVCProfileIndication;
-      data[2] = avcC.profile_compatibility;
-      data[3] = avcC.AVCLevelIndication;
-      data[4] = 0xFC | (avcC.lengthSizeMinusOne ?? 3);
-      data[5] = 0xE0 | spsList.length;
-      
-      let offset = 6;
-      for (const sps of spsList) {
-        const len = sps.length;
-        data[offset++] = (len >> 8) & 0xFF;
-        data[offset++] = len & 0xFF;
-        data.set(sps.nalu, offset);
-        offset += len;
-      }
-      
-      data[offset++] = ppsList.length;
-      for (const pps of ppsList) {
-        const len = pps.length;
-        data[offset++] = (len >> 8) & 0xFF;
-        data[offset++] = len & 0xFF;
-        data.set(pps.nalu, offset);
-        offset += len;
-      }
-      return { description: data, box };
+    // In mp4box.js, the entry itself is the box (e.g. type 'avc1' or 'encv')
+    // We look for 'avcC' directly on the entry or in entry.boxes
+    let configBox = entry.avcC || entry.hvcC || entry.vpcC;
+    
+    if (!configBox && entry.boxes && entry.boxes.length > 0) {
+      configBox = entry.boxes.find(b => b.type === 'avcC' || b.type === 'hvcC' || b.type === 'vpcC');
     }
 
-    // Fallback for HEVC/VP9: try writing the raw parsed config box
-    const configBox = box.hvcC || box.vpcC;
-    if (configBox && typeof configBox.write === 'function') {
-      const stream = new MP4Box.DataStream(undefined, 0, MP4Box.DataStream.BIG_ENDIAN);
-      configBox.write(stream);
-      return { description: new Uint8Array(stream.buffer, 8), box };
+    if (configBox) {
+      // Handle H.264 (AVC) manually to serialise the AVCDecoderConfigurationRecord reliably
+      if (configBox.type === 'avcC') {
+        const avcC = configBox;
+        const spsList = avcC.SPS || [];
+        const ppsList = avcC.PPS || [];
+        
+        let totalSize = 6;
+        for (const sps of spsList) totalSize += 2 + sps.length;
+        for (const pps of ppsList) totalSize += 2 + pps.length;
+        
+        const data = new Uint8Array(totalSize);
+        data[0] = avcC.configurationVersion || 1;
+        data[1] = avcC.AVCProfileIndication;
+        data[2] = avcC.profile_compatibility;
+        data[3] = avcC.AVCLevelIndication;
+        data[4] = 0xFC | (avcC.lengthSizeMinusOne ?? 3);
+        data[5] = 0xE0 | spsList.length;
+        
+        let offset = 6;
+        for (const sps of spsList) {
+          const len = sps.length;
+          data[offset++] = (len >> 8) & 0xFF;
+          data[offset++] = len & 0xFF;
+          data.set(sps.nalu, offset);
+          offset += len;
+        }
+        
+        data[offset++] = ppsList.length;
+        for (const pps of ppsList) {
+          const len = pps.length;
+          data[offset++] = (len >> 8) & 0xFF;
+          data[offset++] = len & 0xFF;
+          data.set(pps.nalu, offset);
+          offset += len;
+        }
+        return { description: data, box: configBox, entry };
+      }
+
+      // Fallback for HEVC/VP9: try writing the raw parsed config box
+      if (typeof configBox.write === 'function') {
+        const stream = new MP4Box.DataStream(undefined, 0, MP4Box.DataStream.BIG_ENDIAN);
+        configBox.write(stream);
+        return { description: new Uint8Array(stream.buffer, 8), box: configBox, entry };
+      }
     }
   } catch (e) {
     console.warn("Failed to extract codec description from stsd box:", e);
@@ -307,7 +315,8 @@ export async function runWebCodecsVideoFilePoC(file) {
       avccData: null,
       descriptionByteLength: 0,
       descriptionHex: '',
-      supportCheck: null
+      supportCheck: null,
+      debugBox: null
     },
     timings: {
       demux: 0,
@@ -352,6 +361,38 @@ export async function runWebCodecsVideoFilePoC(file) {
           return;
         }
         
+        // Setup initial debugBox metadata struct
+        results.meta.debugBox = {
+          trakFound: false,
+          stsdFound: false,
+          entriesCount: 0,
+          firstEntryType: 'none',
+          firstEntryKeys: [],
+          boxesFoundTypes: []
+        };
+        
+        if (mp4boxFile.moov) {
+          const trak = mp4boxFile.moov.traks.find(t => t.tkhd && t.tkhd.track_id === videoTrack.id);
+          if (trak) {
+            results.meta.debugBox.trakFound = true;
+            const stsd = trak.mdia?.minf?.stbl?.stsd;
+            if (stsd) {
+              results.meta.debugBox.stsdFound = true;
+              if (stsd.entries) {
+                results.meta.debugBox.entriesCount = stsd.entries.length;
+                if (stsd.entries.length > 0) {
+                  const entry = stsd.entries[0];
+                  results.meta.debugBox.firstEntryType = entry.type || 'unknown';
+                  results.meta.debugBox.firstEntryKeys = Object.keys(entry);
+                  if (entry.boxes) {
+                    results.meta.debugBox.boxesFoundTypes = entry.boxes.map(b => b.type);
+                  }
+                }
+              }
+            }
+          }
+        }
+        
         // Extract description and profile level parameters
         const descResult = getCodecDescription(mp4boxFile, videoTrack.id);
         targetCodecString = videoTrack.codec;
@@ -360,10 +401,10 @@ export async function runWebCodecsVideoFilePoC(file) {
           descriptionBytes = descResult.description;
           const box = descResult.box;
           
-          results.meta.hasAvcc = !!box.avcC;
+          results.meta.hasAvcc = !!box;
           
-          if (box.avcC) {
-            const avcC = box.avcC;
+          if (box) {
+            const avcC = box;
             const spsList = avcC.SPS || [];
             const ppsList = avcC.PPS || [];
             
@@ -402,7 +443,7 @@ export async function runWebCodecsVideoFilePoC(file) {
           results.meta.descriptionHex = `Start: [${firstBytesHex}] ... End: [${lastBytesHex}]`;
         }
 
-        console.log("Strict PoC Metadatas: ", { ...results.meta });
+        console.log("Strict PoC Box debug metadata:", { ...results.meta });
 
         if (!videoTrack.codec.startsWith('avc1') && !videoTrack.codec.startsWith('encv')) {
           reject(new Error(`PoC only supports H.264 (avc1) files. Found codec: ${videoTrack.codec}`));

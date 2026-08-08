@@ -1889,6 +1889,18 @@ export default function App() {
                       <div>• Size: <span className="text-white font-bold">{pocVideoResults.meta.width}x{pocVideoResults.meta.height}</span></div>
                       <div>• Extradata (avcC): <span className="text-white font-bold">{pocVideoResults.meta.hasAvcc ? "FOUND" : "NOT FOUND"}</span></div>
                       
+                      {pocVideoResults.meta.debugBox && (
+                        <div className="bg-black/40 p-2 rounded border border-pink-500/20 text-[9px] flex flex-col gap-0.5 mt-1 font-mono">
+                          <div className="font-bold text-pink-400 border-b border-pink-500/10 pb-0.5 mb-1">🔍 Raw Box Parsing Structure:</div>
+                          <div>- moov.trak found: <span className="text-white font-bold">{pocVideoResults.meta.debugBox.trakFound ? "YES" : "NO"}</span></div>
+                          <div>- stsd found: <span className="text-white font-bold">{pocVideoResults.meta.debugBox.stsdFound ? "YES" : "NO"}</span></div>
+                          <div>- stsd.entries: <span className="text-white font-bold">{pocVideoResults.meta.debugBox.entriesCount} entries</span></div>
+                          <div>- entry[0] type: <span className="text-white font-bold">{pocVideoResults.meta.debugBox.firstEntryType}</span></div>
+                          <div className="break-all whitespace-pre-wrap text-gray-400">- entry[0] keys: <span className="text-white font-normal">{JSON.stringify(pocVideoResults.meta.debugBox.firstEntryKeys)}</span></div>
+                          <div className="break-all whitespace-pre-wrap text-gray-400">- sub-boxes types: <span className="text-white font-normal">{JSON.stringify(pocVideoResults.meta.debugBox.boxesFoundTypes)}</span></div>
+                        </div>
+                      )}
+                      
                       {pocVideoResults.meta.avccData && (
                         <div className="bg-black/30 p-2 rounded border border-pink-500/10 text-[9px] flex flex-col gap-0.5">
                           <div className="font-bold text-pink-300 border-b border-pink-500/10 pb-0.5 mb-1">🛠️ avcC Record Properties:</div>
