@@ -145,6 +145,7 @@ export default function App() {
   const [pocResults, setPocResults] = useState(null);
   const [pocVideoRunning, setPocVideoRunning] = useState(false);
   const [pocVideoResults, setPocVideoResults] = useState(null);
+  const [pocVideoProgress, setPocVideoProgress] = useState(null);
 
   // Lắng nghe Firebase Auth & Firestore User Data realtime
   useEffect(() => {
@@ -620,8 +621,11 @@ export default function App() {
     }
     setPocVideoRunning(true);
     setPocVideoResults(null);
+    setPocVideoProgress(null);
     try {
-      const res = await runWebCodecsVideoFilePoC(videoFile);
+      const res = await runWebCodecsVideoFilePoC(videoFile, (prog) => {
+        setPocVideoProgress(prog);
+      });
       setPocVideoResults(res);
     } catch (e) {
       setPocVideoResults({ error: e.message || String(e) });
@@ -1869,6 +1873,31 @@ export default function App() {
                   )}
                   <span>🧪 WebCodecs PoC — Test video thật (Toàn bộ)</span>
                 </button>
+              )}
+
+              {pocVideoRunning && pocVideoProgress && (
+                <div className="p-3 border border-pink-500/30 bg-pink-950/30 rounded-lg text-pink-300 font-mono text-[10px] flex flex-col gap-1.5 mt-2">
+                  <div className="font-bold text-pink-400 border-b border-pink-500/15 pb-1 mb-1">🔍 POCO REAL-TIME INSTRUMENTATION</div>
+                  <div className="text-[11px] font-bold text-white mb-1">{pocVideoProgress.status}</div>
+                  
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                    <div>• Samples Demuxed: <span className="text-white font-bold">{pocVideoProgress.samplesDemuxed}</span></div>
+                    <div>• Muxed Chunks: <span className="text-white font-bold">{pocVideoProgress.muxedChunks}</span></div>
+                    <div>• Decode Submitted: <span className="text-white font-bold">{pocVideoProgress.decodeSubmitted}</span></div>
+                    <div>• Decode Output: <span className="text-white font-bold">{pocVideoProgress.decodeOutput}</span></div>
+                    <div>• Decode Queue Size: <span className="text-rose-400 font-bold">{pocVideoProgress.decodeQueueSize} / 6</span></div>
+                    <div>• Rendered Frames: <span className="text-white font-bold">{pocVideoProgress.renderedFrames}</span></div>
+                    <div>• Encode Submitted: <span className="text-white font-bold">{pocVideoProgress.encodeSubmitted}</span></div>
+                    <div>• Encode Output: <span className="text-white font-bold">{pocVideoProgress.encodeOutput}</span></div>
+                    <div>• Encode Queue Size: <span className="text-rose-400 font-bold">{pocVideoProgress.encodeQueueSize} / 6</span></div>
+                    <div>• Time Elapsed: <span className="text-white">{(pocVideoProgress.elapsedTimeMs / 1000).toFixed(1)}s</span></div>
+                  </div>
+                  {pocVideoProgress.jsHeapSize && (
+                    <div className="text-[9px] text-gray-400 border-t border-pink-500/10 pt-1 mt-0.5">
+                      JS Heap Memory: <span className="text-white">{(pocVideoProgress.jsHeapSize / 1024 / 1024).toFixed(1)} MB</span>
+                    </div>
+                  )}
+                </div>
               )}
 
               {pocVideoResults && (
