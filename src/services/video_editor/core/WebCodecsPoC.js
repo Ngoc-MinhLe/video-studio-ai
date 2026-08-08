@@ -88,14 +88,15 @@ export async function runWebCodecsPoC() {
 }
 
 /**
- * Diagnostic Mode Step 3:
- * - Demuxes and decodes H.264 samples using VideoDecoder.
- * - Renders each decoded VideoFrame to a Canvas.
- * - Constructs a new VideoFrame from Canvas with output timestamps based on 25 FPS.
- * - VideoEncoder encodes these frames.
- * - Muxes encoded chunks into an MP4 file using mp4-muxer.
- * - Performs offline playback verification inside an HTMLVideoElement.
- * - Includes 500ms heartbeat logging and 3s stall detection for deadlock diagnostics.
+ * Diagnostic Mode: Sequential execution to prevent deadlocks.
+ * - Demuxes all H.264 samples using MP4Box.
+ * - Feeds all requested samples directly to VideoDecoder without waiting in a loop.
+ * - Calls decoder.flush() to output all frames.
+ * - Renders each decoded VideoFrame to Canvas sequentially.
+ * - Encodes each frame using VideoEncoder.
+ * - Calls encoder.flush().
+ * - Muxes chunks using mp4-muxer.
+ * - Performs playback verification inside an HTMLVideoElement.
  * 
  * @param {File} file The real uploaded video file.
  * @param {number} frameLimit Limit the number of samples to process.
@@ -176,7 +177,6 @@ export function runWebCodecsVideoFilePoC(file, frameLimit = 25, onProgress) {
     let decoderInstance = null;
     let encoderInstance = null;
     const decodedFrames = [];
-    let frameWaiter = null;
     let pipelineError = null;
 
     // Instrumentation State Tracing variables
@@ -541,10 +541,6 @@ export function runWebCodecsVideoFilePoC(file, frameLimit = 25, onProgress) {
             
             decodedFrames.push(frame);
             results.diagnosticsMode.decodedFramesCount = decodedFrames.length;
-            
-            if (frameWaiter) {
-              frameWaiter();
-            }
           } catch (err) {
             console.error("Error in VideoDecoder output callback:", err);
             frame.close(); 
@@ -555,7 +551,6 @@ export function runWebCodecsVideoFilePoC(file, frameLimit = 25, onProgress) {
           results.diagnosticsMode.errorCallbackCount++;
           results.diagnosticsMode.decoderError = err.message || String(err);
           console.error("Decoder error:", err);
-          if (frameWaiter) frameWaiter();
         }
       });
 
@@ -607,7 +602,53 @@ export function runWebCodecsVideoFilePoC(file, frameLimit = 25, onProgress) {
         throw err;
       }
 
-      // 3. Setup Muxer & VideoEncoder
+      // 3. Feed all samples sequentially into decoder without blocking
+      pipelineState = "DECODING";
+      waitingFor = "Feeding all EncodedVideoChunks to VideoDecoder";
+      console.log(`Feeding all ${totalFrames} samples to VideoDecoder...`);
+
+      for (let idx = 0; idx < totalFrames; idx++) {
+        if (pipelineError) throw new Error(pipelineError);
+        
+        const sample = diagnosticSamples[idx];
+        const sampleTimeUs = Math.round((sample.cts / timescale) * 1000000);
+        const sampleDurationUs = Math.round((sample.duration / timescale) * 1000000);
+        const chunkType = sample.is_sync ? 'key' : 'delta';
+
+        const chunk = new EncodedVideoChunk({
+          type: chunkType,
+          timestamp: sampleTimeUs,
+          duration: sampleDurationUs,
+          data: sample.data
+        });
+        decoderInstance.decode(chunk);
+        decodeSubmittedCount++;
+        chunksFed++;
+
+        if (results.diagnosticsMode.samplesLogged.length < 10) {
+          results.diagnosticsMode.samplesLogged.push({
+            index: idx,
+            byteLength: sample.data.byteLength,
+            is_sync: sample.is_sync,
+            chunkTimestamp: sampleTimeUs,
+            chunkType
+          });
+        }
+      }
+
+      // Flush decoder sequentially (NO Promise.race to swallow stalls)
+      pipelineState = "FLUSHING";
+      waitingFor = "decoderInstance.flush()";
+      console.log("WAIT START: decoderInstance.flush()");
+      const decodeFlushStart = performance.now();
+      await decoderInstance.flush();
+      console.log("WAIT END: decoderInstance.flush()");
+      results.diagnosticsMode.flushStatus = 'SUCCESS';
+      results.timings.decode = performance.now() - decodeFlushStart;
+
+      console.log(`Decoder flush completed. Decoded frames count: ${decodedFrames.length} / ${totalFrames}`);
+
+      // 4. Setup Muxer & VideoEncoder
       const targetWidth = 768; 
       const targetHeight = 432; 
       const targetFps = 25; 
@@ -676,150 +717,45 @@ export function runWebCodecsVideoFilePoC(file, frameLimit = 25, onProgress) {
       canvas.height = targetHeight;
       const ctx = canvas.getContext('2d');
 
-      // 4. Sequential Decode -> Render -> Encode -> Mux Loop with backpressure
+      // 5. Render Canvas & Encode exactly the decoded frames sequentially
+      pipelineState = "ENCODING";
+      waitingFor = "Rendering and submitting all VideoFrames to VideoEncoder";
       const frameIntervalUs = 1000000 / targetFps; // 40000 µs
-
-      const getNextFrame = () => {
-        if (pipelineError) {
-          return Promise.reject(new Error(pipelineError));
-        }
-        if (decodedFrames.length > 0) {
-          return Promise.resolve(decodedFrames.shift());
-        }
-        return new Promise((resolve, reject) => {
-          frameWaiter = () => {
-            frameWaiter = null;
-            if (pipelineError) {
-              reject(new Error(pipelineError));
-            } else if (decodedFrames.length > 0) {
-              resolve(decodedFrames.shift());
-            } else {
-              reject(new Error("Frame waiter triggered but no decoded frames available."));
-            }
-          };
-        });
-      };
-
-      const feedDecoder = () => {
-        // Feed decoder up to 6 frames ahead of rendered count OR decoded queue size is full
-        while (chunksFed < totalFrames && 
-               (chunksFed - framesProcessed) < 6 && 
-               decodedFrames.length < 6) {
-          if (pipelineError) break;
-          const sample = diagnosticSamples[chunksFed];
-          const sampleTimeUs = Math.round((sample.cts / timescale) * 1000000);
-          const sampleDurationUs = Math.round((sample.duration / timescale) * 1000000);
-          const chunkType = sample.is_sync ? 'key' : 'delta';
-
-          const bytes = new Uint8Array(sample.data);
-          const hex64 = Array.from(bytes.slice(0, 64)).map(b => b.toString(16).padStart(2, '0')).join(' ').toUpperCase();
-
-          const queueBefore = decoderInstance.decodeQueueSize;
-
-          const chunk = new EncodedVideoChunk({
-            type: chunkType,
-            timestamp: sampleTimeUs,
-            duration: sampleDurationUs,
-            data: sample.data
-          });
-          decoderInstance.decode(chunk);
-          decodeSubmittedCount++;
-
-          const queueAfter = decoderInstance.decodeQueueSize;
-
-          if (results.diagnosticsMode.samplesLogged.length < 10) {
-            results.diagnosticsMode.samplesLogged.push({
-              index: chunksFed,
-              byteLength: sample.data.byteLength,
-              hex64,
-              is_sync: sample.is_sync,
-              dts: sample.dts,
-              cts: sample.cts,
-              duration: sample.duration,
-              chunkTimestamp: sampleTimeUs,
-              chunkType,
-              queueBefore,
-              queueAfter
-            });
-          }
-          chunksFed++;
-        }
-      };
-
-      let decodeTime = 0;
-      let renderTime = 0;
+      const renderStart = performance.now();
       const encodeStart = performance.now();
 
-      for (let i = 0; i < totalFrames; i++) {
-        if (pipelineError) {
-          throw new Error(pipelineError);
-        }
+      for (let i = 0; i < decodedFrames.length; i++) {
+        if (pipelineError) throw new Error(pipelineError);
 
-        // STRICT Backpressure wait points
-        if (encodeSubmittedCount - framesEncodedCount > 6) {
-          pipelineState = "WAIT_ENCODER";
-          waitingFor = `encoderQueueSize = ${encodeSubmittedCount - framesEncodedCount}`;
-          console.log(`WAIT START: WAIT_ENCODER (submitted: ${encodeSubmittedCount}, output: ${framesEncodedCount}, queue: ${encodeSubmittedCount - framesEncodedCount})`);
-          while (encodeSubmittedCount - framesEncodedCount > 6) {
-            if (pipelineError) {
-              throw new Error(pipelineError);
-            }
-            await new Promise(res => setTimeout(res, 5));
-          }
-          console.log(`WAIT END: WAIT_ENCODER`);
-        }
-
-        pipelineState = "DECODING";
-        feedDecoder();
-
-        pipelineState = "WAIT_DECODE_OUTPUT";
-        waitingFor = `decodedFrames.length = ${decodedFrames.length}, decodeQueueSize = ${decoderInstance.decodeQueueSize}, chunksFed = ${chunksFed}`;
-        console.log(`WAIT START: WAIT_DECODE_OUTPUT (decodedFrames: ${decodedFrames.length}, decodeQueueSize: ${decoderInstance.decodeQueueSize}, chunksFed: ${chunksFed}/${totalFrames})`);
-        
-        const frameDecodeStart = performance.now();
-        const decodedFrame = await getNextFrame();
-        decodeTime += performance.now() - frameDecodeStart;
-        console.log(`WAIT END: WAIT_DECODE_OUTPUT`);
-
-        pipelineState = "RENDERING";
-        const frameRenderStart = performance.now();
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(0, 0, targetWidth, targetHeight);
-        ctx.drawImage(decodedFrame, 0, 0, targetWidth, targetHeight);
-        results.diagnosticsMode.renderedFramesCount++;
-        renderedCount++;
-
-        decodedFrame.close();
-
-        pipelineState = "ENCODING";
-        const outputTimestampUs = Math.round(i * frameIntervalUs);
-        const outputFrame = new VideoFrame(canvas, { timestamp: outputTimestampUs });
+        const decodedFrame = decodedFrames[i];
         try {
-          results.diagnosticsMode.encodeSubmittedCount++;
-          encodeSubmittedCount++;
-          encoderInstance.encode(outputFrame, { keyFrame: i % 30 === 0 });
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(0, 0, targetWidth, targetHeight);
+          ctx.drawImage(decodedFrame, 0, 0, targetWidth, targetHeight);
+          results.diagnosticsMode.renderedFramesCount++;
+          renderedCount++;
+
+          const outputTimestampUs = Math.round(i * frameIntervalUs);
+          const outputFrame = new VideoFrame(canvas, { timestamp: outputTimestampUs });
+          try {
+            results.diagnosticsMode.encodeSubmittedCount++;
+            encodeSubmittedCount++;
+            encoderInstance.encode(outputFrame, { keyFrame: i % 30 === 0 });
+          } finally {
+            outputFrame.close();
+          }
         } finally {
-          outputFrame.close();
+          decodedFrame.close();
         }
         framesProcessed++;
-        renderTime += performance.now() - frameRenderStart;
       }
+      decodedFrames.length = 0; // Clear array
+      results.timings.render = performance.now() - renderStart;
 
-      // 5. Direct flushes (NO Promise.race to swallow stalls)
+      // Flush Encoder
       pipelineState = "FLUSHING";
-      
-      waitingFor = "decoderInstance.flush()";
-      console.log("WAIT START: decoderInstance.flush()");
-      const decodeFlushStart = performance.now();
-      await decoderInstance.flush();
-      console.log("WAIT END: decoderInstance.flush()");
-      results.diagnosticsMode.flushStatus = 'SUCCESS';
-      results.timings.decode = decodeTime + (performance.now() - decodeFlushStart);
-      results.timings.render = renderTime;
-
       waitingFor = "encoderInstance.flush()";
       console.log("WAIT START: encoderInstance.flush()");
-      const encFlushStart = performance.now();
       await encoderInstance.flush();
       console.log("WAIT END: encoderInstance.flush()");
       results.diagnosticsMode.encoderFlushStatus = 'SUCCESS';
