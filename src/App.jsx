@@ -36,7 +36,7 @@ import {
   updateUserCoinsInDb
 } from './services/authService';
 import { processVideoCanvas } from './services/canvasExporter';
-import { runWebCodecsPoC } from './services/video_editor/core/WebCodecsPoC';
+import { runWebCodecsPoC, runWebCodecsVideoFilePoC } from './services/video_editor/core/WebCodecsPoC';
 const AdminModal = React.lazy(() => import('./components/AdminModal'));
 const AuthModal = React.lazy(() => import('./components/AuthModal'));
 const PaymentModal = React.lazy(() => import('./components/PaymentModal'));
@@ -143,6 +143,8 @@ export default function App() {
   const [showDebug, setShowDebug] = useState(false);
   const [pocRunning, setPocRunning] = useState(false);
   const [pocResults, setPocResults] = useState(null);
+  const [pocVideoRunning, setPocVideoRunning] = useState(false);
+  const [pocVideoResults, setPocVideoResults] = useState(null);
 
   // Lắng nghe Firebase Auth & Firestore User Data realtime
   useEffect(() => {
@@ -608,6 +610,23 @@ export default function App() {
       setPocResults({ error: e.message || String(e) });
     } finally {
       setPocRunning(false);
+    }
+  };
+
+  const runWebCodecsVideoFileTest = async () => {
+    if (!videoFile) {
+      alert("Vui lòng tải một file video MP4 lên trước!");
+      return;
+    }
+    setPocVideoRunning(true);
+    setPocVideoResults(null);
+    try {
+      const res = await runWebCodecsVideoFilePoC(videoFile);
+      setPocVideoResults(res);
+    } catch (e) {
+      setPocVideoResults({ error: e.message || String(e) });
+    } finally {
+      setPocVideoRunning(false);
     }
   };
 
@@ -1836,6 +1855,65 @@ export default function App() {
                 )}
                 <span>🧪 CHẠY THỬ NGHIỆM WEBCODECS OFFLINE POC (5 GIÂY)</span>
               </button>
+
+              {videoFile && (
+                <button
+                  onClick={runWebCodecsVideoFileTest}
+                  disabled={isProcessing || pocVideoRunning}
+                  className="w-full py-2.5 px-4 rounded-xl border border-pink-500/40 bg-pink-950/20 hover:bg-pink-900/30 text-pink-300 font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                >
+                  {pocVideoRunning ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-pink-400" />
+                  ) : (
+                    <Video className="w-4 h-4 text-pink-400" />
+                  )}
+                  <span>🧪 WebCodecs PoC — Test 10 giây video thật</span>
+                </button>
+              )}
+
+              {pocVideoResults && (
+                <div className="p-3 border border-pink-500/30 bg-pink-950/30 rounded-lg text-pink-300 font-mono text-[10px] flex flex-col gap-2">
+                  <div className="flex justify-between items-center border-b border-pink-500/15 pb-1">
+                    <span className="font-bold text-pink-400 uppercase text-[9px]">🧪 KẾT QUẢ VIDEO THẬT POC (10 GIÂY)</span>
+                    <button 
+                      onClick={() => setPocVideoResults(null)} 
+                      className="text-[9px] text-pink-400 hover:text-white underline cursor-pointer"
+                    >
+                      [Ẩn]
+                    </button>
+                  </div>
+                  {pocVideoResults.error ? (
+                    <div className="text-rose-400 font-bold">Lỗi: {pocVideoResults.error}</div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                      <div className="col-span-2 font-bold text-pink-400 border-b border-pink-500/10 pb-0.5 mb-0.5">⏱️ Thời gian xử lý:</div>
+                      <div>Đọc/Demux: <span className="text-white">{pocVideoResults.timings.demux.toFixed(1)}ms</span></div>
+                      <div>VideoDecoder: <span className="text-white">{pocVideoResults.timings.decode.toFixed(1)}ms</span></div>
+                      <div>Canvas Render: <span className="text-white">{pocVideoResults.timings.render.toFixed(1)}ms</span></div>
+                      <div>VideoEncoder: <span className="text-white">{pocVideoResults.timings.encode.toFixed(1)}ms</span></div>
+                      <div>Flush Pipeline: <span className="text-white">{pocVideoResults.timings.flush.toFixed(1)}ms</span></div>
+                      <div>Muxing MP4: <span className="text-white">{pocVideoResults.timings.mux.toFixed(1)}ms</span></div>
+                      <div>Tổng thời gian: <span className="text-white">{pocVideoResults.timings.total.toFixed(1)}ms</span></div>
+                      <div className="col-span-2 text-white font-bold bg-pink-900/30 p-1 rounded border border-pink-500/20 text-center text-[10px]">
+                        Tốc độ xuất offline: <span className="text-emerald-400">{(pocVideoResults.metrics.realtimeSpeedFactor).toFixed(1)}× realtime</span>
+                      </div>
+                      
+                      <div className="col-span-2 font-bold text-pink-400 border-t border-pink-500/10 pt-0.5 mt-0.5">📦 File kết quả:</div>
+                      <div>Tổng số frame: <span className="text-white font-bold">{pocVideoResults.metrics.framesProcessed} frames</span></div>
+                      <div>Kích thước file: <span className="text-white font-bold">{pocVideoResults.metrics.fileSizeMb.toFixed(2)} MB</span></div>
+                      <div className="col-span-2 mt-1.5 flex gap-2">
+                        <a 
+                          href={pocVideoResults.videoUrl} 
+                          download="webcodecs_video_poc_output.mp4" 
+                          className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-center rounded text-[9px] shadow cursor-pointer"
+                        >
+                          📥 Tải xuống File Video Test MP4 (10s)
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {pocResults && (
                 <div className="p-3 border border-purple-500/30 bg-purple-950/30 rounded-lg text-purple-300 font-mono text-[10px] flex flex-col gap-2">

@@ -16,6 +16,7 @@
     "firebase-admin": "^14.2.0",
     "lucide-react": "^1.28.0",
     "mp4-muxer": "^5.2.2",
+    "mp4box": "^2.4.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "tailwindcss": "^4.3.3"
