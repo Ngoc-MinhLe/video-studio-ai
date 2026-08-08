@@ -243,7 +243,8 @@ export async function runWebCodecsVideoFilePoC(file) {
       debugBox: null,
       spsDebug: null,
       ppsDebug: null,
-      timeline: null
+      first10Frames: [],
+      first10Chunks: []
     },
     timings: {
       demux: 0,
@@ -255,9 +256,12 @@ export async function runWebCodecsVideoFilePoC(file) {
       total: 0
     },
     metrics: {
+      framesDecoded: 0,
+      framesEncoded: 0,
       framesProcessed: 0,
       realtimeSpeedFactor: 0.0,
-      fileSizeMb: 0.0
+      fileSizeMb: 0.0,
+      success: false
     },
     error: null,
     videoUrl: null
@@ -517,13 +521,6 @@ export async function runWebCodecsVideoFilePoC(file) {
     const totalFrames = processedSamples.length;
     results.metrics.framesProcessed = totalFrames;
 
-    // Create a precise presentation timestamp (PTS) mapping to its raw sample parameters
-    const ptsToSampleMap = new Map();
-    for (const sample of processedSamples) {
-      const ptsUs = Math.round((sample.cts / timescale) * 1000000);
-      ptsToSampleMap.set(ptsUs, sample);
-    }
-
     // Check capabilities
     results.browserSupport.videoEncoder = typeof VideoEncoder !== 'undefined';
     results.browserSupport.videoDecoder = typeof VideoDecoder !== 'undefined';
@@ -562,51 +559,22 @@ export async function runWebCodecsVideoFilePoC(file) {
       firstTimestampBehavior: 'offset'
     });
     
-    let baseDts = null;
-    let encodedCount = 0;
-    let firstChunkLogged = false;
+    let framesEncodedCount = 0;
 
     encoderInstance = new VideoEncoder({
       output: (chunk, metadata) => {
-        encodedCount++;
+        framesEncodedCount++;
         
-        // Retrieve original raw PTS and DTS matching this chunk's presentation timestamp
-        const sample = ptsToSampleMap.get(chunk.timestamp);
-        let rawPts = chunk.timestamp;
-        let rawDts = chunk.timestamp;
-        let compOffsetUs = 0;
-
-        if (sample) {
-          rawPts = Math.round((sample.cts / timescale) * 1000000);
-          rawDts = Math.round((sample.dts / timescale) * 1000000);
-          compOffsetUs = rawPts - rawDts;
+        // Log first 10 encoded chunks
+        if (results.meta.first10Chunks.length < 10) {
+          results.meta.first10Chunks.push({
+            timestamp: chunk.timestamp,
+            type: chunk.type
+          });
         }
-
-        if (baseDts === null) {
-          baseDts = rawDts;
-        }
-
-        // Apply timeline normalization relative to baseDts (first decode timestamp)
-        const normDts = rawDts - baseDts;
-        const normPts = normDts + compOffsetUs;
-
-        if (!firstChunkLogged) {
-          firstChunkLogged = true;
-          results.meta.timeline = {
-            firstChunkPtsBefore: rawPts,
-            firstChunkDtsBefore: rawDts,
-            firstChunkPtsAfter: normPts,
-            firstChunkDtsAfter: normDts,
-            totalEncodedFrames: 0
-          };
-          console.log("PoC First Chunk Timeline Logs:", results.meta.timeline);
-        }
-
-        results.meta.timeline.totalEncodedFrames = encodedCount;
 
         try {
-          // Pass compositionTimeOffset to preserve the correct PTS/DTS relation in mp4-muxer
-          muxer.addVideoChunk(chunk, metadata, normPts, compOffsetUs);
+          muxer.addVideoChunk(chunk, metadata);
         } catch (muxErr) {
           console.error("Muxer chunk insertion failed:", muxErr);
           pipelineError = `Muxer chunk error: ${muxErr.message || muxErr}`;
@@ -635,9 +603,12 @@ export async function runWebCodecsVideoFilePoC(file) {
     }
     results.timings.mux += performance.now() - muxStart;
 
+    let framesDecodedCount = 0;
+
     // 3. Setup VideoDecoder with B-frame queue coordination
     decoderInstance = new VideoDecoder({
       output: (frame) => {
+        framesDecodedCount++;
         decodedFrames.push(frame);
         if (frameWaiter) {
           frameWaiter();
@@ -765,8 +736,6 @@ export async function runWebCodecsVideoFilePoC(file) {
       const decodedFrame = await getNextFrame();
       decodeTime += performance.now() - frameDecodeStart;
 
-      const sampleTimeUs = decodedFrame.timestamp;
-
       const frameRenderStart = performance.now();
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(0, 0, width, height);
@@ -775,7 +744,7 @@ export async function runWebCodecsVideoFilePoC(file) {
       decodedFrame.close();
 
       ctx.fillStyle = '#ec4899';
-      const animTime = sampleTimeUs / 1000000;
+      const animTime = i / targetFps;
       for (let b = 0; b < 16; b++) {
         const barHeight = 40 + Math.sin(animTime * 10 + b) * 30;
         ctx.fillRect(240 + b * 50, 640 - barHeight, 40, barHeight);
@@ -787,12 +756,22 @@ export async function runWebCodecsVideoFilePoC(file) {
       ctx.fillText(`WebCodecs Offline Video PoC - Frame ${i + 1}/${totalFrames}`, width / 2, 60);
       ctx.font = '16px monospace';
       ctx.fillStyle = '#a855f7';
-      ctx.fillText(`Timeline: ${(sampleTimeUs / 1000000).toFixed(2)}s | Source Codec: ${videoTrack.codec}`, width / 2, 100);
+      ctx.fillText(`Timeline: ${animTime.toFixed(2)}s | Source Codec: ${videoTrack.codec}`, width / 2, 100);
 
       renderTime += performance.now() - frameRenderStart;
 
+      // Encode Frame using clean outputTimestamp based on frame index (i)
       const frameEncodeStart = performance.now();
-      const outputFrame = new VideoFrame(canvas, { timestamp: sampleTimeUs });
+      const outputTimestampUs = Math.round(i * (1000000 / targetFps));
+
+      if (results.meta.first10Frames.length < 10) {
+        results.meta.first10Frames.push({
+          frameIndex: i,
+          timestamp: outputTimestampUs
+        });
+      }
+
+      const outputFrame = new VideoFrame(canvas, { timestamp: outputTimestampUs });
       encoderInstance.encode(outputFrame, { keyFrame: i % 30 === 0 });
       outputFrame.close();
       encodeTime += performance.now() - frameEncodeStart;
@@ -850,7 +829,11 @@ export async function runWebCodecsVideoFilePoC(file) {
     const blob = new Blob([buffer], { type: 'video/mp4' });
     
     results.metrics.fileSizeMb = blob.size / 1024 / 1024;
-    const actualDurationSec = (processedSamples[totalFrames - 1].cts + processedSamples[totalFrames - 1].duration - processedSamples[0].cts) / timescale;
+    results.metrics.framesDecoded = framesDecodedCount;
+    results.metrics.framesEncoded = framesEncodedCount;
+    results.metrics.success = true;
+
+    const actualDurationSec = totalFrames / targetFps;
     results.metrics.realtimeSpeedFactor = actualDurationSec / (totalElapsed / 1000);
     results.videoUrl = URL.createObjectURL(blob);
 

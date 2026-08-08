@@ -1984,12 +1984,39 @@ export default function App() {
                         )}
                       </div>
 
-                      {pocVideoResults.meta.timeline && (
-                        <div className="mt-1.5 border-t border-pink-500/10 pt-1.5 flex flex-col gap-0.5 font-mono text-[9px]">
-                          <div className="font-bold text-pink-400">⏱️ TIMELINE & CHUNK NORMALIZATION:</div>
-                          <div>• Raw First Chunk: PTS = <span className="text-white font-bold">{pocVideoResults.meta.timeline.firstChunkPtsBefore} µs</span> | DTS = <span className="text-white font-bold">{pocVideoResults.meta.timeline.firstChunkDtsBefore} µs</span></div>
-                          <div>• Normalized First: PTS = <span className="text-white font-bold">{pocVideoResults.meta.timeline.firstChunkPtsAfter} µs</span> | DTS = <span className="text-white font-bold">{pocVideoResults.meta.timeline.firstChunkDtsAfter} µs</span></div>
-                          <div>• Total Encoded Chunks: <span className="text-white font-bold">{pocVideoResults.meta.timeline.totalEncodedFrames} chunks</span></div>
+                      {pocVideoResults.meta.first10Frames && pocVideoResults.meta.first10Frames.length > 0 && (
+                        <div className="mt-1.5 border-t border-pink-500/10 pt-1.5 flex flex-col gap-0.5 font-mono text-[8px] bg-black/20 p-2 rounded">
+                          <div className="font-bold text-pink-400 border-b border-pink-500/10 pb-0.5 mb-1">📋 FIRST 10 VIDEO FRAMES TIMELINE:</div>
+                          <div className="grid grid-cols-4 font-bold text-pink-300">
+                            <div>Idx</div>
+                            <div className="col-span-2">VideoFrame PTS</div>
+                            <div>D/E Order</div>
+                          </div>
+                          {pocVideoResults.meta.first10Frames.map((f, idx) => (
+                            <div key={idx} className="grid grid-cols-4 text-gray-300">
+                              <div>{f.frameIndex}</div>
+                              <div className="col-span-2">{f.timestamp} µs</div>
+                              <div>{idx + 1}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {pocVideoResults.meta.first10Chunks && pocVideoResults.meta.first10Chunks.length > 0 && (
+                        <div className="mt-1.5 border-t border-pink-500/10 pt-1.5 flex flex-col gap-0.5 font-mono text-[8px] bg-black/20 p-2 rounded">
+                          <div className="font-bold text-pink-400 border-b border-pink-500/10 pb-0.5 mb-1">📋 FIRST 10 ENCODED CHUNKS TIMELINE:</div>
+                          <div className="grid grid-cols-3 font-bold text-pink-300">
+                            <div>Chunk</div>
+                            <div>PTS Output</div>
+                            <div>Type</div>
+                          </div>
+                          {pocVideoResults.meta.first10Chunks.map((c, idx) => (
+                            <div key={idx} className="grid grid-cols-3 text-gray-300">
+                              <div>#{idx + 1}</div>
+                              <div>{c.timestamp} µs</div>
+                              <div className={c.type === 'key' ? 'text-emerald-400 font-bold' : 'text-gray-400'}>{c.type.toUpperCase()}</div>
+                            </div>
+                          ))}
                         </div>
                       )}
 
@@ -2033,7 +2060,8 @@ export default function App() {
                       </div>
                       
                       <div className="col-span-2 font-bold text-pink-400 border-t border-pink-500/10 pt-0.5 mt-0.5">📦 FILE KẾT QUẢ:</div>
-                      <div>Tổng số frame: <span className="text-white font-bold">{pocVideoResults.metrics.framesProcessed} frames</span></div>
+                      <div>Decoder Output: <span className="text-white font-bold">{pocVideoResults.metrics.framesDecoded} frames</span></div>
+                      <div>Encoder Output: <span className="text-white font-bold">{pocVideoResults.metrics.framesEncoded} chunks</span></div>
                       <div>Kích thước file: <span className="text-white font-bold">{pocVideoResults.metrics.fileSizeMb.toFixed(2)} MB</span></div>
                       <div className="col-span-2 mt-1.5 flex gap-2 font-sans text-xs">
                         <a 
