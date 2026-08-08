@@ -2074,6 +2074,47 @@ export default function App() {
                     <div className="p-3 text-rose-400 font-bold font-mono text-[10px]">
                       ❌ LỖI PIPELINE: {pocVideoResults.error}
                     </div>
+                  ) : pocVideoResults.diagnosticsMode ? (
+                    <div className="p-3 flex flex-col gap-2 font-mono text-[9px] text-gray-300">
+                      <div className="font-bold text-pink-400 border-b border-pink-500/10 pb-0.5 mb-1">🔬 WEBCODECS DIAGNOSTIC MODE RESULTS (5 SAMPLES):</div>
+                      <div>• Output Callback Count: <span className="text-emerald-400 font-bold">{pocVideoResults.diagnosticsMode.outputCallbackCount} frames</span></div>
+                      <div>• Error Callback Count: <span className={pocVideoResults.diagnosticsMode.errorCallbackCount > 0 ? "text-rose-400 font-bold" : "text-white"}>{pocVideoResults.diagnosticsMode.errorCallbackCount} times</span></div>
+                      
+                      {pocVideoResults.diagnosticsMode.decoderError && (
+                        <div className="text-rose-400 font-bold bg-rose-950/20 p-2 rounded border border-rose-500/20 break-all">
+                          ❌ Decoder Error: {pocVideoResults.diagnosticsMode.decoderError}
+                        </div>
+                      )}
+
+                      <div className="font-bold text-pink-400 mt-1">📋 SAMPLES DECODING DETAILS:</div>
+                      <div className="flex flex-col gap-2 max-h-[250px] overflow-y-auto bg-black/40 p-2 rounded border border-pink-500/10">
+                        {pocVideoResults.diagnosticsMode.samplesLogged.map((s, idx) => (
+                          <div key={idx} className="border-b border-pink-500/5 pb-2 mb-1 flex flex-col gap-0.5 last:border-b-0 last:pb-0 last:mb-0">
+                            <div className="font-bold text-pink-300">Sample #{s.index + 1} ({s.chunkType.toUpperCase()}):</div>
+                            <div>- Size: {s.byteLength} bytes</div>
+                            <div className="break-all text-[8px] text-gray-400">- HEX: {s.hex64}...</div>
+                            <div>- Source DTS: {s.dts} | CTS: {s.cts} | Dur: {s.duration}</div>
+                            <div>- Chunk TS: {s.chunkTimestamp} µs</div>
+                            <div>- Queue Size: {s.queueBefore} (Before) → {s.queueAfter} (After)</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {pocVideoResults.diagnosticsMode.outputFramesLog.length > 0 ? (
+                        <div className="mt-1 flex flex-col gap-1">
+                          <div className="font-bold text-pink-400">📋 OUTPUT FRAMES RECEIVED:</div>
+                          <div className="flex flex-col gap-0.5 bg-black/30 p-1.5 rounded border border-pink-500/5 max-h-[100px] overflow-y-auto">
+                            {pocVideoResults.diagnosticsMode.outputFramesLog.map((f, idx) => (
+                              <div key={idx} className="text-emerald-400">
+                                Frame #{idx + 1}: TS = {f.timestamp} µs | Size = {f.width}x{f.height}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-rose-400 font-bold mt-1">⚠️ No output frames received (Decoder output callback never triggered).</div>
+                      )}
+                    </div>
                   ) : (
                     <div className="p-3 grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[10px]">
                       <div className="col-span-2 font-bold text-pink-400 border-b border-pink-500/10 pb-0.5 mb-0.5">⏱️ THỜI GIAN XỬ LÝ (BENCHMARK):</div>

@@ -1,4 +1,3 @@
-import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import * as MP4Box from 'mp4box';
 
 /**
@@ -84,153 +83,19 @@ export async function runWebCodecsPoC() {
   }
   results.timings.checkSupport = performance.now() - supportStart;
 
-  if (!results.browserSupport.videoEncoder || !results.browserSupport.h264EncodeSupported) {
-    results.error = "WebCodecs or H.264 video encoding is not supported in this browser.";
-    results.timings.total = performance.now() - overallStart;
-    return results;
-  }
-
-  try {
-    // 2. Setup Exporter & Muxer
-    const width = 1280;
-    const height = 720;
-    const fps = 30;
-    const duration = 5; // 5 seconds
-    const totalFrames = fps * duration;
-
-    const muxer = new Muxer({
-      target: new ArrayBufferTarget(),
-      video: {
-        codec: 'avc',
-        width,
-        height
-      },
-      fastStart: 'in-memory'
-    });
-
-    const encoder = new VideoEncoder({
-      output: (chunk, metadata) => {
-        muxer.addVideoChunk(chunk, metadata);
-      },
-      error: (err) => {
-        console.error("VideoEncoder error in PoC:", err);
-      }
-    });
-
-    const videoConfig = {
-      codec: 'avc1.4d001f',
-      width,
-      height,
-      bitrate: 2500000, // 2.5 Mbps
-      framerate: fps,
-      hardwareAcceleration: 'prefer-hardware'
-    };
-
-    encoder.configure(videoConfig);
-
-    // 3. Render and Encode Loop
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-
-    let renderTime = 0;
-    let encodeTime = 0;
-
-    for (let i = 0; i < totalFrames; i++) {
-      const projectTime = i / fps;
-
-      // Render Frame
-      const renderStart = performance.now();
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(0, 0, width, height);
-
-      // Rotating Wheel (Offline Render Validation)
-      ctx.save();
-      ctx.translate(width / 2, height / 2);
-      ctx.rotate(projectTime * Math.PI * 2);
-      const grad = ctx.createLinearGradient(-150, -150, 150, 150);
-      grad.addColorStop(0, '#a855f7');
-      grad.addColorStop(1, '#ec4899');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(0, 0, 150, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-
-      // Visualizer Simulation
-      ctx.fillStyle = '#22c55e';
-      for (let b = 0; b < 24; b++) {
-        const barHeight = 80 + Math.sin(projectTime * 8 + b) * 60;
-        ctx.fillRect(160 + b * 40, 620 - barHeight, 30, barHeight);
-      }
-
-      // Title Text
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 36px Outfit, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(`WebCodecs Offline PoC - Frame ${i + 1}/${totalFrames}`, width / 2, 100);
-
-      // Subtitle Simulation
-      ctx.font = '24px monospace';
-      ctx.fillStyle = '#fbbf24';
-      ctx.fillText(`Timeline: ${projectTime.toFixed(2)}s | CPU/GPU Offline Render`, width / 2, 160);
-
-      renderTime += performance.now() - renderStart;
-
-      // Encode Frame
-      const encodeStart = performance.now();
-      const timestampUs = i * (1000000 / fps);
-      const frame = new VideoFrame(canvas, { timestamp: timestampUs });
-      
-      // Request keyframe every 30 frames
-      encoder.encode(frame, { keyFrame: i % 30 === 0 });
-      frame.close();
-      encodeTime += performance.now() - encodeStart;
-    }
-
-    // Flush and Finalize
-    await encoder.flush();
-    muxer.finalize();
-
-    const totalElapsed = performance.now() - overallStart;
-
-    results.timings.render = renderTime;
-    results.timings.encode = encodeTime;
-    results.timings.total = totalElapsed;
-
-    const buffer = muxer.target.buffer;
-    const blob = new Blob([buffer], { type: 'video/mp4' });
-    
-    results.metrics.fileSizeMb = blob.size / 1024 / 1024;
-    results.metrics.realtimeSpeedFactor = duration / (totalElapsed / 1000);
-    results.videoUrl = URL.createObjectURL(blob);
-
-  } catch (err) {
-    results.error = err.message || String(err);
-  }
-
   return results;
 }
 
 /**
- * Runs an offline H.264 sequential decoding, rendering, and encoding PoC using a real uploaded MP4 file.
- * Includes advanced instrumentation counters, 1-second heartbeat logs, and strict queue backpressure.
+ * Diagnostic Mode: Only decodes the first 5 H.264 samples using WebCodecs.
+ * Logs sample sizes, HEX header buffers, timestamps, and VideoDecoder event triggers.
  * 
  * @param {File} file The real uploaded video file.
- * @param {Function} onProgress Real-time diagnostics instrumentation callback.
- * @returns {Promise<Object>} The benchmark results and output blob URL.
+ * @param {Function} onProgress Progress callback.
+ * @returns {Promise<Object>} The diagnostic results.
  */
 export async function runWebCodecsVideoFilePoC(file, onProgress) {
   const results = {
-    browserSupport: {
-      videoEncoder: typeof VideoEncoder !== 'undefined',
-      videoDecoder: typeof VideoDecoder !== 'undefined',
-      audioEncoder: typeof AudioEncoder !== 'undefined',
-      h264EncodeSupported: false,
-      h264DecodeSupported: false,
-      aacEncodeSupported: false
-    },
     meta: {
       sourceCodec: 'unknown',
       targetCodec: 'unknown',
@@ -243,25 +108,23 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
       supportCheck: null,
       debugBox: null,
       spsDebug: null,
-      ppsDebug: null,
-      first10Frames: [],
-      first10Chunks: []
+      ppsDebug: null
+    },
+    diagnosticsMode: {
+      active: true,
+      samplesLogged: [],
+      outputCallbackCount: 0,
+      errorCallbackCount: 0,
+      outputFramesLog: [],
+      decoderError: null
     },
     timings: {
       demux: 0,
       decode: 0,
-      render: 0,
-      encode: 0,
-      flush: 0,
-      mux: 0,
       total: 0
     },
     metrics: {
       framesDecoded: 0,
-      framesEncoded: 0,
-      framesProcessed: 0,
-      realtimeSpeedFactor: 0.0,
-      fileSizeMb: 0.0,
       success: false
     },
     error: null,
@@ -269,100 +132,10 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
   };
 
   const overallStart = performance.now();
-  let pipelineError = null;
-  const decodedFrames = [];
-  let frameWaiter = null;
   let decoderInstance = null;
-  let encoderInstance = null;
-
-  // Real-time Instrumentation Counters
-  let samplesDemuxedCount = 0;
-  let decodeSubmittedCount = 0;
-  let framesDecodedCount = 0;
-  let renderedCount = 0;
-  let encodeSubmittedCount = 0;
-  let framesEncodedCount = 0;
-  let muxedCount = 0;
-  let currentStatus = "Initializing demuxer...";
-
-  const updateProgress = () => {
-    if (onProgress) {
-      onProgress({
-        status: currentStatus,
-        samplesDemuxed: samplesDemuxedCount,
-        decodeSubmitted: decodeSubmittedCount,
-        decodeOutput: framesDecodedCount,
-        decodeQueueSize: decodedFrames.length,
-        renderedFrames: renderedCount,
-        encodeSubmitted: encodeSubmittedCount,
-        encodeOutput: framesEncodedCount,
-        encodeQueueSize: encodeSubmittedCount - framesEncodedCount,
-        muxedChunks: muxedCount,
-        elapsedTimeMs: performance.now() - overallStart,
-        jsHeapSize: performance.memory ? performance.memory.usedJSHeapSize : null
-      });
-    }
-  };
-
-  const getStallStage = () => {
-    if (samplesDemuxedCount === 0) return "DEMUX";
-    if (decodeSubmittedCount === 0) return "DECODE QUEUE (FEEDING)";
-    if (framesDecodedCount < decodeSubmittedCount && decodedFrames.length === 0) return "DECODER OUTPUT (DECODING)";
-    if (renderedCount < framesDecodedCount) return "RENDER";
-    if (encodeSubmittedCount < renderedCount) return "ENCODE QUEUE (FEEDING)";
-    if (framesEncodedCount < encodeSubmittedCount) return "ENCODER OUTPUT (ENCODING)";
-    if (muxedCount < framesEncodedCount) return "MUX";
-    return "UNKNOWN";
-  };
-
-  // Setup Heartbeat Log and Stall Detection (Abort after 5 seconds of inactivity)
-  let lastSamplesDemuxed = 0;
-  let lastDecodeSubmitted = 0;
-  let lastDecodeOutput = 0;
-  let lastRendered = 0;
-  let lastEncodeSubmitted = 0;
-  let lastEncodeOutput = 0;
-  let lastMuxed = 0;
-  let lastChangeTime = performance.now();
-
-  const heartbeatInterval = setInterval(() => {
-    console.log(`PoC heartbeat: demux=${samplesDemuxedCount} decodeSubmitted=${decodeSubmittedCount} decodeOutput=${framesDecodedCount} rendered=${renderedCount} encodeSubmitted=${encodeSubmittedCount} encodeOutput=${framesEncodedCount} muxed=${muxedCount}`);
-    
-    const hasChanged = 
-      samplesDemuxedCount !== lastSamplesDemuxed ||
-      decodeSubmittedCount !== lastDecodeSubmitted ||
-      framesDecodedCount !== lastDecodeOutput ||
-      renderedCount !== lastRendered ||
-      encodeSubmittedCount !== lastEncodeSubmitted ||
-      framesEncodedCount !== lastEncodeOutput ||
-      muxedCount !== lastMuxed;
-
-    if (hasChanged) {
-      lastSamplesDemuxed = samplesDemuxedCount;
-      lastDecodeSubmitted = decodeSubmittedCount;
-      lastDecodeOutput = framesDecodedCount;
-      lastRendered = renderedCount;
-      lastEncodeSubmitted = encodeSubmittedCount;
-      lastEncodeOutput = framesEncodedCount;
-      lastMuxed = muxedCount;
-      lastChangeTime = performance.now();
-    } else {
-      const durationSinceChange = performance.now() - lastChangeTime;
-      if (durationSinceChange >= 5000) {
-        const stallStage = getStallStage();
-        pipelineError = `PIPELINE STALLED AT: ${stallStage}`;
-        console.error(`PoC Stalled: ${pipelineError}`);
-        clearInterval(heartbeatInterval);
-        if (frameWaiter) frameWaiter();
-      }
-    }
-    updateProgress();
-  }, 1000);
 
   try {
-    updateProgress();
-
-    // 1. Demuxing with mp4box.js
+    // 1. Demux first 5 samples with mp4box.js starting from first keyframe
     const demuxStart = performance.now();
     const mp4boxFile = MP4Box.createFile();
     
@@ -375,7 +148,7 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
       mp4boxFile.onReady = (info) => {
         videoTrack = info.videoTracks[0];
         if (!videoTrack) {
-          reject(new Error("No video track found in the uploaded file. Please use an MP4 file with H.264 video."));
+          reject(new Error("No video track found in the uploaded file."));
           return;
         }
         
@@ -410,7 +183,6 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
                     results.meta.debugBox.boxesFoundTypes = entry.boxes.map(b => b.type);
                   }
 
-                  // Find avcC box
                   let avcC = entry.avcC;
                   if (!avcC && entry.boxes) {
                     avcC = entry.boxes.find(b => b.type === 'avcC');
@@ -510,10 +282,8 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
                       }
                     } catch (serErr) {
                       results.meta.debugBox.avccSerializationError = serErr.message || String(serErr);
-                      console.error("Failed to serialize avcC box via write():", serErr);
                     }
 
-                    // Capture raw metadata fields
                     results.meta.avccData = {
                       configurationVersion: avcC.configurationVersion || 1,
                       AVCProfileIndication: avcC.AVCProfileIndication || 0,
@@ -546,8 +316,6 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
           results.meta.descriptionHex = `Start: [${firstBytesHex}] ... End: [${lastBytesHex}]`;
         }
 
-        console.log("Strict PoC Box debug metadata:", { ...results.meta });
-
         if (!videoTrack.codec.startsWith('avc1') && !videoTrack.codec.startsWith('encv')) {
           reject(new Error(`PoC only supports H.264 (avc1) files. Found codec: ${videoTrack.codec}`));
           return;
@@ -559,9 +327,6 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
       
       mp4boxFile.onSamples = (track_id, ref, extractedSamples) => {
         samples.push(...extractedSamples);
-        samplesDemuxedCount = samples.length;
-        updateProgress();
-
         if (samples.length >= videoTrack.nb_samples) {
           mp4boxFile.stop();
           resolve();
@@ -590,123 +355,37 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
     await demuxPromise;
     results.timings.demux = performance.now() - demuxStart;
 
-    if (samples.length === 0) {
-      throw new Error("No samples extracted from the video file.");
-    }
-
-    // Align to the first keyframe
     const firstKeyframeIndex = samples.findIndex(s => s.is_sync);
     if (firstKeyframeIndex === -1) {
       throw new Error("No sync frame (keyframe) found in the video track. Cannot decode.");
     }
     
-    // Process all samples from the first keyframe to the end
-    const processedSamples = samples.slice(firstKeyframeIndex);
+    // Only process the first 5 samples for diagnostic mode
+    const diagnosticSamples = samples.slice(firstKeyframeIndex).slice(0, 5);
     const timescale = videoTrack.timescale;
-    const targetFps = videoTrack.video.fps || 30;
-    
-    const width = 1280;
-    const height = 720;
-
-    const totalFrames = processedSamples.length;
-    results.metrics.framesProcessed = totalFrames;
-
-    // Check capabilities
-    results.browserSupport.videoEncoder = typeof VideoEncoder !== 'undefined';
-    results.browserSupport.videoDecoder = typeof VideoDecoder !== 'undefined';
-    results.browserSupport.audioEncoder = typeof AudioEncoder !== 'undefined';
-    
-    if (results.browserSupport.videoEncoder) {
-      const support = await VideoEncoder.isConfigSupported({
-        codec: 'avc1.4d001f',
-        width,
-        height,
-        bitrate: 3000000,
-        framerate: targetFps,
-        hardwareAcceleration: 'prefer-hardware'
-      });
-      results.browserSupport.h264EncodeSupported = support.supported;
-    }
-
-    // STRICT VALIDATION: Halt pipeline if description is missing or invalid
-    if (!descriptionBytes || descriptionBytes.byteLength === 0) {
-      throw new Error("AVCDecoderConfigurationRecord (avcC) is missing or empty. Halting pipeline execution before configure.");
-    }
-
     const trackWidth = results.meta.width;
     const trackHeight = results.meta.height;
 
-    // 2. Setup Muxer & VideoEncoder
-    const muxStart = performance.now();
-    const muxer = new Muxer({
-      target: new ArrayBufferTarget(),
-      video: {
-        codec: 'avc',
-        width,
-        height
-      },
-      fastStart: 'in-memory',
-      firstTimestampBehavior: 'offset'
-    });
-    
-    encoderInstance = new VideoEncoder({
-      output: (chunk, metadata) => {
-        framesEncodedCount++;
-        muxedCount++;
-        
-        // Log first 10 encoded chunks
-        if (results.meta.first10Chunks.length < 10) {
-          results.meta.first10Chunks.push({
-            timestamp: chunk.timestamp,
-            type: chunk.type
-          });
-        }
-
-        try {
-          muxer.addVideoChunk(chunk, metadata);
-        } catch (muxErr) {
-          console.error("Muxer chunk insertion failed:", muxErr);
-          pipelineError = `Muxer chunk error: ${muxErr.message || muxErr}`;
-          if (frameWaiter) frameWaiter();
-        }
-        updateProgress();
-      },
-      error: (err) => {
-        console.error("Encoder error in PoC Step 2:", err);
-        pipelineError = `Encoder error: ${err.message || err}`;
-        if (frameWaiter) frameWaiter();
-      }
-    });
-
-    const videoConfig = {
-      codec: 'avc1.4d001f',
-      width,
-      height,
-      bitrate: 3000000,
-      framerate: targetFps,
-      hardwareAcceleration: 'prefer-hardware'
-    };
-    try {
-      encoderInstance.configure(videoConfig);
-    } catch (err) {
-      throw new Error(`VideoEncoder configuration failed (H.264 Profile): ${err.message}`);
+    // STRICT VALIDATION: Halt pipeline if description is missing or invalid
+    if (!descriptionBytes || descriptionBytes.byteLength === 0) {
+      throw new Error("AVCDecoderConfigurationRecord (avcC) is missing or empty. Cannot configure VideoDecoder.");
     }
-    results.timings.mux += performance.now() - muxStart;
 
-    // 3. Setup VideoDecoder with B-frame queue coordination
+    // 2. Setup VideoDecoder
     decoderInstance = new VideoDecoder({
       output: (frame) => {
-        framesDecodedCount++;
-        decodedFrames.push(frame);
-        if (frameWaiter) {
-          frameWaiter();
-        }
-        updateProgress();
+        results.diagnosticsMode.outputCallbackCount++;
+        results.diagnosticsMode.outputFramesLog.push({
+          timestamp: frame.timestamp,
+          width: frame.codedWidth,
+          height: frame.codedHeight
+        });
+        frame.close(); // release GPU resources immediately
       },
       error: (err) => {
-        console.error("Decoder error in PoC Step 2:", err);
-        pipelineError = `Decoder error: ${err.message || err}`;
-        if (frameWaiter) frameWaiter();
+        results.diagnosticsMode.errorCallbackCount++;
+        results.diagnosticsMode.decoderError = err.message || String(err);
+        console.error("Decoder error:", err);
       }
     });
 
@@ -720,8 +399,7 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
       description: descriptionBytes
     };
 
-    // STRICT browser configuration support checking
-    console.log("Checking support for STRICT configuration:", decoderConfig);
+    // Check support
     let decSupport = null;
     try {
       decSupport = await VideoDecoder.isConfigSupported(decoderConfig);
@@ -745,224 +423,90 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
     }
 
     if (!decSupport || !decSupport.supported) {
-      throw new Error(`VideoDecoder STRICT configuration check failed for "${targetCodecString}" (${trackWidth}x${trackHeight}). browser isConfigSupported returned false.`);
+      throw new Error(`VideoDecoder STRICT configuration check failed for "${targetCodecString}".`);
     }
-    
+
     results.browserSupport.h264DecodeSupported = true;
+    decoderInstance.configure(decoderConfig);
 
-    try {
-      decoderInstance.configure(decoderConfig);
-    } catch (err) {
-      throw new Error(`VideoDecoder configure() threw error for "${targetCodecString}": ${err.message}`);
-    }
+    // 3. Decode 5 samples and track diagnostics
+    const decodeStart = performance.now();
+    for (let idx = 0; idx < diagnosticSamples.length; idx++) {
+      const sample = diagnosticSamples[idx];
+      const sampleTimeUs = Math.round((sample.cts / timescale) * 1000000);
+      const sampleDurationUs = Math.round((sample.duration / timescale) * 1000000);
+      const chunkType = sample.is_sync ? 'key' : 'delta';
 
-    // Canvas setup
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
+      // Capture first 64 bytes HEX dump
+      const bytes = new Uint8Array(sample.data);
+      const hex64 = Array.from(bytes.slice(0, 64)).map(b => b.toString(16).padStart(2, '0')).join(' ').toUpperCase();
 
-    let decodeTime = 0;
-    let renderTime = 0;
-    let encodeTime = 0;
+      const queueBefore = decoderInstance.decodeQueueSize;
 
-    let framesProcessed = 0;
-    let chunksFed = 0;
-
-    const getNextFrame = () => {
-      if (pipelineError) {
-        return Promise.reject(new Error(pipelineError));
-      }
-      if (decodedFrames.length > 0) {
-        return Promise.resolve(decodedFrames.shift());
-      }
-      return new Promise((resolve, reject) => {
-        frameWaiter = () => {
-          frameWaiter = null;
-          if (pipelineError) {
-            reject(new Error(pipelineError));
-          } else if (decodedFrames.length > 0) {
-            resolve(decodedFrames.shift());
-          } else {
-            reject(new Error("Frame waiter triggered but no decoded frames available."));
-          }
-        };
+      const chunk = new EncodedVideoChunk({
+        type: chunkType,
+        timestamp: sampleTimeUs,
+        duration: sampleDurationUs,
+        data: sample.data
       });
-    };
+      decoderInstance.decode(chunk);
 
-    const feedDecoder = () => {
-      // STRICT Backpressure: threshold of 6 frames.
-      // Do not feed the decoder if we already fed 6 frames ahead of rendered count OR the decoded frames queue is full
-      while (chunksFed < totalFrames && 
-             (chunksFed - framesProcessed) < 6 && 
-             decodedFrames.length < 6) {
-        if (pipelineError) break;
-        const sample = processedSamples[chunksFed];
-        const sampleTimeUs = (sample.cts / timescale) * 1000000;
-        const sampleDurationUs = (sample.duration / timescale) * 1000000;
+      const queueAfter = decoderInstance.decodeQueueSize;
 
-        const chunk = new EncodedVideoChunk({
-          type: sample.is_sync ? 'key' : 'delta',
-          timestamp: sampleTimeUs,
-          duration: sampleDurationUs,
-          data: sample.data
-        });
-        decoderInstance.decode(chunk);
-        decodeSubmittedCount++;
-        chunksFed++;
-      }
-    };
-
-    // 4. Sequential Decode -> Render -> Encode Loop
-    for (let i = 0; i < totalFrames; i++) {
-      currentStatus = `Decoding ${i + 1} / ${totalFrames}`;
-      updateProgress();
-
-      if (pipelineError) {
-        throw new Error(pipelineError);
-      }
-
-      // STRICT Backpressure: pause the loop if the encoder queue size is too large (> 6)
-      // Wait for VideoEncoder output callbacks to process chunks and reduce the queue size
-      while (encodeSubmittedCount - framesEncodedCount > 6) {
-        if (pipelineError) {
-          throw new Error(pipelineError);
-        }
-        await new Promise(resolve => setTimeout(resolve, 5));
-      }
-
-      feedDecoder();
-
-      const frameDecodeStart = performance.now();
-      const decodedFrame = await getNextFrame();
-      decodeTime += performance.now() - frameDecodeStart;
-
-      const sampleTimeUs = decodedFrame.timestamp;
-
-      const frameRenderStart = performance.now();
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(0, 0, width, height);
-
-      ctx.drawImage(decodedFrame, 0, 0, width, height);
-      decodedFrame.close(); // Close the VideoFrame immediately after drawing it to canvas
-
-      ctx.fillStyle = '#ec4899';
-      const animTime = i / targetFps;
-      for (let b = 0; b < 16; b++) {
-        const barHeight = 40 + Math.sin(animTime * 10 + b) * 30;
-        ctx.fillRect(240 + b * 50, 640 - barHeight, 40, barHeight);
-      }
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 24px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(`WebCodecs Offline Video PoC - Frame ${i + 1}/${totalFrames}`, width / 2, 60);
-      ctx.font = '16px monospace';
-      ctx.fillStyle = '#a855f7';
-      ctx.fillText(`Timeline: ${animTime.toFixed(2)}s | Source Codec: ${videoTrack.codec}`, width / 2, 100);
-
-      renderedCount++;
-      renderTime += performance.now() - frameRenderStart;
-
-      // Encode Frame using outputTimestamp based on frame index (i)
-      const frameEncodeStart = performance.now();
-      const outputTimestampUs = Math.round(i * (1000000 / targetFps));
-
-      if (results.meta.first10Frames.length < 10) {
-        results.meta.first10Frames.push({
-          frameIndex: i,
-          timestamp: outputTimestampUs
-        });
-      }
-
-      const outputFrame = new VideoFrame(canvas, { timestamp: outputTimestampUs });
-      encoderInstance.encode(outputFrame, { keyFrame: i % 30 === 0 });
-      outputFrame.close(); // Close the newly generated VideoFrame immediately after submitting it to encoder
-      encodeSubmittedCount++;
-      encodeTime += performance.now() - frameEncodeStart;
-
-      framesProcessed++;
+      results.diagnosticsMode.samplesLogged.push({
+        index: idx,
+        byteLength: sample.data.byteLength,
+        hex64,
+        is_sync: sample.is_sync,
+        dts: sample.dts,
+        cts: sample.cts,
+        duration: sample.duration,
+        chunkTimestamp: sampleTimeUs,
+        chunkType,
+        queueBefore,
+        queueAfter
+      });
     }
 
-    currentStatus = "Flushing decoder and encoder...";
-    updateProgress();
-
-    // 5. Flush and Finalize with asynchronous error racing protection
-    if (pipelineError) {
-      throw new Error(pipelineError);
-    }
-    
-    const flushStart = performance.now();
-    await Promise.race([
-      decoderInstance.flush(),
-      new Promise((_, reject) => {
-        const interval = setInterval(() => {
-          if (pipelineError) {
-            clearInterval(interval);
-            reject(new Error(pipelineError));
-          }
-        }, 10);
-      })
-    ]);
-
-    if (pipelineError) {
-      throw new Error(pipelineError);
+    // Wait for the decoder to complete by calling flush with a timeout race
+    try {
+      await Promise.race([
+        decoderInstance.flush(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Decoder flush timed out after 2000ms")), 2000))
+      ]);
+    } catch (flushErr) {
+      results.diagnosticsMode.decoderError = `Flush timeout/failure: ${flushErr.message || flushErr}`;
     }
 
-    await Promise.race([
-      encoderInstance.flush(),
-      new Promise((_, reject) => {
-        const interval = setInterval(() => {
-          if (pipelineError) {
-            clearInterval(interval);
-            reject(new Error(pipelineError));
-          }
-        }, 10);
-      })
-    ]);
-    results.timings.flush = performance.now() - flushStart;
-
-    currentStatus = "Finalizing MP4 muxer...";
-    updateProgress();
-
-    const muxFinalizeStart = performance.now();
-    muxer.finalize();
-    results.timings.mux += performance.now() - muxFinalizeStart;
-
-    const totalElapsed = performance.now() - overallStart;
-
-    results.timings.decode = decodeTime;
-    results.timings.render = renderTime;
-    results.timings.encode = encodeTime;
-    results.timings.total = totalElapsed;
-
-    const buffer = muxer.target.buffer;
-    const blob = new Blob([buffer], { type: 'video/mp4' });
-    
-    results.metrics.fileSizeMb = blob.size / 1024 / 1024;
-    results.metrics.framesDecoded = framesDecodedCount;
-    results.metrics.framesEncoded = framesEncodedCount;
-    results.metrics.success = true;
-
-    const actualDurationSec = totalFrames / targetFps;
-    results.metrics.realtimeSpeedFactor = actualDurationSec / (totalElapsed / 1000);
-    results.videoUrl = URL.createObjectURL(blob);
+    results.timings.decode = performance.now() - decodeStart;
+    results.timings.total = performance.now() - overallStart;
+    results.metrics.framesDecoded = results.diagnosticsMode.outputCallbackCount;
+    results.metrics.success = results.diagnosticsMode.outputCallbackCount > 0;
 
   } catch (err) {
     results.error = err.message || String(err);
   } finally {
-    clearInterval(heartbeatInterval);
     if (decoderInstance) {
       try { decoderInstance.close(); } catch (e) {}
     }
-    if (encoderInstance) {
-      try { encoderInstance.close(); } catch (e) {}
-    }
-    for (const f of decodedFrames) {
-      try { f.close(); } catch (e) {}
-    }
-    decodedFrames.length = 0;
-    updateProgress();
+  }
+
+  // Trigger progress callback with complete stats at the end
+  if (onProgress) {
+    onProgress({
+      status: "Completed Diagnostic Mode",
+      samplesDemuxed: 5,
+      decodeSubmitted: 5,
+      decodeOutput: results.diagnosticsMode.outputCallbackCount,
+      decodeQueueSize: 0,
+      renderedFrames: 0,
+      encodeSubmitted: 0,
+      encodeOutput: 0,
+      encodeQueueSize: 0,
+      muxedChunks: 0,
+      elapsedTimeMs: performance.now() - overallStart,
+      jsHeapSize: null
+    });
   }
 
   return results;
