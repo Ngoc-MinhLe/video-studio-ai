@@ -2,18 +2,30 @@ import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import * as MP4Box from 'mp4box';
 
 /**
- * Helper to extract avcC description bytes from MP4Box track entries.
- * Necessary for VideoDecoder initialization with H.264 codec.
+ * Helper to extract codec description bytes (extradata) from the raw MP4 stsd box entries.
+ * Necessary for VideoDecoder initialization with H.264, HEVC, or VP9 codec.
  */
-function getAVCDescription(track) {
-  const entry = track.entries[0];
-  const avcC = entry.avc1?.avcC || entry.encv?.avc1?.avcC;
-  if (!avcC) return null;
-  
-  // Write the avcC box to a raw binary stream
-  const stream = new MP4Box.DataStream(undefined, 0, MP4Box.DataStream.BIG_ENDIAN);
-  avcC.write(stream);
-  return new Uint8Array(stream.buffer, 8); // Skip 8-byte box size/type header
+function getCodecDescription(mp4boxFile, trackId) {
+  try {
+    if (!mp4boxFile || !mp4boxFile.moov) return null;
+    const trak = mp4boxFile.moov.traks.find(t => t.tkhd && t.tkhd.track_id === trackId);
+    if (!trak) return null;
+    
+    const stsd = trak.mdia?.minf?.stbl?.stsd;
+    if (!stsd || !stsd.entries || stsd.entries.length === 0) return null;
+    
+    const entry = stsd.entries[0];
+    const box = entry.avc1 || entry.encv?.avc1 || entry.hvc1 || entry.hev1 || entry.vp09 || entry.vp9;
+    const configBox = box?.avcC || box?.hvcC || box?.vpcC;
+    if (configBox) {
+      const stream = new MP4Box.DataStream(undefined, 0, MP4Box.DataStream.BIG_ENDIAN);
+      configBox.write(stream);
+      return new Uint8Array(stream.buffer, 8); // Skip 8-byte box size/type header
+    }
+  } catch (e) {
+    console.warn("Failed to extract codec description from stsd box:", e);
+  }
+  return null;
 }
 
 /**
@@ -282,7 +294,7 @@ export async function runWebCodecsVideoFilePoC(file) {
           return;
         }
         
-        descriptionBytes = getAVCDescription(videoTrack);
+        descriptionBytes = getCodecDescription(mp4boxFile, videoTrack.id);
         mp4boxFile.setExtraction(videoTrack.id);
         mp4boxFile.start();
       };
@@ -413,7 +425,11 @@ export async function runWebCodecsVideoFilePoC(file) {
       framerate: targetFps,
       hardwareAcceleration: 'prefer-hardware'
     };
-    encoder.configure(videoConfig);
+    try {
+      encoder.configure(videoConfig);
+    } catch (err) {
+      throw new Error(`VideoEncoder configuration failed (H.264 Profile): ${err.message}`);
+    }
     results.timings.mux += performance.now() - muxStart;
 
     // 3. Setup VideoDecoder
@@ -435,7 +451,11 @@ export async function runWebCodecsVideoFilePoC(file) {
     if (descriptionBytes) {
       decoderConfig.description = descriptionBytes;
     }
-    decoder.configure(decoderConfig);
+    try {
+      decoder.configure(decoderConfig);
+    } catch (err) {
+      throw new Error(`VideoDecoder configuration failed (Codec: ${videoTrack.codec}): ${err.message}. Your browser might not support decoding this video file format.`);
+    }
 
     // Canvas setup
     const canvas = document.createElement('canvas');
