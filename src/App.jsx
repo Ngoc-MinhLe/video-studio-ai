@@ -1882,22 +1882,37 @@ export default function App() {
                       [Ẩn]
                     </button>
                   </div>
-                  {pocVideoResults.error ? (
-                    <div className="text-rose-400 font-bold">Lỗi: {pocVideoResults.error}</div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                      {pocVideoResults.meta && (
-                        <div className="col-span-2 font-bold text-pink-400 border-b border-pink-500/10 pb-1 mb-1 flex flex-col gap-0.5">
-                          <div>🎥 FILE METADATA:</div>
-                          <div className="text-[9px] text-gray-300 font-normal">
-                            - Source Codec: <span className="text-white font-bold">{pocVideoResults.meta.sourceCodec}</span><br />
-                            - Decoder Codec: <span className="text-white font-bold">{pocVideoResults.meta.targetCodec}</span><br />
-                            - Dimension: <span className="text-white font-bold">{pocVideoResults.meta.width}x{pocVideoResults.meta.height}</span><br />
-                            - Extradata avcC: <span className="text-white font-bold">{pocVideoResults.meta.hasAvcc ? `YES (SPS: ${pocVideoResults.meta.spsCount || 0}, PPS: ${pocVideoResults.meta.ppsCount || 0})` : 'NO'}</span>
-                          </div>
+                  {pocVideoResults.meta && (
+                    <div className="p-3 border-b border-pink-500/15 text-[10px] text-gray-300 flex flex-col gap-1.5 font-mono">
+                      <div className="font-bold text-pink-400">🎥 MP4 HEADER METADATA:</div>
+                      <div>• Source Codec: <span className="text-white font-bold">{pocVideoResults.meta.sourceCodec}</span></div>
+                      <div>• Size: <span className="text-white font-bold">{pocVideoResults.meta.width}x{pocVideoResults.meta.height}</span></div>
+                      <div>• Extradata (avcC): <span className="text-white font-bold">{pocVideoResults.meta.hasAvcc ? `YES (SPS: ${pocVideoResults.meta.spsCount}, PPS: ${pocVideoResults.meta.ppsCount})` : 'NO'}</span></div>
+                      {pocVideoResults.meta.avccHeaderHex && (
+                        <div className="text-[8px] bg-black/40 p-1.5 rounded border border-pink-500/10 whitespace-pre-wrap break-all font-mono leading-tight">
+                          HEX: {pocVideoResults.meta.avccHeaderHex}
                         </div>
                       )}
-                      <div className="col-span-2 font-bold text-pink-400 border-b border-pink-500/10 pb-0.5 mb-0.5">⏱️ Thời gian xử lý:</div>
+                      {pocVideoResults.meta.supportCheck && (
+                        <div className="mt-1 border-t border-pink-500/10 pt-1.5 flex flex-col gap-0.5">
+                          <div className="font-bold text-pink-400">🔍 BROWSER COMPATIBILITY CHECKS:</div>
+                          <div>• Original Codec ({pocVideoResults.meta.supportCheck.originalCodec}): <span className={pocVideoResults.meta.supportCheck.originalSupported ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocVideoResults.meta.supportCheck.originalSupported ? "SUPPORTED" : "UNSUPPORTED"}</span></div>
+                          {pocVideoResults.meta.supportCheck.fallbackTried && (
+                            <div>• Fallback Codec ({pocVideoResults.meta.supportCheck.fallbackCodec}): <span className={pocVideoResults.meta.supportCheck.fallbackSupported ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocVideoResults.meta.supportCheck.fallbackSupported ? "SUPPORTED" : "UNSUPPORTED"}</span></div>
+                          )}
+                          <div>• Final Config Accepted: <span className="text-white font-bold">{pocVideoResults.meta.supportCheck.finalCodecUsed}</span></div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {pocVideoResults.error ? (
+                    <div className="p-3 text-rose-400 font-bold font-mono text-[10px]">
+                      ❌ LỖI PIPELINE: {pocVideoResults.error}
+                    </div>
+                  ) : (
+                    <div className="p-3 grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[10px]">
+                      <div className="col-span-2 font-bold text-pink-400 border-b border-pink-500/10 pb-0.5 mb-0.5">⏱️ THỜI GIAN XỬ LÝ (BENCHMARK):</div>
                       <div>Đọc/Demux: <span className="text-white">{pocVideoResults.timings.demux.toFixed(1)}ms</span></div>
                       <div>VideoDecoder: <span className="text-white">{pocVideoResults.timings.decode.toFixed(1)}ms</span></div>
                       <div>Canvas Render: <span className="text-white">{pocVideoResults.timings.render.toFixed(1)}ms</span></div>
@@ -1909,10 +1924,10 @@ export default function App() {
                         Tốc độ xuất offline: <span className="text-emerald-400">{(pocVideoResults.metrics.realtimeSpeedFactor).toFixed(1)}× realtime</span>
                       </div>
                       
-                      <div className="col-span-2 font-bold text-pink-400 border-t border-pink-500/10 pt-0.5 mt-0.5">📦 File kết quả:</div>
+                      <div className="col-span-2 font-bold text-pink-400 border-t border-pink-500/10 pt-0.5 mt-0.5">📦 FILE KẾT QUẢ:</div>
                       <div>Tổng số frame: <span className="text-white font-bold">{pocVideoResults.metrics.framesProcessed} frames</span></div>
                       <div>Kích thước file: <span className="text-white font-bold">{pocVideoResults.metrics.fileSizeMb.toFixed(2)} MB</span></div>
-                      <div className="col-span-2 mt-1.5 flex gap-2">
+                      <div className="col-span-2 mt-1.5 flex gap-2 font-sans text-xs">
                         <a 
                           href={pocVideoResults.videoUrl} 
                           download="webcodecs_video_poc_output.mp4" 

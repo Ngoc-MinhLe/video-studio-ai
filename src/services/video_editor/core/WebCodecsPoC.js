@@ -541,19 +541,64 @@ export async function runWebCodecsVideoFilePoC(file) {
       decoderConfig.description = descriptionBytes;
     }
 
-    // Verify decoder config before configure()
-    const decSupport = await VideoDecoder.isConfigSupported(decoderConfig);
-    if (!decSupport.supported) {
-      throw new Error(`VideoDecoder does not support this codec configuration: "${targetCodecString}" (${videoTrack.video.width}x${videoTrack.video.height})`);
+    // Verify decoder config before configure() using fallback options if needed
+    console.log("Checking VideoDecoder configuration support for codec:", targetCodecString);
+    let decSupport = await VideoDecoder.isConfigSupported(decoderConfig);
+    
+    results.meta.supportCheck = {
+      originalCodec: targetCodecString,
+      originalSupported: decSupport.supported,
+      fallbackTried: false,
+      fallbackCodec: '',
+      fallbackSupported: false,
+      finalCodecUsed: targetCodecString,
+      configObj: {
+        codec: decoderConfig.codec,
+        codedWidth: decoderConfig.codedWidth,
+        codedHeight: decoderConfig.codedHeight,
+        descriptionLength: descriptionBytes ? descriptionBytes.byteLength : 0
+      }
+    };
+
+    if (!decSupport.supported && targetCodecString.startsWith('avc1')) {
+      // Try resolving constraint flags profile compatibility issues: replace CC with '00'
+      const parts = targetCodecString.split('.');
+      if (parts.length === 2 && parts[1].length === 6) {
+        const profile = parts[1].slice(0, 2);
+        const level = parts[1].slice(4, 6);
+        const fallbackCodec = `avc1.${profile}00${level}`;
+        
+        results.meta.supportCheck.fallbackTried = true;
+        results.meta.supportCheck.fallbackCodec = fallbackCodec;
+        
+        console.log("Original codec rejected by browser. Retrying fallback config with:", fallbackCodec);
+        const fallbackConfig = { ...decoderConfig, codec: fallbackCodec };
+        const fallbackSupport = await VideoDecoder.isConfigSupported(fallbackConfig);
+        
+        results.meta.supportCheck.fallbackSupported = fallbackSupport.supported;
+        
+        if (fallbackSupport.supported) {
+          console.log("Fallback codec configuration is supported. Using:", fallbackCodec);
+          decoderConfig.codec = fallbackCodec;
+          targetCodecString = fallbackCodec;
+          results.meta.supportCheck.finalCodecUsed = fallbackCodec;
+          decSupport = fallbackSupport;
+        }
+      }
     }
+
+    if (!decSupport.supported) {
+      throw new Error(`VideoDecoder does not support this codec configuration: "${targetCodecString}" (${videoTrack.video.width}x${videoTrack.video.height}). isConfigSupported returned unsupported.`);
+    }
+    
     results.browserSupport.h264DecodeSupported = true;
 
     try {
       decoderInstance.configure(decoderConfig);
     } catch (err) {
-      throw new Error(`VideoDecoder configuration failed (Codec: ${targetCodecString}): ${err.message}`);
+      throw new Error(`VideoDecoder configure() threw error for "${targetCodecString}": ${err.message}`);
     }
-
+    
     // Canvas setup
     const canvas = document.createElement('canvas');
     canvas.width = width;
