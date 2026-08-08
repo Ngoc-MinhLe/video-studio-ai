@@ -2,90 +2,6 @@ import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import * as MP4Box from 'mp4box';
 
 /**
- * Helper to extract codec description bytes (extradata) and its parsed box from the raw MP4 stsd box entries.
- * Necessary for VideoDecoder initialization with H.264, HEVC, or VP9 codec.
- */
-function getCodecDescription(mp4boxFile, trackId) {
-  try {
-    if (!mp4boxFile || !mp4boxFile.moov) return null;
-    const trak = mp4boxFile.moov.traks.find(t => t.tkhd && t.tkhd.track_id === trackId);
-    if (!trak) return null;
-    
-    const stsd = trak.mdia?.minf?.stbl?.stsd;
-    if (!stsd || !stsd.entries || stsd.entries.length === 0) return null;
-    
-    const entry = stsd.entries[0];
-    if (!entry) return null;
-
-    // In mp4box.js, the entry itself is the box (e.g. type 'avc1' or 'encv')
-    // We look for 'avcC' directly on the entry or in entry.boxes
-    let configBox = entry.avcC || entry.hvcC || entry.vpcC;
-    
-    if (!configBox && entry.boxes && entry.boxes.length > 0) {
-      configBox = entry.boxes.find(b => b.type === 'avcC' || b.type === 'hvcC' || b.type === 'vpcC');
-    }
-
-    if (configBox) {
-      // Handle H.264 (AVC) manually to serialise the AVCDecoderConfigurationRecord reliably
-      if (configBox.type === 'avcC') {
-        const avcC = configBox;
-        const spsList = avcC.SPS || [];
-        const ppsList = avcC.PPS || [];
-        
-        let totalSize = 6;
-        for (const sps of spsList) totalSize += 2 + (sps.length || 0);
-        for (const pps of ppsList) totalSize += 2 + (pps.length || 0);
-        
-        const data = new Uint8Array(totalSize);
-        data[0] = avcC.configurationVersion || 1;
-        data[1] = avcC.AVCProfileIndication;
-        data[2] = avcC.profile_compatibility;
-        data[3] = avcC.AVCLevelIndication;
-        data[4] = 0xFC | (avcC.lengthSizeMinusOne ?? 3);
-        data[5] = 0xE0 | spsList.length;
-        
-        let offset = 6;
-        for (const sps of spsList) {
-          const len = sps.length || 0;
-          data[offset++] = (len >> 8) & 0xFF;
-          data[offset++] = len & 0xFF;
-          // In mp4box.js, sps can be either a raw byte array or an object with 'nalu' byte array
-          const src = sps.nalu || sps;
-          if (src) {
-            data.set(src, offset);
-          }
-          offset += len;
-        }
-        
-        data[offset++] = ppsList.length;
-        for (const pps of ppsList) {
-          const len = pps.length || 0;
-          data[offset++] = (len >> 8) & 0xFF;
-          data[offset++] = len & 0xFF;
-          // In mp4box.js, pps can be either a raw byte array or an object with 'nalu' byte array
-          const src = pps.nalu || pps;
-          if (src) {
-            data.set(src, offset);
-          }
-          offset += len;
-        }
-        return { description: data, box: configBox, entry };
-      }
-
-      // Fallback for HEVC/VP9: try writing the raw parsed config box
-      if (typeof configBox.write === 'function') {
-        const stream = new MP4Box.DataStream(undefined, 0, MP4Box.DataStream.BIG_ENDIAN);
-        configBox.write(stream);
-        return { description: new Uint8Array(stream.buffer, 8), box: configBox, entry };
-      }
-    }
-  } catch (e) {
-    console.warn("Failed to extract codec description from stsd box:", e);
-  }
-  return null;
-}
-
-/**
  * Runs an offline H.264 rendering and muxing Proof of Concept (PoC) using WebCodecs.
  * This runs independently of the main rendering loop and measures real-world performance.
  * 
@@ -299,7 +215,7 @@ export async function runWebCodecsPoC() {
 
 /**
  * Runs an offline H.264 sequential decoding, rendering, and encoding PoC using a real uploaded MP4 file.
- * Decodes the entire video from start to finish.
+ * Performs deep debug metrics and writes them back to the results metadata.
  * 
  * @param {File} file The real uploaded video file.
  * @returns {Promise<Object>} The benchmark results and output blob URL.
@@ -324,7 +240,9 @@ export async function runWebCodecsVideoFilePoC(file) {
       descriptionByteLength: 0,
       descriptionHex: '',
       supportCheck: null,
-      debugBox: null
+      debugBox: null,
+      spsDebug: null,
+      ppsDebug: null
     },
     timings: {
       demux: 0,
@@ -379,7 +297,8 @@ export async function runWebCodecsVideoFilePoC(file) {
           boxesFoundTypes: [],
           avccBoxKeys: [],
           avccBoxConstructor: '',
-          avccSerializationError: ''
+          avccSerializationError: '',
+          avccSerializeMethodUsed: 'none'
         };
         
         if (mp4boxFile.moov) {
@@ -410,67 +329,115 @@ export async function runWebCodecsVideoFilePoC(file) {
                     results.meta.debugBox.avccBoxConstructor = avcC.constructor?.name || typeof avcC;
                     results.meta.hasAvcc = true;
 
-                    // Manual extraction of AVCDecoderConfigurationRecord
-                    try {
-                      const spsList = avcC.SPS || [];
-                      const ppsList = avcC.PPS || [];
-                      
-                      let totalSize = 6;
-                      for (const sps of spsList) totalSize += 2 + (sps.length || 0);
-                      for (const pps of ppsList) totalSize += 2 + (pps.length || 0);
-                      
-                      const data = new Uint8Array(totalSize);
-                      data[0] = avcC.configurationVersion || 1;
-                      data[1] = avcC.AVCProfileIndication || 0;
-                      data[2] = avcC.profile_compatibility || 0;
-                      data[3] = avcC.AVCLevelIndication || 0;
-                      data[4] = 0xFC | (avcC.lengthSizeMinusOne ?? 3);
-                      data[5] = 0xE0 | spsList.length;
-                      
-                      let offset = 6;
-                      for (const sps of spsList) {
-                        const len = sps.length || 0;
-                        data[offset++] = (len >> 8) & 0xFF;
-                        data[offset++] = len & 0xFF;
-                        // In mp4box.js, sps can be either a raw byte array or an object with 'nalu' byte array
-                        const src = sps.nalu || sps;
-                        if (src) {
-                          data.set(src, offset);
-                        }
-                        offset += len;
-                      }
-                      
-                      data[offset++] = ppsList.length;
-                      for (const pps of ppsList) {
-                        const len = pps.length || 0;
-                        data[offset++] = (len >> 8) & 0xFF;
-                        data[offset++] = len & 0xFF;
-                        // In mp4box.js, pps can be either a raw byte array or an object with 'nalu' byte array
-                        const src = pps.nalu || pps;
-                        if (src) {
-                          data.set(src, offset);
-                        }
-                        offset += len;
-                      }
-
-                      descriptionBytes = data;
-
-                      results.meta.avccData = {
-                        configurationVersion: avcC.configurationVersion || 1,
-                        AVCProfileIndication: avcC.AVCProfileIndication || 0,
-                        profile_compatibility: avcC.profile_compatibility || 0,
-                        AVCLevelIndication: avcC.AVCLevelIndication || 0,
-                        lengthSizeMinusOne: avcC.lengthSizeMinusOne ?? 3,
-                        spsCount: spsList.length,
-                        ppsCount: ppsList.length,
-                        spsLengths: spsList.map(s => s.length || 0),
-                        ppsLengths: ppsList.map(p => p.length || 0),
-                        avccFullHex: Array.from(descriptionBytes).map(b => b.toString(16).padStart(2, '0')).join(' ').toUpperCase()
+                    // 1. DUMP avcC.SPS[0] diagnostics
+                    if (avcC.SPS && avcC.SPS.length > 0) {
+                      const sps = avcC.SPS[0];
+                      results.meta.spsDebug = {
+                        exists: true,
+                        constructorName: sps.constructor?.name || '',
+                        typeOf: typeof sps,
+                        isArray: Array.isArray(sps),
+                        isUint8Array: sps instanceof Uint8Array,
+                        isArrayBuffer: sps instanceof ArrayBuffer,
+                        byteLength: sps.byteLength,
+                        length: sps.length,
+                        keys: Object.keys(sps),
+                        properties: {}
                       };
+                      // Safe properties extraction
+                      for (const k of results.meta.spsDebug.keys) {
+                        try {
+                          const val = sps[k];
+                          if (val instanceof Uint8Array) {
+                            results.meta.spsDebug.properties[k] = `Uint8Array(${val.length}) HEX: ${Array.from(val.slice(0, 16)).map(b => b.toString(16).padStart(2, '0')).join(' ').toUpperCase()}`;
+                          } else {
+                            results.meta.spsDebug.properties[k] = `${typeof val} = ${JSON.stringify(val)}`;
+                          }
+                        } catch (e) {
+                          results.meta.spsDebug.properties[k] = `Error: ${e.message}`;
+                        }
+                      }
+                      // HEX dump of first 32 bytes
+                      try {
+                        const targetBytes = sps.nalu || sps;
+                        if (targetBytes) {
+                          results.meta.spsDebug.hex32 = Array.from(targetBytes.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ').toUpperCase();
+                        }
+                      } catch (e) {
+                        results.meta.spsDebug.hex32 = `HexErr: ${e.message}`;
+                      }
+                    } else {
+                      results.meta.spsDebug = { exists: false };
+                    }
+
+                    // 2. DUMP avcC.PPS[0] diagnostics
+                    if (avcC.PPS && avcC.PPS.length > 0) {
+                      const pps = avcC.PPS[0];
+                      results.meta.ppsDebug = {
+                        exists: true,
+                        constructorName: pps.constructor?.name || '',
+                        typeOf: typeof pps,
+                        isArray: Array.isArray(pps),
+                        isUint8Array: pps instanceof Uint8Array,
+                        isArrayBuffer: pps instanceof ArrayBuffer,
+                        byteLength: pps.byteLength,
+                        length: pps.length,
+                        keys: Object.keys(pps),
+                        properties: {}
+                      };
+                      // Safe properties extraction
+                      for (const k of results.meta.ppsDebug.keys) {
+                        try {
+                          const val = pps[k];
+                          if (val instanceof Uint8Array) {
+                            results.meta.ppsDebug.properties[k] = `Uint8Array(${val.length}) HEX: ${Array.from(val.slice(0, 16)).map(b => b.toString(16).padStart(2, '0')).join(' ').toUpperCase()}`;
+                          } else {
+                            results.meta.ppsDebug.properties[k] = `${typeof val} = ${JSON.stringify(val)}`;
+                          }
+                        } catch (e) {
+                          results.meta.ppsDebug.properties[k] = `Error: ${e.message}`;
+                        }
+                      }
+                      // HEX dump of first 32 bytes
+                      try {
+                        const targetBytes = pps.nalu || pps;
+                        if (targetBytes) {
+                          results.meta.ppsDebug.hex32 = Array.from(targetBytes.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ').toUpperCase();
+                        }
+                      } catch (e) {
+                        results.meta.ppsDebug.hex32 = `HexErr: ${e.message}`;
+                      }
+                    } else {
+                      results.meta.ppsDebug = { exists: false };
+                    }
+
+                    // 3. Serialize AVCDecoderConfigurationRecord using mp4box official write()
+                    try {
+                      const stream = new MP4Box.DataStream(undefined, 0, MP4Box.DataStream.BIG_ENDIAN);
+                      avcC.write(stream);
+                      const rawBox = new Uint8Array(stream.buffer);
+                      if (rawBox.length > 8) {
+                        descriptionBytes = rawBox.slice(8); // Strip 8-byte box size/type header
+                        results.meta.debugBox.avccSerializeMethodUsed = 'mp4box_avcC_write';
+                      }
                     } catch (serErr) {
                       results.meta.debugBox.avccSerializationError = serErr.message || String(serErr);
-                      console.error("Failed to serialize avcC box properties:", serErr);
+                      console.error("Failed to serialize avcC box via write():", serErr);
                     }
+
+                    // Capture raw metadata fields
+                    results.meta.avccData = {
+                      configurationVersion: avcC.configurationVersion || 1,
+                      AVCProfileIndication: avcC.AVCProfileIndication || 0,
+                      profile_compatibility: avcC.profile_compatibility || 0,
+                      AVCLevelIndication: avcC.AVCLevelIndication || 0,
+                      lengthSizeMinusOne: avcC.lengthSizeMinusOne ?? 3,
+                      spsCount: avcC.SPS?.length || 0,
+                      ppsCount: avcC.PPS?.length || 0,
+                      nb_SPS_nalus: avcC.nb_SPS_nalus || 0,
+                      nb_PPS_nalus: avcC.nb_PPS_nalus || 0,
+                      avccFullHex: descriptionBytes ? Array.from(descriptionBytes).map(b => b.toString(16).padStart(2, '0')).join(' ').toUpperCase() : ''
+                    };
                   }
                 }
               }
@@ -479,14 +446,6 @@ export async function runWebCodecsVideoFilePoC(file) {
         }
         
         targetCodecString = videoTrack.codec;
-        // Strictly set avc1 target codec according to file metadata profile indications
-        if (results.meta.avccData && videoTrack.codec.startsWith('avc1')) {
-          const profile = results.meta.avccData.AVCProfileIndication.toString(16).padStart(2, '0');
-          const comp = results.meta.avccData.profile_compatibility.toString(16).padStart(2, '0');
-          const level = results.meta.avccData.AVCLevelIndication.toString(16).padStart(2, '0');
-          targetCodecString = `avc1.${profile}${comp}${level}`;
-        }
-        
         results.meta.sourceCodec = videoTrack.codec;
         results.meta.targetCodec = targetCodecString;
         results.meta.width = videoTrack.track_width || (videoTrack.video && videoTrack.video.width) || 1920;
@@ -512,8 +471,6 @@ export async function runWebCodecsVideoFilePoC(file) {
       
       mp4boxFile.onSamples = (track_id, ref, extractedSamples) => {
         samples.push(...extractedSamples);
-        
-        // Extract all samples (do not limit to 10 seconds anymore)
         if (samples.length >= videoTrack.nb_samples) {
           mp4boxFile.stop();
           resolve();
@@ -552,7 +509,7 @@ export async function runWebCodecsVideoFilePoC(file) {
       throw new Error("No sync frame (keyframe) found in the video track. Cannot decode.");
     }
     
-    // Process all samples from the first keyframe to the end (no 10s capping)
+    // Process all samples from the first keyframe to the end
     const processedSamples = samples.slice(firstKeyframeIndex);
     const timescale = videoTrack.timescale;
     const targetFps = videoTrack.video.fps || 30;
@@ -580,9 +537,9 @@ export async function runWebCodecsVideoFilePoC(file) {
       results.browserSupport.h264EncodeSupported = support.supported;
     }
 
-    // Only configure VideoDecoder if description is successfully extracted
+    // STRICT VALIDATION: Halt pipeline if description is missing or invalid
     if (!descriptionBytes || descriptionBytes.byteLength === 0) {
-      throw new Error("AVCDecoderConfigurationRecord (avcC) is missing. Cannot verify VideoDecoder.");
+      throw new Error("AVCDecoderConfigurationRecord (avcC) is missing or empty. Halting pipeline execution before configure.");
     }
 
     const trackWidth = results.meta.width;
@@ -740,7 +697,7 @@ export async function runWebCodecsVideoFilePoC(file) {
 
     // 4. Sequential Decode -> Render -> Encode Loop
     for (let i = 0; i < totalFrames; i++) {
-      // Timeout safety guard (Increased to 60 seconds to process the entire video file)
+      // Timeout safety guard (60 seconds)
       if (performance.now() - overallStart > 60000) {
         throw new Error("Timeout: WebCodecs processing exceeded 60 seconds total limit.");
       }

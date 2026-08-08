@@ -1928,6 +1928,52 @@ export default function App() {
                         </div>
                       )}
 
+                      {pocVideoResults.meta.spsDebug && pocVideoResults.meta.spsDebug.exists && (
+                        <div className="bg-black/35 p-2 rounded border border-pink-500/10 text-[9px] flex flex-col gap-0.5 mt-1 font-mono">
+                          <div className="font-bold text-pink-300 border-b border-pink-500/10 pb-0.5 mb-1">🔍 avcC.SPS[0] diagnostics:</div>
+                          <div>- TypeOf: {pocVideoResults.meta.spsDebug.typeOf} | Class: {pocVideoResults.meta.spsDebug.constructorName}</div>
+                          <div>- isArray: {pocVideoResults.meta.spsDebug.isArray ? "YES" : "NO"} | isUint8: {pocVideoResults.meta.spsDebug.isUint8Array ? "YES" : "NO"}</div>
+                          <div>- length: {pocVideoResults.meta.spsDebug.length} | byteLength: {pocVideoResults.meta.spsDebug.byteLength}</div>
+                          <div>- Keys: {JSON.stringify(pocVideoResults.meta.spsDebug.keys)}</div>
+                          {Object.keys(pocVideoResults.meta.spsDebug.properties).length > 0 && (
+                            <div className="text-[8px] text-gray-400 pl-1 mt-1 leading-normal border-t border-pink-500/5 pt-1">
+                              Properties:<br />
+                              {Object.entries(pocVideoResults.meta.spsDebug.properties).map(([k, v]) => (
+                                <div key={k}>&nbsp;&nbsp;{k}: {v}</div>
+                              ))}
+                            </div>
+                          )}
+                          {pocVideoResults.meta.spsDebug.hex32 && (
+                            <div className="text-[7.5px] text-gray-400 break-all leading-normal mt-1 border-t border-pink-500/5 pt-1 font-mono">
+                              HEX (First 32b): {pocVideoResults.meta.spsDebug.hex32}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {pocVideoResults.meta.ppsDebug && pocVideoResults.meta.ppsDebug.exists && (
+                        <div className="bg-black/35 p-2 rounded border border-pink-500/10 text-[9px] flex flex-col gap-0.5 mt-1 font-mono">
+                          <div className="font-bold text-pink-300 border-b border-pink-500/10 pb-0.5 mb-1">🔍 avcC.PPS[0] diagnostics:</div>
+                          <div>- TypeOf: {pocVideoResults.meta.ppsDebug.typeOf} | Class: {pocVideoResults.meta.ppsDebug.constructorName}</div>
+                          <div>- isArray: {pocVideoResults.meta.ppsDebug.isArray ? "YES" : "NO"} | isUint8: {pocVideoResults.meta.ppsDebug.isUint8Array ? "YES" : "NO"}</div>
+                          <div>- length: {pocVideoResults.meta.ppsDebug.length} | byteLength: {pocVideoResults.meta.ppsDebug.byteLength}</div>
+                          <div>- Keys: {JSON.stringify(pocVideoResults.meta.ppsDebug.keys)}</div>
+                          {Object.keys(pocVideoResults.meta.ppsDebug.properties).length > 0 && (
+                            <div className="text-[8px] text-gray-400 pl-1 mt-1 leading-normal border-t border-pink-500/5 pt-1">
+                              Properties:<br />
+                              {Object.entries(pocVideoResults.meta.ppsDebug.properties).map(([k, v]) => (
+                                <div key={k}>&nbsp;&nbsp;{k}: {v}</div>
+                              ))}
+                            </div>
+                          )}
+                          {pocVideoResults.meta.ppsDebug.hex32 && (
+                            <div className="text-[7.5px] text-gray-400 break-all leading-normal mt-1 border-t border-pink-500/5 pt-1 font-mono">
+                              HEX (First 32b): {pocVideoResults.meta.ppsDebug.hex32}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       <div className="mt-1 border-t border-pink-500/10 pt-1.5 flex flex-col gap-0.5">
                         <div className="font-bold text-pink-400">📦 DECODER CONFIGURATION (INPUT):</div>
                         <div>• description.byteLength: <span className="text-white font-bold">{pocVideoResults.meta.descriptionByteLength} bytes</span></div>
