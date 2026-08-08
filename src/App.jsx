@@ -2149,9 +2149,48 @@ export default function App() {
                         </div>
                       )}
 
+                      {/* MP4 MUXER DIAGNOSTICS */}
+                      <div className="font-bold text-pink-400 mt-2 border-t border-pink-500/10 pt-2 font-mono">🔬 MP4 MUXER DIAGNOSTICS:</div>
+                      <div className="font-mono">• Mux Status: <span className={pocVideoResults.diagnosticsMode.muxStatus === 'SUCCESS' ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocVideoResults.diagnosticsMode.muxStatus}</span></div>
+                      <div className="font-mono">• Finalize Status: <span className={pocVideoResults.diagnosticsMode.finalizeStatus === 'SUCCESS' ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocVideoResults.diagnosticsMode.finalizeStatus}</span></div>
+                      <div className="font-mono">• Muxed Chunks: <span className="text-white font-bold">{pocVideoResults.diagnosticsMode.muxedChunksCount} chunks</span></div>
+                      <div className="font-mono">• MP4 Byte Length: <span className="text-white font-bold">{pocVideoResults.diagnosticsMode.mp4ByteLength} bytes</span></div>
+
+                      {pocVideoResults.diagnosticsMode.muxError && (
+                        <div className="text-rose-400 font-bold bg-rose-950/20 p-2 rounded border border-rose-500/20 break-all mt-1 font-mono">
+                          ❌ Muxer Error: {pocVideoResults.diagnosticsMode.muxError}
+                        </div>
+                      )}
+
+                      {/* PLAYBACK DIAGNOSTICS */}
+                      {pocVideoResults.diagnosticsMode.playbackTest && (
+                        <div className="mt-2 border-t border-pink-500/10 pt-2 font-mono flex flex-col gap-0.5 text-[8.5px]">
+                          <div className="font-bold text-pink-400">🔬 OFFLINE PLAYBACK TEST:</div>
+                          <div>• Load Success: <span className={pocVideoResults.diagnosticsMode.playbackTest.success ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocVideoResults.diagnosticsMode.playbackTest.success ? "YES" : "NO"}</span></div>
+                          {pocVideoResults.diagnosticsMode.playbackTest.success ? (
+                            <>
+                              <div>• Parsed Duration: <span className="text-white font-bold">{pocVideoResults.diagnosticsMode.playbackTest.duration.toFixed(3)}s</span></div>
+                              <div>• Video Dimensions: <span className="text-white font-bold">{pocVideoResults.diagnosticsMode.playbackTest.width}x{pocVideoResults.diagnosticsMode.playbackTest.height}</span></div>
+                              <div>• HTMLVideoElement canplay: <span className={pocVideoResults.diagnosticsMode.playbackTest.canPlay ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocVideoResults.diagnosticsMode.playbackTest.canPlay ? "YES" : "NO"}</span></div>
+                            </>
+                          ) : (
+                            <div className="text-rose-400 font-bold">• Playback Error: {pocVideoResults.diagnosticsMode.playbackTest.error}</div>
+                          )}
+                        </div>
+                      )}
+
                       {pocVideoResults.metrics.success && (
-                        <div className="mt-2 text-center text-emerald-400 font-bold bg-emerald-950/30 p-2 rounded border border-emerald-500/20 text-[10px] font-mono">
-                          🎉 DECODER → RENDER → ENCODER = PASS
+                        <div className="mt-2 text-center text-emerald-400 font-bold bg-emerald-950/30 p-2 rounded border border-emerald-500/20 text-[10px] font-mono flex flex-col gap-1">
+                          <div>🎉 DECODER → RENDER → ENCODER → MUX = PASS</div>
+                          {pocVideoResults.videoUrl && (
+                            <a 
+                              href={pocVideoResults.videoUrl} 
+                              download="webcodecs_5frame_test.mp4" 
+                              className="mt-1 block py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded text-[8px] cursor-pointer text-center"
+                            >
+                              📥 Tải xuống File Test 5 Frame
+                            </a>
+                          )}
                         </div>
                       )}
                     </div>

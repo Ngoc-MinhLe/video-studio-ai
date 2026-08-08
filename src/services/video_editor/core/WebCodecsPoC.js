@@ -1,3 +1,4 @@
+import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import * as MP4Box from 'mp4box';
 
 /**
@@ -87,12 +88,13 @@ export async function runWebCodecsPoC() {
 }
 
 /**
- * Diagnostic Mode Step 2: 
+ * Diagnostic Mode Step 3:
  * - Demuxes and decodes first 5 H.264 samples using VideoDecoder.
  * - Renders each decoded VideoFrame to a Canvas.
  * - Constructs a new VideoFrame from Canvas with output timestamps based on 25 FPS (0, 40000, 80000, 120000, 160000 µs).
  * - VideoEncoder encodes exactly these 5 frames.
- * - No mp4-muxer is initialized or used.
+ * - Muxes these 5 encoded chunks into an MP4 file using mp4-muxer.
+ * - Performs offline playback verification inside an HTMLVideoElement.
  * 
  * @param {File} file The real uploaded video file.
  * @param {Function} onProgress Progress callback.
@@ -125,7 +127,7 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
       samplesLogged: [],
       outputCallbackCount: 0,
       errorCallbackCount: 0,
-      outputFramesLog: [], // Initialized correctly to avoid TypeError
+      outputFramesLog: [],
       decoderError: null,
       
       // Stage timeline logs
@@ -133,9 +135,17 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
       renderedFramesCount: 0,
       encodeSubmittedCount: 0,
       encodedChunksCount: 0,
-      encoderChunksLogged: [], // Initialized correctly
+      encoderChunksLogged: [],
       encoderError: null,
-      encoderFlushStatus: 'PENDING'
+      encoderFlushStatus: 'PENDING',
+
+      // Muxer diagnostics
+      muxedChunksCount: 0,
+      muxStatus: 'PENDING',
+      finalizeStatus: 'PENDING',
+      muxError: null,
+      mp4ByteLength: 0,
+      playbackTest: null
     },
     timings: {
       demux: 0,
@@ -521,7 +531,30 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
       results.diagnosticsMode.decoderError = `Flush failed/timed out: ${flushErr.message || flushErr}`;
     }
 
-    // 4. Setup VideoEncoder (Without Muxer)
+    // 4. Setup Muxer & VideoEncoder
+    const targetWidth = 768; // matching source width
+    const targetHeight = 432; // matching source height
+    const targetFps = 25; // 25 FPS source match
+
+    let muxer = null;
+    try {
+      muxer = new Muxer({
+        target: new ArrayBufferTarget(),
+        video: {
+          codec: 'avc',
+          width: targetWidth,
+          height: targetHeight
+        },
+        fastStart: 'in-memory',
+        firstTimestampBehavior: 'offset'
+      });
+      results.diagnosticsMode.muxStatus = 'SUCCESS';
+    } catch (muxErr) {
+      results.diagnosticsMode.muxStatus = 'ERROR';
+      results.diagnosticsMode.muxError = `Muxer initialization failed: ${muxErr.message || muxErr}`;
+      throw muxErr;
+    }
+
     encoderInstance = new VideoEncoder({
       output: (chunk, metadata) => {
         results.diagnosticsMode.encodedChunksCount++;
@@ -529,16 +562,24 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
           timestamp: chunk.timestamp,
           type: chunk.type
         });
+
+        // Add chunk to muxer
+        try {
+          if (muxer && results.diagnosticsMode.muxStatus !== 'ERROR') {
+            muxer.addVideoChunk(chunk, metadata);
+            results.diagnosticsMode.muxedChunksCount++;
+          }
+        } catch (addErr) {
+          console.error("Muxer addVideoChunk failed:", addErr);
+          results.diagnosticsMode.muxStatus = 'ERROR';
+          results.diagnosticsMode.muxError = `Muxer addVideoChunk error at chunk #${results.diagnosticsMode.encodedChunksCount} (TS: ${chunk.timestamp} us): ${addErr.message || addErr}`;
+        }
       },
       error: (err) => {
         results.diagnosticsMode.encoderError = err.message || String(err);
         console.error("Encoder error:", err);
       }
     });
-
-    const targetWidth = 768; // matching source width
-    const targetHeight = 432; // matching source height
-    const targetFps = 25; // 25 FPS source match
 
     const videoConfig = {
       codec: 'avc1.4d001f',
@@ -595,15 +636,85 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
       results.diagnosticsMode.encoderError = `Encoder flush failed: ${encFlushErr.message || encFlushErr}`;
     }
 
+    // 6. Finalize Muxer and obtain MP4 Blob
+    if (muxer && results.diagnosticsMode.muxStatus === 'SUCCESS') {
+      try {
+        muxer.finalize();
+        results.diagnosticsMode.finalizeStatus = 'SUCCESS';
+      } catch (finErr) {
+        results.diagnosticsMode.finalizeStatus = 'ERROR';
+        results.diagnosticsMode.muxError = `Muxer finalize failed: ${finErr.message || finErr}`;
+      }
+    }
+
     results.timings.decode = performance.now() - decodeStart;
     results.timings.total = performance.now() - overallStart;
     results.metrics.framesDecoded = results.diagnosticsMode.outputCallbackCount;
     
-    // Success means all 5 frames were decoded, rendered, and encoded successfully!
+    // Playback test inside HTMLVideoElement to verify MP4 metadata/duration/playability
+    if (muxer && results.diagnosticsMode.finalizeStatus === 'SUCCESS') {
+      const buffer = muxer.target.buffer;
+      results.diagnosticsMode.mp4ByteLength = buffer.byteLength;
+      
+      const blob = new Blob([buffer], { type: 'video/mp4' });
+      const videoUrl = URL.createObjectURL(blob);
+      results.videoUrl = videoUrl;
+
+      const playbackTest = new Promise((resolve) => {
+        const videoEl = document.createElement('video');
+        videoEl.preload = 'metadata';
+        videoEl.muted = true;
+        videoEl.playsInline = true;
+        
+        const timeout = setTimeout(() => {
+          results.diagnosticsMode.playbackTest = {
+            success: false,
+            error: "Playback metadata load timed out after 3000ms"
+          };
+          resolve();
+        }, 3000);
+
+        videoEl.onloadedmetadata = () => {
+          results.diagnosticsMode.playbackTest = {
+            success: true,
+            duration: videoEl.duration,
+            width: videoEl.videoWidth,
+            height: videoEl.videoHeight,
+            canPlay: false,
+            error: null
+          };
+        };
+
+        videoEl.oncanplay = () => {
+          if (results.diagnosticsMode.playbackTest) {
+            results.diagnosticsMode.playbackTest.canPlay = true;
+          }
+          clearTimeout(timeout);
+          resolve();
+        };
+
+        videoEl.onerror = () => {
+          results.diagnosticsMode.playbackTest = {
+            success: false,
+            error: videoEl.error ? `Code ${videoEl.error.code}: ${videoEl.error.message}` : "Unknown video element error"
+          };
+          clearTimeout(timeout);
+          resolve();
+        };
+
+        videoEl.src = videoUrl;
+      });
+
+      await playbackTest;
+    }
+
+    // Success check: decoder, encoder, muxer and playback test are all successful!
     results.metrics.success = 
       results.diagnosticsMode.outputCallbackCount === 5 &&
       results.diagnosticsMode.renderedFramesCount === 5 &&
-      results.diagnosticsMode.encodedChunksCount === 5;
+      results.diagnosticsMode.encodedChunksCount === 5 &&
+      results.diagnosticsMode.finalizeStatus === 'SUCCESS' &&
+      results.diagnosticsMode.playbackTest?.success === true;
 
   } catch (err) {
     results.error = err.message || String(err);
@@ -624,7 +735,7 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
   // Trigger progress callback with complete stats at the end
   if (onProgress) {
     onProgress({
-      status: "Completed Diagnostic Mode Step 2",
+      status: "Completed Diagnostic Mode Step 3",
       samplesDemuxed: 5,
       decodeSubmitted: 5,
       decodeOutput: results.diagnosticsMode.outputCallbackCount,
@@ -633,7 +744,7 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
       encodeSubmitted: results.diagnosticsMode.encodeSubmittedCount,
       encodeOutput: results.diagnosticsMode.encodedChunksCount,
       encodeQueueSize: 0,
-      muxedChunks: 0,
+      muxedChunks: results.diagnosticsMode.muxedChunksCount,
       elapsedTimeMs: performance.now() - overallStart,
       jsHeapSize: null
     });
