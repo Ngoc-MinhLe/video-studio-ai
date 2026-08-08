@@ -2,82 +2,6 @@ import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import * as MP4Box from 'mp4box';
 
 /**
- * Helper to extract codec description bytes (extradata) and its parsed box from the raw MP4 stsd box entries.
- * Necessary for VideoDecoder initialization with H.264, HEVC, or VP9 codec.
- */
-function getCodecDescription(mp4boxFile, trackId) {
-  try {
-    if (!mp4boxFile || !mp4boxFile.moov) return null;
-    const trak = mp4boxFile.moov.traks.find(t => t.tkhd && t.tkhd.track_id === trackId);
-    if (!trak) return null;
-    
-    const stsd = trak.mdia?.minf?.stbl?.stsd;
-    if (!stsd || !stsd.entries || stsd.entries.length === 0) return null;
-    
-    const entry = stsd.entries[0];
-    if (!entry) return null;
-
-    // In mp4box.js, the entry itself is the box (e.g. type 'avc1' or 'encv')
-    // We look for 'avcC' directly on the entry or in entry.boxes
-    let configBox = entry.avcC || entry.hvcC || entry.vpcC;
-    
-    if (!configBox && entry.boxes && entry.boxes.length > 0) {
-      configBox = entry.boxes.find(b => b.type === 'avcC' || b.type === 'hvcC' || b.type === 'vpcC');
-    }
-
-    if (configBox) {
-      // Handle H.264 (AVC) manually to serialise the AVCDecoderConfigurationRecord reliably
-      if (configBox.type === 'avcC') {
-        const avcC = configBox;
-        const spsList = avcC.SPS || [];
-        const ppsList = avcC.PPS || [];
-        
-        let totalSize = 6;
-        for (const sps of spsList) totalSize += 2 + sps.length;
-        for (const pps of ppsList) totalSize += 2 + pps.length;
-        
-        const data = new Uint8Array(totalSize);
-        data[0] = avcC.configurationVersion || 1;
-        data[1] = avcC.AVCProfileIndication;
-        data[2] = avcC.profile_compatibility;
-        data[3] = avcC.AVCLevelIndication;
-        data[4] = 0xFC | (avcC.lengthSizeMinusOne ?? 3);
-        data[5] = 0xE0 | spsList.length;
-        
-        let offset = 6;
-        for (const sps of spsList) {
-          const len = sps.length;
-          data[offset++] = (len >> 8) & 0xFF;
-          data[offset++] = len & 0xFF;
-          data.set(sps.nalu, offset);
-          offset += len;
-        }
-        
-        data[offset++] = ppsList.length;
-        for (const pps of ppsList) {
-          const len = pps.length;
-          data[offset++] = (len >> 8) & 0xFF;
-          data[offset++] = len & 0xFF;
-          data.set(pps.nalu, offset);
-          offset += len;
-        }
-        return { description: data, box: configBox, entry };
-      }
-
-      // Fallback for HEVC/VP9: try writing the raw parsed config box
-      if (typeof configBox.write === 'function') {
-        const stream = new MP4Box.DataStream(undefined, 0, MP4Box.DataStream.BIG_ENDIAN);
-        configBox.write(stream);
-        return { description: new Uint8Array(stream.buffer, 8), box: configBox, entry };
-      }
-    }
-  } catch (e) {
-    console.warn("Failed to extract codec description from stsd box:", e);
-  }
-  return null;
-}
-
-/**
  * Runs an offline H.264 rendering and muxing Proof of Concept (PoC) using WebCodecs.
  * This runs independently of the main rendering loop and measures real-world performance.
  * 
@@ -368,7 +292,10 @@ export async function runWebCodecsVideoFilePoC(file) {
           entriesCount: 0,
           firstEntryType: 'none',
           firstEntryKeys: [],
-          boxesFoundTypes: []
+          boxesFoundTypes: [],
+          avccBoxKeys: [],
+          avccBoxConstructor: '',
+          avccSerializationError: ''
         };
         
         if (mp4boxFile.moov) {
@@ -387,54 +314,95 @@ export async function runWebCodecsVideoFilePoC(file) {
                   if (entry.boxes) {
                     results.meta.debugBox.boxesFoundTypes = entry.boxes.map(b => b.type);
                   }
+
+                  // Find avcC box
+                  let avcC = entry.avcC;
+                  if (!avcC && entry.boxes) {
+                    avcC = entry.boxes.find(b => b.type === 'avcC');
+                  }
+
+                  if (avcC) {
+                    results.meta.debugBox.avccBoxKeys = Object.keys(avcC);
+                    results.meta.debugBox.avccBoxConstructor = avcC.constructor?.name || typeof avcC;
+                    results.meta.hasAvcc = true;
+
+                    // Manual extraction of AVCDecoderConfigurationRecord
+                    try {
+                      const spsList = avcC.SPS || [];
+                      const ppsList = avcC.PPS || [];
+                      
+                      let totalSize = 6;
+                      for (const sps of spsList) totalSize += 2 + (sps.length || 0);
+                      for (const pps of ppsList) totalSize += 2 + (pps.length || 0);
+                      
+                      const data = new Uint8Array(totalSize);
+                      data[0] = avcC.configurationVersion || 1;
+                      data[1] = avcC.AVCProfileIndication || 0;
+                      data[2] = avcC.profile_compatibility || 0;
+                      data[3] = avcC.AVCLevelIndication || 0;
+                      data[4] = 0xFC | (avcC.lengthSizeMinusOne ?? 3);
+                      data[5] = 0xE0 | spsList.length;
+                      
+                      let offset = 6;
+                      for (const sps of spsList) {
+                        const len = sps.length || 0;
+                        data[offset++] = (len >> 8) & 0xFF;
+                        data[offset++] = len & 0xFF;
+                        if (sps.nalu) {
+                          data.set(sps.nalu, offset);
+                        }
+                        offset += len;
+                      }
+                      
+                      data[offset++] = ppsList.length;
+                      for (const pps of ppsList) {
+                        const len = pps.length || 0;
+                        data[offset++] = (len >> 8) & 0xFF;
+                        data[offset++] = len & 0xFF;
+                        if (pps.nalu) {
+                          data.set(pps.nalu, offset);
+                        }
+                        offset += len;
+                      }
+
+                      descriptionBytes = data;
+
+                      results.meta.avccData = {
+                        configurationVersion: avcC.configurationVersion || 1,
+                        AVCProfileIndication: avcC.AVCProfileIndication || 0,
+                        profile_compatibility: avcC.profile_compatibility || 0,
+                        AVCLevelIndication: avcC.AVCLevelIndication || 0,
+                        lengthSizeMinusOne: avcC.lengthSizeMinusOne ?? 3,
+                        spsCount: spsList.length,
+                        ppsCount: ppsList.length,
+                        spsLengths: spsList.map(s => s.length || 0),
+                        ppsLengths: ppsList.map(p => p.length || 0),
+                        avccFullHex: Array.from(descriptionBytes).map(b => b.toString(16).padStart(2, '0')).join(' ').toUpperCase()
+                      };
+                    } catch (serErr) {
+                      results.meta.debugBox.avccSerializationError = serErr.message || String(serErr);
+                      console.error("Failed to serialize avcC box properties:", serErr);
+                    }
+                  }
                 }
               }
             }
           }
         }
         
-        // Extract description and profile level parameters
-        const descResult = getCodecDescription(mp4boxFile, videoTrack.id);
         targetCodecString = videoTrack.codec;
-        
-        if (descResult) {
-          descriptionBytes = descResult.description;
-          const box = descResult.box;
-          
-          results.meta.hasAvcc = !!box;
-          
-          if (box) {
-            const avcC = box;
-            const spsList = avcC.SPS || [];
-            const ppsList = avcC.PPS || [];
-            
-            results.meta.avccData = {
-              configurationVersion: avcC.configurationVersion || 1,
-              AVCProfileIndication: avcC.AVCProfileIndication,
-              profile_compatibility: avcC.profile_compatibility,
-              AVCLevelIndication: avcC.AVCLevelIndication,
-              lengthSizeMinusOne: avcC.lengthSizeMinusOne ?? 3,
-              spsCount: spsList.length,
-              ppsCount: ppsList.length,
-              spsLengths: spsList.map(s => s.length),
-              ppsLengths: ppsList.map(p => p.length),
-              avccFullHex: Array.from(descriptionBytes).map(b => b.toString(16).padStart(2, '0')).join(' ').toUpperCase()
-            };
-
-            // STRICT RFC 6381 compilation (no auto fallback)
-            if (videoTrack.codec.startsWith('avc1')) {
-              const profile = avcC.AVCProfileIndication.toString(16).padStart(2, '0');
-              const comp = avcC.profile_compatibility.toString(16).padStart(2, '0');
-              const level = avcC.AVCLevelIndication.toString(16).padStart(2, '0');
-              targetCodecString = `avc1.${profile}${comp}${level}`;
-            }
-          }
+        // Strictly set avc1 target codec according to file metadata profile indications
+        if (results.meta.avccData && videoTrack.codec.startsWith('avc1')) {
+          const profile = results.meta.avccData.AVCProfileIndication.toString(16).padStart(2, '0');
+          const comp = results.meta.avccData.profile_compatibility.toString(16).padStart(2, '0');
+          const level = results.meta.avccData.AVCLevelIndication.toString(16).padStart(2, '0');
+          targetCodecString = `avc1.${profile}${comp}${level}`;
         }
         
         results.meta.sourceCodec = videoTrack.codec;
         results.meta.targetCodec = targetCodecString;
-        results.meta.width = videoTrack.video.width;
-        results.meta.height = videoTrack.video.height;
+        results.meta.width = videoTrack.track_width || (videoTrack.video && videoTrack.video.width) || 1920;
+        results.meta.height = videoTrack.track_height || (videoTrack.video && videoTrack.video.height) || 1080;
         results.meta.descriptionByteLength = descriptionBytes ? descriptionBytes.byteLength : 0;
         
         if (descriptionBytes) {
@@ -506,6 +474,7 @@ export async function runWebCodecsVideoFilePoC(file) {
     const startingSamples = samples.slice(firstKeyframeIndex);
     const timescale = videoTrack.timescale;
     const targetFps = videoTrack.video.fps || 30;
+    
     const width = 1280;
     const height = 720;
     
@@ -539,6 +508,14 @@ export async function runWebCodecsVideoFilePoC(file) {
       });
       results.browserSupport.h264EncodeSupported = support.supported;
     }
+
+    // Only configure VideoDecoder if description is successfully extracted
+    if (!descriptionBytes || descriptionBytes.byteLength === 0) {
+      throw new Error("AVCDecoderConfigurationRecord (avcC) is missing. Cannot verify VideoDecoder.");
+    }
+
+    const trackWidth = results.meta.width;
+    const trackHeight = results.meta.height;
 
     // 2. Setup Muxer & VideoEncoder
     const muxStart = performance.now();
@@ -597,15 +574,13 @@ export async function runWebCodecsVideoFilePoC(file) {
 
     const decoderConfig = {
       codec: targetCodecString,
-      codedWidth: videoTrack.video.width,
-      codedHeight: videoTrack.video.height,
-      displayWidth: videoTrack.video.width,
-      displayHeight: videoTrack.video.height,
-      hardwareAcceleration: 'prefer-hardware'
+      codedWidth: trackWidth,
+      codedHeight: trackHeight,
+      displayWidth: trackWidth,
+      displayHeight: trackHeight,
+      hardwareAcceleration: 'prefer-hardware',
+      description: descriptionBytes
     };
-    if (descriptionBytes) {
-      decoderConfig.description = descriptionBytes;
-    }
 
     // STRICT browser configuration support checking
     console.log("Checking support for STRICT configuration:", decoderConfig);
@@ -632,7 +607,7 @@ export async function runWebCodecsVideoFilePoC(file) {
     }
 
     if (!decSupport || !decSupport.supported) {
-      throw new Error(`VideoDecoder STRICT configuration check failed for "${targetCodecString}" (${videoTrack.video.width}x${videoTrack.video.height}). browser isConfigSupported returned false.`);
+      throw new Error(`VideoDecoder STRICT configuration check failed for "${targetCodecString}" (${trackWidth}x${trackHeight}). browser isConfigSupported returned false.`);
     }
     
     results.browserSupport.h264DecodeSupported = true;
@@ -694,7 +669,6 @@ export async function runWebCodecsVideoFilePoC(file) {
 
     // 4. Sequential Decode -> Render -> Encode Loop
     for (let i = 0; i < totalFrames; i++) {
-      // Timeout safety guard
       if (performance.now() - overallStart > 10000) {
         throw new Error("Timeout: WebCodecs processing exceeded 10 seconds total limit.");
       }

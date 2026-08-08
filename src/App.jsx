@@ -1898,6 +1898,15 @@ export default function App() {
                           <div>- entry[0] type: <span className="text-white font-bold">{pocVideoResults.meta.debugBox.firstEntryType}</span></div>
                           <div className="break-all whitespace-pre-wrap text-gray-400">- entry[0] keys: <span className="text-white font-normal">{JSON.stringify(pocVideoResults.meta.debugBox.firstEntryKeys)}</span></div>
                           <div className="break-all whitespace-pre-wrap text-gray-400">- sub-boxes types: <span className="text-white font-normal">{JSON.stringify(pocVideoResults.meta.debugBox.boxesFoundTypes)}</span></div>
+                          {pocVideoResults.meta.debugBox.avccBoxConstructor && (
+                            <>
+                              <div>- avcC Object Class: <span className="text-white font-bold">{pocVideoResults.meta.debugBox.avccBoxConstructor}</span></div>
+                              <div className="break-all whitespace-pre-wrap text-gray-400">- avcC Object Keys: <span className="text-white font-normal">{JSON.stringify(pocVideoResults.meta.debugBox.avccBoxKeys)}</span></div>
+                            </>
+                          )}
+                          {pocVideoResults.meta.debugBox.avccSerializationError && (
+                            <div className="text-rose-400 font-bold break-all">- avcC Serialization Error: {pocVideoResults.meta.debugBox.avccSerializationError}</div>
+                          )}
                         </div>
                       )}
                       
