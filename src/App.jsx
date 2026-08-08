@@ -1867,14 +1867,14 @@ export default function App() {
                   ) : (
                     <Video className="w-4 h-4 text-pink-400" />
                   )}
-                  <span>🧪 WebCodecs PoC — Test 10 giây video thật</span>
+                  <span>🧪 WebCodecs PoC — Test video thật (Toàn bộ)</span>
                 </button>
               )}
 
               {pocVideoResults && (
                 <div className="p-3 border border-pink-500/30 bg-pink-950/30 rounded-lg text-pink-300 font-mono text-[10px] flex flex-col gap-2">
                   <div className="flex justify-between items-center border-b border-pink-500/15 pb-1">
-                    <span className="font-bold text-pink-400 uppercase text-[9px]">🧪 KẾT QUẢ VIDEO THẬT POC (10 GIÂY)</span>
+                    <span className="font-bold text-pink-400 uppercase text-[9px]">🧪 KẾT QUẢ VIDEO THẬT POC (TOÀN BỘ)</span>
                     <button 
                       onClick={() => setPocVideoResults(null)} 
                       className="text-[9px] text-pink-400 hover:text-white underline cursor-pointer"
@@ -1986,7 +1986,7 @@ export default function App() {
                           download="webcodecs_video_poc_output.mp4" 
                           className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-center rounded text-[9px] shadow cursor-pointer"
                         >
-                          📥 Tải xuống File Video Test MP4 (10s)
+                          📥 Tải xuống File Video Test MP4 (Toàn bộ)
                         </a>
                       </div>
                     </div>

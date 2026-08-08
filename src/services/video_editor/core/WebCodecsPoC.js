@@ -2,6 +2,90 @@ import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import * as MP4Box from 'mp4box';
 
 /**
+ * Helper to extract codec description bytes (extradata) and its parsed box from the raw MP4 stsd box entries.
+ * Necessary for VideoDecoder initialization with H.264, HEVC, or VP9 codec.
+ */
+function getCodecDescription(mp4boxFile, trackId) {
+  try {
+    if (!mp4boxFile || !mp4boxFile.moov) return null;
+    const trak = mp4boxFile.moov.traks.find(t => t.tkhd && t.tkhd.track_id === trackId);
+    if (!trak) return null;
+    
+    const stsd = trak.mdia?.minf?.stbl?.stsd;
+    if (!stsd || !stsd.entries || stsd.entries.length === 0) return null;
+    
+    const entry = stsd.entries[0];
+    if (!entry) return null;
+
+    // In mp4box.js, the entry itself is the box (e.g. type 'avc1' or 'encv')
+    // We look for 'avcC' directly on the entry or in entry.boxes
+    let configBox = entry.avcC || entry.hvcC || entry.vpcC;
+    
+    if (!configBox && entry.boxes && entry.boxes.length > 0) {
+      configBox = entry.boxes.find(b => b.type === 'avcC' || b.type === 'hvcC' || b.type === 'vpcC');
+    }
+
+    if (configBox) {
+      // Handle H.264 (AVC) manually to serialise the AVCDecoderConfigurationRecord reliably
+      if (configBox.type === 'avcC') {
+        const avcC = configBox;
+        const spsList = avcC.SPS || [];
+        const ppsList = avcC.PPS || [];
+        
+        let totalSize = 6;
+        for (const sps of spsList) totalSize += 2 + (sps.length || 0);
+        for (const pps of ppsList) totalSize += 2 + (pps.length || 0);
+        
+        const data = new Uint8Array(totalSize);
+        data[0] = avcC.configurationVersion || 1;
+        data[1] = avcC.AVCProfileIndication;
+        data[2] = avcC.profile_compatibility;
+        data[3] = avcC.AVCLevelIndication;
+        data[4] = 0xFC | (avcC.lengthSizeMinusOne ?? 3);
+        data[5] = 0xE0 | spsList.length;
+        
+        let offset = 6;
+        for (const sps of spsList) {
+          const len = sps.length || 0;
+          data[offset++] = (len >> 8) & 0xFF;
+          data[offset++] = len & 0xFF;
+          // In mp4box.js, sps can be either a raw byte array or an object with 'nalu' byte array
+          const src = sps.nalu || sps;
+          if (src) {
+            data.set(src, offset);
+          }
+          offset += len;
+        }
+        
+        data[offset++] = ppsList.length;
+        for (const pps of ppsList) {
+          const len = pps.length || 0;
+          data[offset++] = (len >> 8) & 0xFF;
+          data[offset++] = len & 0xFF;
+          // In mp4box.js, pps can be either a raw byte array or an object with 'nalu' byte array
+          const src = pps.nalu || pps;
+          if (src) {
+            data.set(src, offset);
+          }
+          offset += len;
+        }
+        return { description: data, box: configBox, entry };
+      }
+
+      // Fallback for HEVC/VP9: try writing the raw parsed config box
+      if (typeof configBox.write === 'function') {
+        const stream = new MP4Box.DataStream(undefined, 0, MP4Box.DataStream.BIG_ENDIAN);
+        configBox.write(stream);
+        return { description: new Uint8Array(stream.buffer, 8), box: configBox, entry };
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to extract codec description from stsd box:", e);
+  }
+  return null;
+}
+
+/**
  * Runs an offline H.264 rendering and muxing Proof of Concept (PoC) using WebCodecs.
  * This runs independently of the main rendering loop and measures real-world performance.
  * 
@@ -215,7 +299,7 @@ export async function runWebCodecsPoC() {
 
 /**
  * Runs an offline H.264 sequential decoding, rendering, and encoding PoC using a real uploaded MP4 file.
- * Performs deep debug metrics and writes them back to the results metadata.
+ * Decodes the entire video from start to finish.
  * 
  * @param {File} file The real uploaded video file.
  * @returns {Promise<Object>} The benchmark results and output blob URL.
@@ -348,8 +432,10 @@ export async function runWebCodecsVideoFilePoC(file) {
                         const len = sps.length || 0;
                         data[offset++] = (len >> 8) & 0xFF;
                         data[offset++] = len & 0xFF;
-                        if (sps.nalu) {
-                          data.set(sps.nalu, offset);
+                        // In mp4box.js, sps can be either a raw byte array or an object with 'nalu' byte array
+                        const src = sps.nalu || sps;
+                        if (src) {
+                          data.set(src, offset);
                         }
                         offset += len;
                       }
@@ -359,8 +445,10 @@ export async function runWebCodecsVideoFilePoC(file) {
                         const len = pps.length || 0;
                         data[offset++] = (len >> 8) & 0xFF;
                         data[offset++] = len & 0xFF;
-                        if (pps.nalu) {
-                          data.set(pps.nalu, offset);
+                        // In mp4box.js, pps can be either a raw byte array or an object with 'nalu' byte array
+                        const src = pps.nalu || pps;
+                        if (src) {
+                          data.set(src, offset);
                         }
                         offset += len;
                       }
@@ -425,15 +513,8 @@ export async function runWebCodecsVideoFilePoC(file) {
       mp4boxFile.onSamples = (track_id, ref, extractedSamples) => {
         samples.push(...extractedSamples);
         
-        const timescale = videoTrack.timescale;
-        const maxDurationUs = 10 * 1000000;
-        
-        let totalDurationUs = 0;
-        for (const s of samples) {
-          totalDurationUs += (s.duration / timescale) * 1000000;
-        }
-        
-        if (totalDurationUs >= maxDurationUs || samples.length >= videoTrack.nb_samples) {
+        // Extract all samples (do not limit to 10 seconds anymore)
+        if (samples.length >= videoTrack.nb_samples) {
           mp4boxFile.stop();
           resolve();
         }
@@ -471,23 +552,13 @@ export async function runWebCodecsVideoFilePoC(file) {
       throw new Error("No sync frame (keyframe) found in the video track. Cannot decode.");
     }
     
-    const startingSamples = samples.slice(firstKeyframeIndex);
+    // Process all samples from the first keyframe to the end (no 10s capping)
+    const processedSamples = samples.slice(firstKeyframeIndex);
     const timescale = videoTrack.timescale;
     const targetFps = videoTrack.video.fps || 30;
     
     const width = 1280;
     const height = 720;
-    
-    let processedSamples = [];
-    let accumulatedTimeUs = 0;
-    for (const s of startingSamples) {
-      const sampleDurationUs = (s.duration / timescale) * 1000000;
-      processedSamples.push(s);
-      accumulatedTimeUs += sampleDurationUs;
-      if (accumulatedTimeUs >= 10 * 1000000) {
-        break;
-      }
-    }
 
     const totalFrames = processedSamples.length;
     results.metrics.framesProcessed = totalFrames;
@@ -669,8 +740,9 @@ export async function runWebCodecsVideoFilePoC(file) {
 
     // 4. Sequential Decode -> Render -> Encode Loop
     for (let i = 0; i < totalFrames; i++) {
-      if (performance.now() - overallStart > 10000) {
-        throw new Error("Timeout: WebCodecs processing exceeded 10 seconds total limit.");
+      // Timeout safety guard (Increased to 60 seconds to process the entire video file)
+      if (performance.now() - overallStart > 60000) {
+        throw new Error("Timeout: WebCodecs processing exceeded 60 seconds total limit.");
       }
 
       if (pipelineError) {
@@ -739,7 +811,7 @@ export async function runWebCodecsVideoFilePoC(file) {
     const blob = new Blob([buffer], { type: 'video/mp4' });
     
     results.metrics.fileSizeMb = blob.size / 1024 / 1024;
-    const actualDurationSec = accumulatedTimeUs / 1000000;
+    const actualDurationSec = (processedSamples[totalFrames - 1].cts + processedSamples[totalFrames - 1].duration - processedSamples[0].cts) / timescale;
     results.metrics.realtimeSpeedFactor = actualDurationSec / (totalElapsed / 1000);
     results.videoUrl = URL.createObjectURL(blob);
 
