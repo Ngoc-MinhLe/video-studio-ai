@@ -2204,6 +2204,30 @@ export default function App() {
                           )}
                         </div>
                       )}
+
+                      {pocVideoResults.diagnosticsMode.stallDump && (
+                        <div className="bg-rose-950/20 p-2.5 rounded border border-rose-500/30 text-[9px] flex flex-col gap-1 mt-2 font-mono">
+                          <div className="font-bold text-rose-400 border-b border-rose-500/25 pb-0.5 mb-1">🚨 PIPELINE STALLED DIAGNOSTIC DUMP:</div>
+                          <div className="text-rose-300 font-bold">• STALL STATE: {pocVideoResults.diagnosticsMode.stallDump.state}</div>
+                          <div className="text-rose-300 font-bold">• Waiting For: {pocVideoResults.diagnosticsMode.stallDump.waitingFor}</div>
+                          
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1.5 text-gray-300">
+                            <div>- Frame Index: {pocVideoResults.diagnosticsMode.stallDump.currentFrameIndex}</div>
+                            <div>- Next Sample: {pocVideoResults.diagnosticsMode.stallDump.nextSampleIndex}</div>
+                            <div>- Samples Demuxed: {pocVideoResults.diagnosticsMode.stallDump.demuxed}</div>
+                            <div>- Decode Submitted: {pocVideoResults.diagnosticsMode.stallDump.decodeSubmitted}</div>
+                            <div>- Decode Output: {pocVideoResults.diagnosticsMode.stallDump.decodeOutput}</div>
+                            <div>- Decoded Queue size: {pocVideoResults.diagnosticsMode.stallDump.decodedFramesQueue}</div>
+                            <div>- Rendered Frames: {pocVideoResults.diagnosticsMode.stallDump.renderedFrames}</div>
+                            <div>- Encode Submitted: {pocVideoResults.diagnosticsMode.stallDump.encodeSubmitted}</div>
+                            <div>- Encode Output: {pocVideoResults.diagnosticsMode.stallDump.encodeOutput}</div>
+                            <div>- Muxed Chunks: {pocVideoResults.diagnosticsMode.stallDump.muxedChunks}</div>
+                            <div>- Decoder Queue size: {pocVideoResults.diagnosticsMode.stallDump.decoderQueueSize}</div>
+                            <div>- Encoder Queue size: {pocVideoResults.diagnosticsMode.stallDump.encoderQueueSize}</div>
+                          </div>
+                        </div>
+                      )}
+
                       {/* TIMING STATISTICS */}
                       <div className="font-bold text-pink-400 mt-2 border-t border-pink-500/10 pt-2 font-mono">⏱️ THỜI GIAN CHẠY & HIỆU NĂNG:</div>
                       <div className="font-mono">• Demux Time: <span className="text-white font-bold">{pocVideoResults.timings.demux.toFixed(1)}ms</span></div>
