@@ -125,6 +125,7 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
       samplesLogged: [],
       outputCallbackCount: 0,
       errorCallbackCount: 0,
+      outputFramesLog: [], // Initialized correctly to avoid TypeError
       decoderError: null,
       
       // Stage timeline logs
@@ -132,7 +133,7 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
       renderedFramesCount: 0,
       encodeSubmittedCount: 0,
       encodedChunksCount: 0,
-      encoderChunksLogged: [],
+      encoderChunksLogged: [], // Initialized correctly
       encoderError: null,
       encoderFlushStatus: 'PENDING'
     },
@@ -394,16 +395,22 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
     // 2. Setup VideoDecoder (FROZEN decoder callbacks and config)
     decoderInstance = new VideoDecoder({
       output: (frame) => {
-        results.diagnosticsMode.outputCallbackCount++;
-        results.diagnosticsMode.outputFramesLog.push({
-          timestamp: frame.timestamp,
-          width: frame.codedWidth,
-          height: frame.codedHeight
-        });
-        
-        // Push to temporary queue for sequential rendering and encoding test
-        decodedFrames.push(frame);
-        results.diagnosticsMode.decodedFramesCount = decodedFrames.length;
+        try {
+          results.diagnosticsMode.outputCallbackCount++;
+          results.diagnosticsMode.outputFramesLog.push({
+            timestamp: frame.timestamp,
+            width: frame.codedWidth,
+            height: frame.codedHeight
+          });
+          
+          // Transfer ownership to the decoded queue
+          decodedFrames.push(frame);
+          results.diagnosticsMode.decodedFramesCount = decodedFrames.length;
+        } catch (err) {
+          console.error("Error in VideoDecoder output callback:", err);
+          frame.close(); // Close immediately to avoid leak if pushing to queue fails
+          throw err;
+        }
       },
       error: (err) => {
         results.diagnosticsMode.errorCallbackCount++;
@@ -555,25 +562,25 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
 
     for (let i = 0; i < decodedFrames.length; i++) {
       const decodedFrame = decodedFrames[i];
-      
-      // Render decoded VideoFrame to Canvas
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(0, 0, targetWidth, targetHeight);
-      ctx.drawImage(decodedFrame, 0, 0, targetWidth, targetHeight);
-      results.diagnosticsMode.renderedFramesCount++;
+      try {
+        // Render decoded VideoFrame to Canvas
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, targetWidth, targetHeight);
+        ctx.drawImage(decodedFrame, 0, 0, targetWidth, targetHeight);
+        results.diagnosticsMode.renderedFramesCount++;
 
-      // Close the decoded source frame immediately
-      decodedFrame.close();
-
-      // Create new VideoFrame from canvas with output timestamp
-      const outputTimestampUs = Math.round(i * frameIntervalUs);
-      const outputFrame = new VideoFrame(canvas, { timestamp: outputTimestampUs });
-      
-      results.diagnosticsMode.encodeSubmittedCount++;
-      encoderInstance.encode(outputFrame, { keyFrame: i === 0 });
-      
-      // Close the constructed output frame immediately
-      outputFrame.close();
+        // Create new VideoFrame from canvas with output timestamp
+        const outputTimestampUs = Math.round(i * frameIntervalUs);
+        const outputFrame = new VideoFrame(canvas, { timestamp: outputTimestampUs });
+        try {
+          results.diagnosticsMode.encodeSubmittedCount++;
+          encoderInstance.encode(outputFrame, { keyFrame: i === 0 });
+        } finally {
+          outputFrame.close(); // Close constructed output frame immediately in try-finally
+        }
+      } finally {
+        decodedFrame.close(); // Close decoded frame immediately in try-finally
+      }
     }
 
     // Flush Encoder to ensure all frames are encoded
@@ -607,6 +614,7 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
     if (encoderInstance) {
       try { encoderInstance.close(); } catch (e) {}
     }
+    // Safety check: close any remaining frames in queue in case of early return/exceptions
     for (const f of decodedFrames) {
       try { f.close(); } catch (e) {}
     }
