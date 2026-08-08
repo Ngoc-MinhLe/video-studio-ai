@@ -16,8 +16,49 @@ function getCodecDescription(mp4boxFile, trackId) {
     
     const entry = stsd.entries[0];
     const box = entry.avc1 || entry.encv?.avc1 || entry.hvc1 || entry.hev1 || entry.vp09 || entry.vp9;
-    const configBox = box?.avcC || box?.hvcC || box?.vpcC;
-    if (configBox) {
+    if (!box) return null;
+
+    // Handle H.264 (AVC) manually to serialise the AVCDecoderConfigurationRecord reliably
+    if (box.avcC) {
+      const avcC = box.avcC;
+      const spsList = avcC.SPS || [];
+      const ppsList = avcC.PPS || [];
+      
+      let totalSize = 6;
+      for (const sps of spsList) totalSize += 2 + sps.length;
+      for (const pps of ppsList) totalSize += 2 + pps.length;
+      
+      const data = new Uint8Array(totalSize);
+      data[0] = avcC.configurationVersion || 1;
+      data[1] = avcC.AVCProfileIndication;
+      data[2] = avcC.profile_compatibility;
+      data[3] = avcC.AVCLevelIndication;
+      data[4] = 0xFC | (avcC.lengthSizeMinusOne ?? 3);
+      data[5] = 0xE0 | spsList.length;
+      
+      let offset = 6;
+      for (const sps of spsList) {
+        const len = sps.length;
+        data[offset++] = (len >> 8) & 0xFF;
+        data[offset++] = len & 0xFF;
+        data.set(sps.nalu, offset);
+        offset += len;
+      }
+      
+      data[offset++] = ppsList.length;
+      for (const pps of ppsList) {
+        const len = pps.length;
+        data[offset++] = (len >> 8) & 0xFF;
+        data[offset++] = len & 0xFF;
+        data.set(pps.nalu, offset);
+        offset += len;
+      }
+      return data;
+    }
+
+    // Fallback for HEVC/VP9: try writing the raw parsed config box
+    const configBox = box.hvcC || box.vpcC;
+    if (configBox && typeof configBox.write === 'function') {
       const stream = new MP4Box.DataStream(undefined, 0, MP4Box.DataStream.BIG_ENDIAN);
       configBox.write(stream);
       return new Uint8Array(stream.buffer, 8); // Skip 8-byte box size/type header
@@ -344,6 +385,15 @@ export async function runWebCodecsVideoFilePoC(file) {
       throw new Error("No samples extracted from the video file.");
     }
 
+    // Align to the first keyframe (sync frame) to guarantee VideoDecoder receives a keyframe first
+    const firstKeyframeIndex = samples.findIndex(s => s.is_sync);
+    if (firstKeyframeIndex === -1) {
+      throw new Error("No sync frame (keyframe) found in the video track. Cannot decode.");
+    }
+    
+    // Slice samples from the first keyframe onwards
+    const startingSamples = samples.slice(firstKeyframeIndex);
+
     // Filter samples to exactly 10 seconds
     const timescale = videoTrack.timescale;
     const targetFps = videoTrack.video.fps || 30;
@@ -352,7 +402,7 @@ export async function runWebCodecsVideoFilePoC(file) {
     
     let processedSamples = [];
     let accumulatedTimeUs = 0;
-    for (const s of samples) {
+    for (const s of startingSamples) {
       const sampleDurationUs = (s.duration / timescale) * 1000000;
       processedSamples.push(s);
       accumulatedTimeUs += sampleDurationUs;
@@ -432,12 +482,17 @@ export async function runWebCodecsVideoFilePoC(file) {
     }
     results.timings.mux += performance.now() - muxStart;
 
-    // 3. Setup VideoDecoder
-    let frameResolver = null;
+    // 3. Setup VideoDecoder with B-frame queue coordination (prevents deadlocks on B-frame reordering)
+    const decodedFrames = [];
+    let frameWaiter = null;
+
     const decoder = new VideoDecoder({
       output: (frame) => {
-        if (frameResolver) {
-          frameResolver(frame);
+        decodedFrames.push(frame);
+        if (frameWaiter) {
+          const resolve = frameWaiter;
+          frameWaiter = null;
+          resolve();
         }
       },
       error: (err) => console.error("Decoder error in PoC Step 2:", err)
@@ -467,29 +522,48 @@ export async function runWebCodecsVideoFilePoC(file) {
     let renderTime = 0;
     let encodeTime = 0;
 
-    // 4. Sequential Decode -> Render -> Encode Loop (Backpressure 1-frame deep)
+    let framesProcessed = 0;
+    let chunksFed = 0;
+
+    // Helper to pull decoded frames from the queue (blocks asynchronously if queue is empty)
+    const getNextFrame = () => {
+      if (decodedFrames.length > 0) {
+        return Promise.resolve(decodedFrames.shift());
+      }
+      return new Promise((resolve) => {
+        frameWaiter = () => resolve(decodedFrames.shift());
+      });
+    };
+
+    // Helper to feed chunks ahead to maintain a 15-frame pipeline depth (prevents B-frame deadlock)
+    const feedDecoder = () => {
+      while (chunksFed < totalFrames && (chunksFed - framesProcessed) < 15) {
+        const sample = processedSamples[chunksFed];
+        const sampleTimeUs = (sample.cts / timescale) * 1000000;
+        const sampleDurationUs = (sample.duration / timescale) * 1000000;
+
+        const chunk = new EncodedVideoChunk({
+          type: sample.is_sync ? 'key' : 'delta',
+          timestamp: sampleTimeUs,
+          duration: sampleDurationUs,
+          data: sample.data
+        });
+        decoder.decode(chunk);
+        chunksFed++;
+      }
+    };
+
+    // 4. Sequential Decode -> Render -> Encode Loop
     for (let i = 0; i < totalFrames; i++) {
-      const sample = processedSamples[i];
-      const sampleTimeUs = (sample.cts / timescale) * 1000000;
-      const sampleDurationUs = (sample.duration / timescale) * 1000000;
+      // Feed samples to decoder ahead
+      feedDecoder();
 
-      // Construct EncodedVideoChunk
-      const chunk = new EncodedVideoChunk({
-        type: sample.is_sync ? 'key' : 'delta',
-        timestamp: sampleTimeUs,
-        duration: sampleDurationUs,
-        data: sample.data
-      });
-
-      // Decode and await output
-      const decodePromise = new Promise((resolve) => {
-        frameResolver = resolve;
-      });
-
+      // Retrieve the next decoded frame
       const frameDecodeStart = performance.now();
-      decoder.decode(chunk);
-      const decodedFrame = await decodePromise;
+      const decodedFrame = await getNextFrame();
       decodeTime += performance.now() - frameDecodeStart;
+
+      const sampleTimeUs = decodedFrame.timestamp;
 
       // Render Frame (Draw video source, visualizer bar, text subtitle)
       const frameRenderStart = performance.now();
@@ -525,6 +599,8 @@ export async function runWebCodecsVideoFilePoC(file) {
       encoder.encode(outputFrame, { keyFrame: i % 30 === 0 });
       outputFrame.close();
       encodeTime += performance.now() - frameEncodeStart;
+
+      framesProcessed++;
     }
 
     // 5. Flush and Finalize
