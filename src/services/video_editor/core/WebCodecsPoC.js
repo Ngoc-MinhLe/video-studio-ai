@@ -96,6 +96,10 @@ export async function runWebCodecsPoC() {
  */
 export async function runWebCodecsVideoFilePoC(file, onProgress) {
   const results = {
+    browserSupport: {
+      videoDecoder: typeof VideoDecoder !== 'undefined',
+      h264DecodeSupported: false
+    },
     meta: {
       sourceCodec: 'unknown',
       targetCodec: 'unknown',
@@ -112,11 +116,14 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
     },
     diagnosticsMode: {
       active: true,
+      configureStatus: 'PENDING',
+      configureError: null,
       samplesLogged: [],
       outputCallbackCount: 0,
       errorCallbackCount: 0,
       outputFramesLog: [],
-      decoderError: null
+      decoderError: null,
+      flushStatus: 'PENDING'
     },
     timings: {
       demux: 0,
@@ -427,7 +434,15 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
     }
 
     results.browserSupport.h264DecodeSupported = true;
-    decoderInstance.configure(decoderConfig);
+
+    try {
+      decoderInstance.configure(decoderConfig);
+      results.diagnosticsMode.configureStatus = 'SUCCESS';
+    } catch (err) {
+      results.diagnosticsMode.configureStatus = 'ERROR';
+      results.diagnosticsMode.configureError = err.message || String(err);
+      throw err;
+    }
 
     // 3. Decode 5 samples and track diagnostics
     const decodeStart = performance.now();
@@ -472,10 +487,16 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
     try {
       await Promise.race([
         decoderInstance.flush(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Decoder flush timed out after 2000ms")), 2000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2000))
       ]);
+      results.diagnosticsMode.flushStatus = 'SUCCESS';
     } catch (flushErr) {
-      results.diagnosticsMode.decoderError = `Flush timeout/failure: ${flushErr.message || flushErr}`;
+      if (flushErr.message === "Timeout") {
+        results.diagnosticsMode.flushStatus = 'TIMEOUT';
+      } else {
+        results.diagnosticsMode.flushStatus = 'ERROR';
+      }
+      results.diagnosticsMode.decoderError = `Flush failed/timed out: ${flushErr.message || flushErr}`;
     }
 
     results.timings.decode = performance.now() - decodeStart;

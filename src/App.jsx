@@ -2071,14 +2071,21 @@ export default function App() {
                   )}
 
                   {pocVideoResults.error ? (
-                    <div className="p-3 text-rose-400 font-bold font-mono text-[10px]">
-                      ❌ LỖI PIPELINE: {pocVideoResults.error}
+                    <div className="p-3 text-rose-400 font-bold font-mono text-[10px] flex flex-col gap-2">
+                      <div>❌ LỖI PIPELINE: {pocVideoResults.error}</div>
+                      {pocVideoResults.stackTrace && (
+                        <div className="bg-rose-950/20 p-2 rounded border border-rose-500/20 text-[8px] text-rose-300 break-all whitespace-pre-wrap leading-tight font-mono">
+                          {pocVideoResults.stackTrace}
+                        </div>
+                      )}
                     </div>
                   ) : pocVideoResults.diagnosticsMode ? (
                     <div className="p-3 flex flex-col gap-2 font-mono text-[9px] text-gray-300">
                       <div className="font-bold text-pink-400 border-b border-pink-500/10 pb-0.5 mb-1">🔬 WEBCODECS DIAGNOSTIC MODE RESULTS (5 SAMPLES):</div>
+                      <div>• VideoDecoder configure(): <span className={pocVideoResults.diagnosticsMode.configureStatus === 'SUCCESS' ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocVideoResults.diagnosticsMode.configureStatus}</span></div>
                       <div>• Output Callback Count: <span className="text-emerald-400 font-bold">{pocVideoResults.diagnosticsMode.outputCallbackCount} frames</span></div>
                       <div>• Error Callback Count: <span className={pocVideoResults.diagnosticsMode.errorCallbackCount > 0 ? "text-rose-400 font-bold" : "text-white"}>{pocVideoResults.diagnosticsMode.errorCallbackCount} times</span></div>
+                      <div>• VideoDecoder flush(): <span className={pocVideoResults.diagnosticsMode.flushStatus === 'SUCCESS' ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocVideoResults.diagnosticsMode.flushStatus}</span></div>
                       
                       {pocVideoResults.diagnosticsMode.decoderError && (
                         <div className="text-rose-400 font-bold bg-rose-950/20 p-2 rounded border border-rose-500/20 break-all">
