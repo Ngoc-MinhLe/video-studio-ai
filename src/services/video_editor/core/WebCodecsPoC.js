@@ -87,8 +87,12 @@ export async function runWebCodecsPoC() {
 }
 
 /**
- * Diagnostic Mode: Only decodes the first 5 H.264 samples using WebCodecs.
- * Logs sample sizes, HEX header buffers, timestamps, and VideoDecoder event triggers.
+ * Diagnostic Mode Step 2: 
+ * - Demuxes and decodes first 5 H.264 samples using VideoDecoder.
+ * - Renders each decoded VideoFrame to a Canvas.
+ * - Constructs a new VideoFrame from Canvas with output timestamps based on 25 FPS (0, 40000, 80000, 120000, 160000 µs).
+ * - VideoEncoder encodes exactly these 5 frames.
+ * - No mp4-muxer is initialized or used.
  * 
  * @param {File} file The real uploaded video file.
  * @param {Function} onProgress Progress callback.
@@ -121,9 +125,16 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
       samplesLogged: [],
       outputCallbackCount: 0,
       errorCallbackCount: 0,
-      outputFramesLog: [],
       decoderError: null,
-      flushStatus: 'PENDING'
+      
+      // Stage timeline logs
+      decodedFramesCount: 0,
+      renderedFramesCount: 0,
+      encodeSubmittedCount: 0,
+      encodedChunksCount: 0,
+      encoderChunksLogged: [],
+      encoderError: null,
+      encoderFlushStatus: 'PENDING'
     },
     timings: {
       demux: 0,
@@ -140,6 +151,8 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
 
   const overallStart = performance.now();
   let decoderInstance = null;
+  let encoderInstance = null;
+  const decodedFrames = [];
 
   try {
     // 1. Demux first 5 samples with mp4box.js starting from first keyframe
@@ -378,7 +391,7 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
       throw new Error("AVCDecoderConfigurationRecord (avcC) is missing or empty. Cannot configure VideoDecoder.");
     }
 
-    // 2. Setup VideoDecoder
+    // 2. Setup VideoDecoder (FROZEN decoder callbacks and config)
     decoderInstance = new VideoDecoder({
       output: (frame) => {
         results.diagnosticsMode.outputCallbackCount++;
@@ -387,7 +400,10 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
           width: frame.codedWidth,
           height: frame.codedHeight
         });
-        frame.close(); // release GPU resources immediately
+        
+        // Push to temporary queue for sequential rendering and encoding test
+        decodedFrames.push(frame);
+        results.diagnosticsMode.decodedFramesCount = decodedFrames.length;
       },
       error: (err) => {
         results.diagnosticsMode.errorCallbackCount++;
@@ -444,7 +460,7 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
       throw err;
     }
 
-    // 3. Decode 5 samples and track diagnostics
+    // 3. Decode 5 samples and wait for flush
     const decodeStart = performance.now();
     for (let idx = 0; idx < diagnosticSamples.length; idx++) {
       const sample = diagnosticSamples[idx];
@@ -452,7 +468,6 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
       const sampleDurationUs = Math.round((sample.duration / timescale) * 1000000);
       const chunkType = sample.is_sync ? 'key' : 'delta';
 
-      // Capture first 64 bytes HEX dump
       const bytes = new Uint8Array(sample.data);
       const hex64 = Array.from(bytes.slice(0, 64)).map(b => b.toString(16).padStart(2, '0')).join(' ').toUpperCase();
 
@@ -483,7 +498,7 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
       });
     }
 
-    // Wait for the decoder to complete by calling flush with a timeout race
+    // Wait for the decoder to complete decoding
     try {
       await Promise.race([
         decoderInstance.flush(),
@@ -499,10 +514,89 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
       results.diagnosticsMode.decoderError = `Flush failed/timed out: ${flushErr.message || flushErr}`;
     }
 
+    // 4. Setup VideoEncoder (Without Muxer)
+    encoderInstance = new VideoEncoder({
+      output: (chunk, metadata) => {
+        results.diagnosticsMode.encodedChunksCount++;
+        results.diagnosticsMode.encoderChunksLogged.push({
+          timestamp: chunk.timestamp,
+          type: chunk.type
+        });
+      },
+      error: (err) => {
+        results.diagnosticsMode.encoderError = err.message || String(err);
+        console.error("Encoder error:", err);
+      }
+    });
+
+    const targetWidth = 768; // matching source width
+    const targetHeight = 432; // matching source height
+    const targetFps = 25; // 25 FPS source match
+
+    const videoConfig = {
+      codec: 'avc1.4d001f',
+      width: targetWidth,
+      height: targetHeight,
+      bitrate: 1500000,
+      framerate: targetFps,
+      hardwareAcceleration: 'prefer-hardware'
+    };
+    encoderInstance.configure(videoConfig);
+
+    // Create a local canvas to render VideoFrames
+    const canvas = document.createElement('canvas');
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext('2d');
+
+    // 5. Render Canvas & Encode exactly the 5 frames in sequential order
+    // Timestamps MUST be: 0, 40000, 80000, 120000, 160000 µs (25 FPS)
+    const frameIntervalUs = 1000000 / targetFps; // 40000 µs
+
+    for (let i = 0; i < decodedFrames.length; i++) {
+      const decodedFrame = decodedFrames[i];
+      
+      // Render decoded VideoFrame to Canvas
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, targetWidth, targetHeight);
+      ctx.drawImage(decodedFrame, 0, 0, targetWidth, targetHeight);
+      results.diagnosticsMode.renderedFramesCount++;
+
+      // Close the decoded source frame immediately
+      decodedFrame.close();
+
+      // Create new VideoFrame from canvas with output timestamp
+      const outputTimestampUs = Math.round(i * frameIntervalUs);
+      const outputFrame = new VideoFrame(canvas, { timestamp: outputTimestampUs });
+      
+      results.diagnosticsMode.encodeSubmittedCount++;
+      encoderInstance.encode(outputFrame, { keyFrame: i === 0 });
+      
+      // Close the constructed output frame immediately
+      outputFrame.close();
+    }
+
+    // Flush Encoder to ensure all frames are encoded
+    try {
+      await Promise.race([
+        encoderInstance.flush(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2000))
+      ]);
+      results.diagnosticsMode.encoderFlushStatus = 'SUCCESS';
+    } catch (encFlushErr) {
+      results.diagnosticsMode.encoderFlushStatus = encFlushErr.message === 'Timeout' ? 'TIMEOUT' : 'ERROR';
+      results.diagnosticsMode.encoderError = `Encoder flush failed: ${encFlushErr.message || encFlushErr}`;
+    }
+
     results.timings.decode = performance.now() - decodeStart;
     results.timings.total = performance.now() - overallStart;
     results.metrics.framesDecoded = results.diagnosticsMode.outputCallbackCount;
-    results.metrics.success = results.diagnosticsMode.outputCallbackCount > 0;
+    
+    // Success means all 5 frames were decoded, rendered, and encoded successfully!
+    results.metrics.success = 
+      results.diagnosticsMode.outputCallbackCount === 5 &&
+      results.diagnosticsMode.renderedFramesCount === 5 &&
+      results.diagnosticsMode.encodedChunksCount === 5;
 
   } catch (err) {
     results.error = err.message || String(err);
@@ -510,19 +604,26 @@ export async function runWebCodecsVideoFilePoC(file, onProgress) {
     if (decoderInstance) {
       try { decoderInstance.close(); } catch (e) {}
     }
+    if (encoderInstance) {
+      try { encoderInstance.close(); } catch (e) {}
+    }
+    for (const f of decodedFrames) {
+      try { f.close(); } catch (e) {}
+    }
+    decodedFrames.length = 0;
   }
 
   // Trigger progress callback with complete stats at the end
   if (onProgress) {
     onProgress({
-      status: "Completed Diagnostic Mode",
+      status: "Completed Diagnostic Mode Step 2",
       samplesDemuxed: 5,
       decodeSubmitted: 5,
       decodeOutput: results.diagnosticsMode.outputCallbackCount,
       decodeQueueSize: 0,
-      renderedFrames: 0,
-      encodeSubmitted: 0,
-      encodeOutput: 0,
+      renderedFrames: results.diagnosticsMode.renderedFramesCount,
+      encodeSubmitted: results.diagnosticsMode.encodeSubmittedCount,
+      encodeOutput: results.diagnosticsMode.encodedChunksCount,
       encodeQueueSize: 0,
       muxedChunks: 0,
       elapsedTimeMs: performance.now() - overallStart,

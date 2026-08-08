@@ -2110,7 +2110,7 @@ export default function App() {
                       {pocVideoResults.diagnosticsMode.outputFramesLog.length > 0 ? (
                         <div className="mt-1 flex flex-col gap-1">
                           <div className="font-bold text-pink-400">📋 OUTPUT FRAMES RECEIVED:</div>
-                          <div className="flex flex-col gap-0.5 bg-black/30 p-1.5 rounded border border-pink-500/5 max-h-[100px] overflow-y-auto">
+                          <div className="flex flex-col gap-0.5 bg-black/30 p-1.5 rounded border border-pink-500/5 max-h-[100px] overflow-y-auto font-mono">
                             {pocVideoResults.diagnosticsMode.outputFramesLog.map((f, idx) => (
                               <div key={idx} className="text-emerald-400">
                                 Frame #{idx + 1}: TS = {f.timestamp} µs | Size = {f.width}x{f.height}
@@ -2120,6 +2120,39 @@ export default function App() {
                         </div>
                       ) : (
                         <div className="text-rose-400 font-bold mt-1">⚠️ No output frames received (Decoder output callback never triggered).</div>
+                      )}
+
+                      {/* ENCODER DIAGNOSTICS */}
+                      <div className="font-bold text-pink-400 mt-2 border-t border-pink-500/10 pt-2 font-mono">🔬 VIDEO ENCODER DIAGNOSTICS:</div>
+                      <div className="font-mono">• Decoded Frames: <span className="text-white font-bold">{pocVideoResults.diagnosticsMode.decodedFramesCount}</span></div>
+                      <div className="font-mono">• Rendered Frames: <span className="text-white font-bold">{pocVideoResults.diagnosticsMode.renderedFramesCount}</span></div>
+                      <div className="font-mono">• Encode Submitted: <span className="text-white font-bold">{pocVideoResults.diagnosticsMode.encodeSubmittedCount}</span></div>
+                      <div className="font-mono">• Encoded Chunks: <span className="text-emerald-400 font-bold">{pocVideoResults.diagnosticsMode.encodedChunksCount}</span></div>
+                      <div className="font-mono">• VideoEncoder flush(): <span className={pocVideoResults.diagnosticsMode.encoderFlushStatus === 'SUCCESS' ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>{pocVideoResults.diagnosticsMode.encoderFlushStatus}</span></div>
+                      
+                      {pocVideoResults.diagnosticsMode.encoderError && (
+                        <div className="text-rose-400 font-bold bg-rose-950/20 p-2 rounded border border-rose-500/20 break-all mt-1 font-mono">
+                          ❌ Encoder Error: {pocVideoResults.diagnosticsMode.encoderError}
+                        </div>
+                      )}
+
+                      {pocVideoResults.diagnosticsMode.encoderChunksLogged && pocVideoResults.diagnosticsMode.encoderChunksLogged.length > 0 && (
+                        <div className="mt-1 flex flex-col gap-1">
+                          <div className="font-bold text-pink-400 font-mono">📋 ENCODER OUTPUT CHUNKS:</div>
+                          <div className="flex flex-col gap-0.5 bg-black/30 p-1.5 rounded border border-pink-500/5 max-h-[100px] overflow-y-auto font-mono">
+                            {pocVideoResults.diagnosticsMode.encoderChunksLogged.map((c, idx) => (
+                              <div key={idx} className="text-emerald-400">
+                                Chunk #{idx + 1}: TS = {c.timestamp} µs | Type = {c.type.toUpperCase()}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {pocVideoResults.metrics.success && (
+                        <div className="mt-2 text-center text-emerald-400 font-bold bg-emerald-950/30 p-2 rounded border border-emerald-500/20 text-[10px] font-mono">
+                          🎉 DECODER → RENDER → ENCODER = PASS
+                        </div>
                       )}
                     </div>
                   ) : (
